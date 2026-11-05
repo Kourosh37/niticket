@@ -1,0 +1,22 @@
+packages:
+  - apps/*
+  - packages/*
+overrides:
+  deepmerge-ts: ^8.0.0
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true
+  sharp: true
+  '@tailwindcss/oxide': true
+  msgpackr-extract: false
+minimumReleaseAgeExclude:
+  - '@better-auth/core@1.7.17'
+  - '@better-auth/drizzle-adapter@1.7.17'
+  - '@better-auth/kysely-adapter@1.7.17'
+  - '@better-auth/memory-adapter@1.7.17'
+  - '@better-auth/mongo-adapter@1.7.17'
+  - '@better-auth/prisma-adapter@1.7.17'
+  - '@better-auth/telemetry@1.7.17'
+  - better-auth@1.7.17

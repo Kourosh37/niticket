@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.env*
+!.env.example
+**/.next
+test-results
+playwright-report
+.local
+backups
+*.dump
+*.sql.gz
+apps/web/public/pdf.worker.min.mjs
+apps/web/public/pdf-assets/

@@ -1,0 +1,351 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DepartmentRole {
+  AGENT
+  MANAGER
+}
+
+enum UserRole {
+  STUDENT
+  STAFF
+  ADMIN
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_USER
+  WAITING_FOR_DEPARTMENT
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum Visibility {
+  PUBLIC
+  INTERNAL
+}
+
+enum ScanStatus {
+  PENDING
+  QUARANTINED
+  CLEAN
+  REJECTED
+}
+
+model User {
+  id                 String                 @id @default(uuid())
+  name               String
+  email              String                 @unique
+  emailVerified      Boolean                @default(false)
+  image              String?
+  active             Boolean                @default(true)
+  isAdmin            Boolean                @default(false)
+  role               UserRole               @default(STUDENT)
+  username           String?                @unique
+  displayUsername    String?
+  studentNumber      String?                @unique
+  avatarAttachmentId String?                @unique
+  avatarAttachment   Attachment?            @relation("UserAvatar", fields: [avatarAttachmentId], references: [id], onDelete: Restrict)
+  avatarUploads      Attachment[]           @relation("AvatarOwner")
+  universityId       String?                @unique
+  accountType        String                 @default("STUDENT")
+  phone              String?
+  emailNotifications Boolean                @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  sessions           Session[]
+  accounts           Account[]
+  memberships        DepartmentMembership[]
+  tickets            Ticket[]               @relation("Creator")
+  assignedTickets    Ticket[]               @relation("Assignee")
+  messages           Message[]
+  attachments        Attachment[]
+  notifications      Notification[]
+  activityNotes      ActivityNote[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Department {
+  id               String                 @id @default(uuid())
+  name             String
+  englishName      String?
+  slug             String                 @unique
+  description      String                 @default("")
+  active           Boolean                @default(true)
+  visible          Boolean                @default(true)
+  acceptingTickets Boolean                @default(true)
+  displayOrder     Int                    @default(0)
+  defaultPriority  Priority               @default(NORMAL)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  memberships      DepartmentMembership[]
+  categories       Category[]
+  tickets          Ticket[]
+}
+
+model DepartmentMembership {
+  id           String         @id @default(uuid())
+  userId       String
+  departmentId String
+  role         DepartmentRole
+  active       Boolean        @default(true)
+  assignedBy   String
+  createdAt    DateTime       @default(now())
+  revokedAt    DateTime?
+  user         User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  department   Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, departmentId])
+  @@index([departmentId, active, role])
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  departmentId String
+  name         String
+  active       Boolean    @default(true)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  tickets      Ticket[]
+
+  @@unique([departmentId, name])
+}
+
+model Ticket {
+  id              String       @id @default(uuid())
+  number          Int          @unique @default(autoincrement())
+  creatorId       String
+  departmentId    String
+  categoryId      String?
+  subject         String
+  status          TicketStatus @default(OPEN)
+  priority        Priority     @default(NORMAL)
+  assigneeId      String?
+  version         Int          @default(1)
+  reopenCount     Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  lastActivityAt  DateTime     @default(now())
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  dueAt           DateTime?
+  creator         User         @relation("Creator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee        User?        @relation("Assignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  department      Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  category        Category?    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  messages        Message[]
+  activities      Activity[]
+  attachments     Attachment[]
+
+  @@index([creatorId, lastActivityAt, id])
+  @@index([departmentId, status, lastActivityAt, id])
+  @@index([assigneeId, status])
+}
+
+model Message {
+  id          String       @id @default(uuid())
+  ticketId    String
+  senderId    String
+  body        String
+  visibility  Visibility   @default(PUBLIC)
+  createdAt   DateTime     @default(now())
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  sender      User         @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  attachments Attachment[]
+
+  @@index([ticketId, createdAt, id])
+}
+
+model Activity {
+  id         String         @id @default(uuid())
+  ticketId   String
+  actorId    String
+  type       String
+  visibility Visibility     @default(PUBLIC)
+  metadata   Json
+  createdAt  DateTime       @default(now())
+  ticket     Ticket         @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  notes      ActivityNote[]
+
+  @@index([ticketId, createdAt, id])
+}
+
+model ActivityNote {
+  id          String       @id @default(uuid())
+  activityId  String
+  authorId    String
+  body        String       @default("")
+  createdAt   DateTime     @default(now())
+  activity    Activity     @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  attachments Attachment[]
+
+  @@index([activityId, createdAt, id])
+}
+
+model Attachment {
+  id              String        @id @default(uuid())
+  ticketId        String?
+  messageId       String?
+  noteId          String?
+  avatarOwnerId   String?
+  uploaderId      String
+  filename        String
+  objectKey       String        @unique
+  declaredMime    String
+  detectedMime    String?
+  expectedSize    Int
+  size            Int?
+  checksum        String?
+  durationSeconds Float?
+  waveform        Json?
+  scanStatus      ScanStatus    @default(PENDING)
+  scanResult      String?
+  createdAt       DateTime      @default(now())
+  expiresAt       DateTime
+  ticket          Ticket?       @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  message         Message?      @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  uploader        User          @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  note            ActivityNote? @relation(fields: [noteId], references: [id], onDelete: Restrict)
+  avatarOwner     User?         @relation("AvatarOwner", fields: [avatarOwnerId], references: [id], onDelete: Restrict)
+  avatarFor       User?         @relation("UserAvatar")
+
+  @@index([ticketId, messageId])
+  @@index([scanStatus, expiresAt])
+  @@index([noteId])
+  @@index([avatarOwnerId, scanStatus])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  resourceId String?
+  metadata   Json
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt, id])
+  @@index([actorId, createdAt])
+}
+
+model OutboxEvent {
+  id           String    @id @default(uuid())
+  type         String
+  payload      Json
+  dispatchedAt DateTime?
+  processedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([processedAt, createdAt])
+}
+
+model Notification {
+  id         String                 @id @default(uuid())
+  eventId    String
+  userId     String
+  ticketId   String?
+  title      String
+  readAt     DateTime?
+  createdAt  DateTime               @default(now())
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  deliveries NotificationDelivery[]
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt, id])
+}
+
+model NotificationDelivery {
+  id             String       @id @default(uuid())
+  notificationId String       @unique
+  status         String       @default("PENDING")
+  attempts       Int          @default(0)
+  sentAt         DateTime?
+  lastError      String?
+  nextAttemptAt  DateTime     @default(now())
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+}
+
+model Idempotency {
+  id          String   @id @default(uuid())
+  actorId     String
+  key         String
+  fingerprint String
+  resourceId  String
+  createdAt   DateTime @default(now())
+
+  @@unique([actorId, key])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedBy String
+  updatedAt DateTime @updatedAt
+}
+
+model Reauthentication {
+  sessionId  String   @id
+  verifiedAt DateTime
+}

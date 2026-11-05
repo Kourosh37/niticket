@@ -1,0 +1,35 @@
+import { defineConfig } from '@playwright/test';
+import { loadEnvFile } from 'node:process';
+import { existsSync } from 'node:fs';
+
+try {
+  loadEnvFile('.env');
+} catch {
+  /* CI injects environment. */
+}
+const edge = existsSync('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe');
+
+export default defineConfig({
+  testDir: 'tests/e2e',
+  fullyParallel: false,
+  workers: 1,
+  timeout: 60000,
+  expect: { timeout: 10000 },
+  reporter: [['list'], ['html', { open: 'never' }]],
+  use: {
+    baseURL: 'http://localhost:3001',
+    headless: true,
+    launchOptions: {
+      args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    },
+    ...(edge ? { channel: 'msedge' } : {}),
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  webServer: {
+    command: 'node --env-file=.env scripts/test-web.mjs',
+    url: 'http://localhost:3001/login',
+    reuseExistingServer: false,
+    timeout: 120000,
+  },
+});

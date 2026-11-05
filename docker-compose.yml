@@ -1,0 +1,120 @@
+name: niticket
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    ports: ['127.0.0.1:5432:5432']
+    volumes: ['postgres_data:/var/lib/postgresql/data']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    ports: ['127.0.0.1:6379:6379']
+    volumes: ['redis_data:/data']
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+  minio:
+    build: { context: ., dockerfile: infrastructure/docker/Minio.Dockerfile }
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?required}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?required}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${APP_ORIGIN},http://localhost:3001
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+    volumes: ['minio_data:/data']
+    restart: unless-stopped
+  storage-init:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
+    depends_on: [minio]
+    env_file: .env
+    environment:
+      S3_ENDPOINT: http://minio:9000
+    command: [pnpm, exec, tsx, scripts/init-storage.ts]
+  clamav:
+    image: clamav/clamav:stable
+    environment:
+      CLAMD_CONF_AlertExceedsMax: 'yes'
+      CLAMD_CONF_MaxScanTime: '25000'
+      CLAMD_CONF_MaxFileSize: '50M'
+      CLAMD_CONF_MaxScanSize: '100M'
+      CLAMD_CONF_MaxRecursion: '10'
+      CLAMD_CONF_MaxFiles: '1000'
+    ports: ['127.0.0.1:3310:3310']
+    volumes: ['clamav_data:/var/lib/clamav']
+    restart: unless-stopped
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['127.0.0.1:1025:1025', '127.0.0.1:8025:8025']
+    restart: unless-stopped
+  migrate:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    command: [pnpm, db:migrate]
+    depends_on:
+      postgres: { condition: service_healthy }
+  web:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: web }
+    env_file: .env
+    environment: &app-env
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      CLAMAV_HOST: clamav
+      SMTP_HOST: mailpit
+      HOSTNAME: 0.0.0.0
+    ports: ['127.0.0.1:3000:3000']
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      storage-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      retries: 5
+  worker:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: worker }
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      storage-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 40s
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "const fs=require('fs');const path=require('path');process.exit(Date.now()-Number(fs.readFileSync(path.join(require('os').tmpdir(),'niticket-worker-heartbeat'),'utf8'))<120000?0:1)",
+        ]
+      interval: 30s
+      start_period: 45s
+      retries: 3
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  clamav_data:

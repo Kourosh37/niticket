@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+node_modules
+.next
+apps/web/next-env.d.ts
+packages/database/prisma/migrations
+.local
+apps/web/public/pdf.worker.min.mjs
+apps/web/public/pdf-assets

@@ -1,0 +1,9 @@
+{
+  "name": "@niticket/worker",
+  "private": true,
+  "version": "0.1.0",
+  "dependencies": {
+    "@niticket/core": "workspace:*",
+    "@niticket/database": "workspace:*"
+  }
+}

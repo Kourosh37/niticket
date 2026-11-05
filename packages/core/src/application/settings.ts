@@ -1,0 +1,59 @@
+import { z } from 'zod';
+import { db } from '@niticket/database';
+import { config } from '../infrastructure/config';
+import { assertAdmin, type Actor } from '../domain/authorization';
+import { requireFresh, refreshActor } from './context';
+import { transaction } from '../infrastructure/transaction';
+
+export const settingsSchema = z
+  .object({
+    reopenDays: z.number().int().min(0).max(365),
+    maxUploadBytes: z.number().int().min(1024).max(52428800),
+    maxVoiceSeconds: z.number().int().min(10).max(600),
+    allowUserUrgent: z.boolean(),
+    universityName: z.string().trim().min(2).max(150).default('دانشگاه صنعتی نوشیروانی بابل'),
+    supportDescription: z.string().max(1000).default('سامانه ارتباط و پشتیبانی دانشگاه'),
+    studentEmailDomains: z
+      .array(
+        z
+          .string()
+          .toLowerCase()
+          .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/),
+      )
+      .min(1)
+      .max(10)
+      .default(['stu.nit.ac.ir']),
+  })
+  .strict();
+
+export async function settings() {
+  const c = config();
+  const saved = await db.systemSetting.findUnique({ where: { key: 'policy' } });
+  return saved
+    ? settingsSchema.parse(saved.value)
+    : settingsSchema.parse({
+        reopenDays: c.REOPEN_DAYS,
+        maxUploadBytes: c.MAX_UPLOAD_BYTES,
+        maxVoiceSeconds: c.MAX_VOICE_SECONDS,
+        allowUserUrgent: false,
+      });
+}
+
+export async function saveSettings(actor: Actor, input: unknown) {
+  assertAdmin(actor);
+  await requireFresh(actor);
+  const value = settingsSchema.parse(input);
+  return transaction(async (tx) => {
+    actor = await refreshActor(tx, actor);
+    assertAdmin(actor);
+    await tx.systemSetting.upsert({
+      where: { key: 'policy' },
+      create: { key: 'policy', value, updatedBy: actor.id },
+      update: { value, updatedBy: actor.id },
+    });
+    await tx.auditLog.create({
+      data: { actorId: actor.id, action: 'POLICY_CHANGED', resourceId: 'policy', metadata: value },
+    });
+    return value;
+  });
+}

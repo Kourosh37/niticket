@@ -1,0 +1,134 @@
+name: niticket-production
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      {
+        POSTGRES_USER: '${POSTGRES_USER:?required}',
+        POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:?required}',
+        POSTGRES_DB: '${POSTGRES_DB:?required}',
+      }
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [data]
+    restart: unless-stopped
+    healthcheck:
+      {
+        test: [CMD-SHELL, 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB'],
+        interval: 5s,
+        retries: 20,
+      }
+    mem_limit: 2g
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes', --maxmemory, 256mb, --maxmemory-policy, noeviction]
+    volumes: [redis_data:/data]
+    networks: [data]
+    restart: unless-stopped
+    healthcheck: { test: [CMD, redis-cli, ping], interval: 5s, retries: 20 }
+    mem_limit: 512m
+  migrate:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
+    env_file: .env.production
+    environment: { DATABASE_URL: '${MIGRATION_DATABASE_URL:?required}' }
+    command: [pnpm, db:migrate]
+    networks: [data]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: 'no'
+  web:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: web }
+    env_file: .env.production
+    environment:
+      {
+        DATABASE_URL: '${RUNTIME_DATABASE_URL:?required}',
+        REDIS_URL: 'redis://redis:6379',
+        HOSTNAME: 0.0.0.0,
+      }
+    networks: [edge, data]
+    depends_on:
+      {
+        migrate: { condition: service_completed_successfully },
+        redis: { condition: service_healthy },
+      }
+    restart: unless-stopped
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    healthcheck:
+      {
+        test:
+          [
+            CMD,
+            node,
+            -e,
+            "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          ],
+        interval: 15s,
+        retries: 5,
+      }
+  worker:
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: worker }
+    env_file: .env.production
+    environment:
+      {
+        DATABASE_URL: '${RUNTIME_DATABASE_URL:?required}',
+        REDIS_URL: 'redis://redis:6379',
+        CLAMAV_HOST: clamav,
+      }
+    networks: [data, egress]
+    depends_on:
+      {
+        migrate: { condition: service_completed_successfully },
+        redis: { condition: service_healthy },
+      }
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 40s
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "const fs=require('fs');const path=require('path');process.exit(Date.now()-Number(fs.readFileSync(path.join(require('os').tmpdir(),'niticket-worker-heartbeat'),'utf8'))<120000?0:1)",
+        ]
+      interval: 30s
+      start_period: 45s
+      retries: 3
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+  clamav:
+    image: clamav/clamav:stable
+    environment:
+      CLAMD_CONF_AlertExceedsMax: 'yes'
+      CLAMD_CONF_MaxScanTime: '25000'
+      CLAMD_CONF_MaxFileSize: '50M'
+      CLAMD_CONF_MaxScanSize: '100M'
+      CLAMD_CONF_MaxRecursion: '10'
+      CLAMD_CONF_MaxFiles: '1000'
+    volumes: [clamav_data:/var/lib/clamav]
+    networks: [data, egress]
+    restart: unless-stopped
+    mem_limit: 2g
+  proxy:
+    image: nginxinc/nginx-unprivileged:stable-alpine
+    ports: ['80:8080', '443:8443']
+    volumes:
+      - ./infrastructure/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${TLS_CERT_PATH:?required}:/etc/nginx/tls/fullchain.pem:ro
+      - ${TLS_KEY_PATH:?required}:/etc/nginx/tls/privkey.pem:ro
+    networks: [edge]
+    depends_on: { web: { condition: service_healthy } }
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+networks:
+  edge:
+  data: { internal: true }
+  egress:
+volumes:
+  postgres_data:
+  redis_data:
+  clamav_data:

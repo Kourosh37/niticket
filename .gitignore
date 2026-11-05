@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.env*
+!.env.example
+coverage/
+playwright-report/
+test-results/
+*.log
+*.tsbuildinfo
+apps/web/public/pdf.worker.min.mjs
+apps/web/public/pdf-assets/
+backups/
+*.dump
+*.sql.gz
+.local/
