@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { afterAll, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { db } from '@niticket/database';
 import { issueOtp, consumeOtp } from '@niticket/core/application/otp';
 import * as sms from '@niticket/core/infrastructure/sms';
@@ -14,6 +14,11 @@ import {
 import { getProfile } from '@niticket/core/application/administration';
 import { POST, GET } from '../../apps/web/src/app/api/auth/[...all]/route';
 import { fixtures } from '../helpers/fixtures';
+import { synchronizeRootAdministrator } from '@niticket/core/application/mobile-identity';
+
+beforeAll(async () => {
+  if (config().ADMIN_PHONE) await synchronizeRootAdministrator();
+});
 
 const codes = new Map<string, string>();
 vi.spyOn(sms, 'sendOtpSms').mockImplementation(async (phone, code) => {

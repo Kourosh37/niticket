@@ -26,9 +26,10 @@ import { Button } from './ui/button';
 import { NotificationBell } from './notification-bell';
 import { Avatar } from './avatar';
 import { SessionGuard } from './session-guard';
+import { DownloadTray } from './downloads';
 
 type Props = {
-  user: { name: string; isAdmin: boolean; staff: boolean; image?: string | null };
+  user: { id: string; name: string; isAdmin: boolean; staff: boolean; image?: string | null };
   universityName?: string;
   supportDescription?: string;
   children: React.ReactNode;
@@ -140,6 +141,7 @@ export function Shell({
     return (
       <div className={cn('easy-app', chatPage && 'messenger-app')}>
         <SessionGuard />
+        <DownloadTray key={user.id} />
         {!chatPage && (
           <header className="easy-header">
             <div className="easy-header-inner">
@@ -190,6 +192,7 @@ export function Shell({
   return (
     <div className="app-frame">
       <SessionGuard />
+      <DownloadTray key={user.id} />
       {open && (
         <button className="drawer-backdrop" aria-label="بستن منو" onClick={() => setOpen(false)} />
       )}

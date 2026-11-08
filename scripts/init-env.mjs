@@ -18,3 +18,4 @@ const replacements = {
 for (const [key, value] of Object.entries(replacements)) template = template.replaceAll(key, value);
 await writeFile('.env', template, { mode: 0o600, flag: 'wx' });
 console.log('Created .env with random local service secrets. No user accounts were created.');
+console.log('Set ADMIN_PHONE in .env before running docker compose up.');

@@ -11,6 +11,8 @@ import {
   Paperclip,
   Search,
   Send,
+  LoaderCircle,
+  RotateCcw,
   X,
 } from 'lucide-react';
 import type { getTicket, getMessageContext } from '@niticket/core/application/tickets';
@@ -696,6 +698,7 @@ export function Conversation({
               id="reply"
               ref={input}
               rows={1}
+              enterKeyHint="send"
               value={body}
               maxLength={20000}
               disabled={busy || !!pendingMessage}
@@ -712,20 +715,18 @@ export function Conversation({
                 event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 120)}px`;
               }}
               onKeyDown={(event) => {
-                if (
-                  event.key === 'Enter' &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing &&
-                  window.matchMedia('(pointer: fine)').matches
-                ) {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
                   event.currentTarget.form?.requestSubmit();
                 }
               }}
             />
             <Button
+              type="submit"
               className="messenger-send"
               aria-label={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام'}
+              title={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام (Enter)'}
+              aria-busy={busy}
               disabled={
                 busy ||
                 finding ||
@@ -733,8 +734,13 @@ export function Conversation({
                 (!pendingMessage && !body.trim() && !files.length && !voice)
               }
             >
-              <Send size={22} />
-              <span>{busy ? 'ارسال…' : pendingMessage ? 'تلاش دوباره' : 'ارسال'}</span>
+              {busy ? (
+                <LoaderCircle size={22} className="download-spinner" />
+              ) : pendingMessage ? (
+                <RotateCcw size={22} />
+              ) : (
+                <Send size={22} />
+              )}
             </Button>
           </div>
           <div className="messenger-tools">

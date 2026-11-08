@@ -7,6 +7,7 @@ import './globals.css';
 import './easy.css';
 import './messenger.css';
 import './search.css';
+import './downloads.css';
 
 export const metadata: Metadata = {
   title: { default: 'نیتیکت | پشتیبانی دانشگاه', template: '%s | نیتیکت' },

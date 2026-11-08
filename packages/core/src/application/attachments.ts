@@ -194,11 +194,26 @@ export async function uploadStatus(actor: Actor, id: string) {
   return { id, scanStatus: a.scanStatus };
 }
 
-export async function downloadAttachment(actor: Actor, id: string) {
+async function authorizedDownload(actor: Actor, id: string) {
   uuid.parse(id);
   const a = await db.attachment.findUnique({ where: { id } });
   if (!a || a.scanStatus !== 'CLEAN') fail();
   await authorize(actor, a);
+  return a;
+}
+
+export async function streamAttachment(actor: Actor, id: string, signal?: AbortSignal) {
+  const a = await authorizedDownload(actor, id);
+  const { objectStream } = await import('../infrastructure/storage');
+  return {
+    ...(await objectStream(a.objectKey, 52428800, signal)),
+    mime: a.detectedMime ?? 'application/octet-stream',
+    filename: a.filename,
+  };
+}
+
+export async function downloadAttachment(actor: Actor, id: string) {
+  const a = await authorizedDownload(actor, id);
   return {
     bytes: await objectBytes(a.objectKey, 52428800),
     mime: a.detectedMime ?? 'application/octet-stream',

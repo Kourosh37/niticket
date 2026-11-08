@@ -13,6 +13,7 @@ export default async function PortalLayout({ children }: { children: React.React
       universityName={policy.universityName}
       supportDescription={policy.supportDescription}
       user={{
+        id: actor.id,
         name: profile.name,
         isAdmin: actor.isAdmin,
         staff: !actor.isAdmin && profile.role === 'STAFF',

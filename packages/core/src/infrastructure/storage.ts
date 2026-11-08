@@ -43,6 +43,35 @@ export async function objectBytes(key: string, max: number) {
   return Buffer.from(bytes);
 }
 
+/** Backpressure and cancellation propagate to S3; no full-file buffer in the web process. */
+export async function objectStream(key: string, max: number, signal?: AbortSignal) {
+  const result = await storage().send(
+    new GetObjectCommand({ Bucket: config().S3_BUCKET, Key: key }),
+    { abortSignal: signal },
+  );
+  const source = result.Body?.transformToWebStream();
+  const size = result.ContentLength;
+  if (!source || !size || size > max) {
+    await source?.cancel();
+    throw new Error('Invalid object size');
+  }
+  let transferred = 0;
+  const stream = source.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        transferred += chunk.byteLength;
+        if (transferred > size || transferred > max) throw new Error('Object too large');
+        controller.enqueue(chunk);
+      },
+      flush() {
+        if (transferred !== size) throw new Error('Incomplete object');
+      },
+    }),
+    signal ? { signal } : undefined,
+  );
+  return { stream, size };
+}
+
 export async function headObject(key: string) {
   return storage().send(new HeadObjectCommand({ Bucket: config().S3_BUCKET, Key: key }));
 }

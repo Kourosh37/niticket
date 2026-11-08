@@ -1,7 +1,13 @@
-import { config } from '@niticket/core/infrastructure/config';
+import { db } from '@niticket/database';
+import { synchronizeRootAdministrator } from '@niticket/core/application/mobile-identity';
 
-const c = config();
-if (!c.ADMIN_PHONE) throw new Error('Set ADMIN_PHONE in .env before signing in.');
-console.log(
-  'Administrator phone is configured. Sign in with its OTP to create or link the administrator account. No password or email bootstrap is required.',
-);
+try {
+  const result = await synchronizeRootAdministrator();
+  console.log(
+    result.changed
+      ? 'Administrator synchronized. Sign in with the configured phone and OTP.'
+      : 'Administrator configuration is unchanged.',
+  );
+} finally {
+  await db.$disconnect();
+}

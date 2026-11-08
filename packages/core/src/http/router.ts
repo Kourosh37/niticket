@@ -121,14 +121,14 @@ export async function dispatch(
     });
   }
   if (resource === 'attachments' && id && action === 'access' && method === 'GET') {
-    const file = await attachments.downloadAttachment(actor, id);
-    return new Response(new Uint8Array(file.bytes), {
+    const file = await attachments.streamAttachment(actor, id, request.signal);
+    return new Response(file.stream, {
       headers: {
         'content-type': file.mime,
-        'content-length': String(file.bytes.length),
+        'content-length': String(file.size),
         'content-disposition': `${file.mime.startsWith('audio/') || file.mime.startsWith('image/') ? 'inline' : 'attachment'}; filename="attachment"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
         'x-content-type-options': 'nosniff',
-        'cache-control': 'no-store',
+        'cache-control': 'private, no-store, no-transform',
       },
     });
   }

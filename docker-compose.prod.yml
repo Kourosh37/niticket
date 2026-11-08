@@ -42,6 +42,8 @@ services:
         DATABASE_URL: '${RUNTIME_DATABASE_URL:?required}',
         REDIS_URL: 'redis://redis:6379',
         HOSTNAME: 0.0.0.0,
+        ADMIN_PHONE: '${ADMIN_PHONE:?required}',
+        SYNC_ROOT_ADMIN_ON_STARTUP: 'true',
       }
     networks: [edge, data]
     depends_on:

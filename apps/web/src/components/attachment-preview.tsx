@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist';
-import { Download, FileText, ImageIcon, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, ImageIcon, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
 import { AudioPlayer } from './audio-player';
+import { DownloadButton } from './downloads';
 import { digits, checkSession } from '@/lib/utils';
 
 export type AttachmentInfo = {
@@ -253,7 +254,10 @@ export function AttachmentPreview({ file }: { file: AttachmentInfo }) {
     );
   if (file.detectedMime?.startsWith('audio/'))
     return (
-      <AudioPlayer src={url} durationSeconds={file.durationSeconds} waveform={file.waveform} />
+      <div className="audio-attachment">
+        <AudioPlayer src={url} durationSeconds={file.durationSeconds} waveform={file.waveform} />
+        <DownloadButton file={file} />
+      </div>
     );
   const image = file.detectedMime?.startsWith('image/');
   return (
@@ -292,14 +296,7 @@ export function AttachmentPreview({ file }: { file: AttachmentInfo }) {
           >
             <Eye size={17} />
           </button>
-          <a
-            className="attachment-action"
-            href={url}
-            download={file.filename}
-            aria-label={`دریافت ${file.filename}`}
-          >
-            <Download size={17} />
-          </a>
+          <DownloadButton file={file} />
         </div>
       </div>
       <Modal
@@ -324,11 +321,7 @@ export function AttachmentPreview({ file }: { file: AttachmentInfo }) {
           )}
         </div>
         <div className="preview-footer">
-          <Button asChild variant="outline">
-            <a href={url} download={file.filename}>
-              <Download size={16} /> دریافت فایل اصلی
-            </a>
-          </Button>
+          <DownloadButton file={file} full />
         </div>
       </Modal>
     </>
