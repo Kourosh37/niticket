@@ -4,6 +4,9 @@ permissions: { contents: read }
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      # CI-only fixture; Compose validates every service even for infrastructure-only commands.
+      ADMIN_PHONE: '09120000000'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
