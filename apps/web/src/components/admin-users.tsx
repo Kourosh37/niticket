@@ -8,7 +8,7 @@ import { Button } from './ui/button';
 import { Modal } from './ui/dialog';
 import { Avatar } from './avatar';
 import { useReauthentication } from './reauthentication';
-import { request } from '@/lib/utils';
+import { request, dateTime } from '@/lib/utils';
 import type { listUsers } from '@niticket/core/application/administration';
 
 type User = Awaited<ReturnType<typeof listUsers>>['items'][number];
@@ -97,7 +97,13 @@ export function AdminUsers({
               <div style={{ flex: 1 }}>
                 <h3>{user.name}</h3>
                 <p>
-                  <bdi>{user.phoneNumber?.replace('+98', '0') ?? 'شماره ثبت نشده'}</bdi>
+                  شماره موبایل:{' '}
+                  <bdi>
+                    {(user.phoneNumber ?? user.phone)?.replace('+98', '0') || 'شماره ثبت نشده'}
+                  </bdi>
+                </p>
+                <p className="field-hint">
+                  آخرین ورود: {user.lastLoginAt ? dateTime(user.lastLoginAt) : 'هنوز وارد نشده'}
                 </p>
               </div>
               <span className="status">
@@ -144,14 +150,29 @@ export function AdminUsers({
             <h3>کاربری با این اطلاعات پیدا نشد.</h3>
           </div>
         )}
-        {data.nextCursor && (
-          <div className="pagination">
-            <Button asChild variant="outline">
-              <Link href={`/admin/users?cursor=${data.nextCursor}&q=${encodeURIComponent(q)}`}>
-                کاربران بعدی
-              </Link>
-            </Button>
-          </div>
+        {(data.previousCursor || data.nextCursor) && (
+          <nav className="pagination" aria-label="صفحه‌بندی کاربران">
+            {data.previousCursor && (
+              <Button asChild variant="outline">
+                <Link
+                  prefetch={false}
+                  href={`/admin/users?cursor=${data.previousCursor}&direction=previous&q=${encodeURIComponent(q)}`}
+                >
+                  صفحه قبل
+                </Link>
+              </Button>
+            )}
+            {data.nextCursor && (
+              <Button asChild variant="outline">
+                <Link
+                  prefetch={false}
+                  href={`/admin/users?cursor=${data.nextCursor}&q=${encodeURIComponent(q)}`}
+                >
+                  صفحه بعد
+                </Link>
+              </Button>
+            )}
+          </nav>
         )}
       </section>
       <Modal

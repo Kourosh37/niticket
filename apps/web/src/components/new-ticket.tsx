@@ -4,24 +4,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Building2, ChevronLeft, LoaderCircle, Search } from 'lucide-react';
+import { Button } from './ui/button';
 import { request } from '@/lib/utils';
 
-type Department = {
-  id: string;
-  name: string;
-  description: string;
-  acceptingTickets: boolean;
-  canContinue?: boolean;
-};
+type Choices = Awaited<
+  ReturnType<typeof import('@niticket/core/application/administration').conversationChoices>
+>;
 
 export function NewTicket({
-  departments,
+  initial,
   initialDepartment,
 }: {
-  departments: Department[];
+  initial: Choices;
   initialDepartment?: string;
 }) {
   const router = useRouter();
+  const [data, setData] = useState(initial),
+    [cursor, setCursor] = useState<string | undefined>(),
+    [previous, setPrevious] = useState<(string | undefined)[]>([]),
+    [loading, setLoading] = useState(false);
+  const first = useRef(true);
   const [search, setSearch] = useState(''),
     [openingId, setOpeningId] = useState<string | null>(null),
     [error, setError] = useState('');
@@ -46,15 +48,39 @@ export function NewTicket({
     },
     [router],
   );
-  const initialId = departments.find(
-    (d) => d.id === initialDepartment && (d.acceptingTickets || d.canContinue),
-  )?.id;
   useEffect(() => {
-    if (!initialId) return;
-    const pending = setTimeout(() => void open(initialId), 0);
+    if (!initialDepartment) return;
+    const pending = setTimeout(() => void open(initialDepartment), 0);
     return () => clearTimeout(pending);
-  }, [initialId, open]);
-  const shown = departments.filter((d) => `${d.name} ${d.description}`.includes(search.trim()));
+  }, [initialDepartment, open]);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      const query = new URLSearchParams({ q: search.trim(), ...(cursor ? { cursor } : {}) });
+      void request<Choices>(`/api/v1/departments/choices?${query}`, { signal: abort.signal })
+        .then((result) => {
+          if (!abort.signal.aborted) {
+            setData(result);
+            setError('');
+          }
+        })
+        .catch((error) => {
+          if (!abort.signal.aborted)
+            setError(error instanceof Error ? error.message : 'دریافت واحدها انجام نشد.');
+        })
+        .finally(() => {
+          if (!abort.signal.aborted) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [search, cursor]);
   return (
     <div className="easy-new-ticket messenger-picker">
       <Link href="/" className="easy-back">
@@ -66,14 +92,20 @@ export function NewTicket({
         <p>واحد را انتخاب کنید و همان‌جا پیام بفرستید.</p>
       </div>
       <section className="new-ticket-card" aria-label="واحدهای دانشگاه">
-        {departments.length > 5 && (
+        {(initial.items.length > 5 || initial.nextCursor) && (
           <div className="unit-search">
             <Search size={20} />
             <input
               aria-label="جستجوی واحد"
               placeholder="نام واحد را بنویسید…"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              maxLength={100}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCursor(undefined);
+                setPrevious([]);
+                setLoading(true);
+              }}
             />
           </div>
         )}
@@ -82,13 +114,13 @@ export function NewTicket({
             {error}
           </p>
         )}
-        <div className="unit-choices">
-          {shown.map((d) => (
+        <div className="unit-choices" aria-busy={loading}>
+          {data.items.map((d) => (
             <button
               type="button"
               key={d.id}
               className="unit-choice"
-              disabled={!!openingId || !(d.acceptingTickets || d.canContinue)}
+              disabled={loading || !!openingId || !(d.acceptingTickets || d.canContinue)}
               aria-label={`انتخاب ${d.name}`}
               onClick={() => void open(d.id)}
             >
@@ -115,9 +147,42 @@ export function NewTicket({
             </button>
           ))}
         </div>
-        {!shown.length && (
+        {loading && <p role="status">در حال دریافت واحدها…</p>}
+        {(data.nextCursor || previous.length > 0) && (
+          <nav className="unit-load-more" aria-label="صفحه‌بندی واحدها">
+            {!!previous.length && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading || !!openingId}
+                onClick={() => {
+                  setLoading(true);
+                  setCursor(previous.at(-1));
+                  setPrevious((value) => value.slice(0, -1));
+                }}
+              >
+                واحدهای قبلی
+              </Button>
+            )}
+            {data.nextCursor && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading || !!openingId}
+                onClick={() => {
+                  setLoading(true);
+                  setPrevious((value) => [...value, cursor]);
+                  setCursor(data.nextCursor!);
+                }}
+              >
+                واحدهای بیشتر
+              </Button>
+            )}
+          </nav>
+        )}
+        {!data.items.length && !loading && (
           <p className="new-no-units" role="status">
-            {departments.length
+            {search.trim()
               ? 'واحدی با این نام پیدا نشد.'
               : 'هنوز واحدی برای دریافت پیام فعال نشده است.'}
           </p>

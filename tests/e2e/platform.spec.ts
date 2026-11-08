@@ -61,6 +61,9 @@ test('an expired session redirects immediately when a protected form is submitte
   );
   await page.goto('/profile');
   await checked;
+  await expect(
+    page.getByRole('region', { name: 'نشست‌های فعال' }).getByText('این دستگاه', { exact: true }),
+  ).toBeVisible();
   await page.getByLabel('نام و نام خانوادگی', { exact: true }).fill('دانشجوی نشست منقضی');
   await db.session.updateMany({
     where: { userId: f.student.id },
@@ -297,6 +300,9 @@ test('three roles complete a ticket with private history notes, file previews an
   await expect(a.getByRole('textbox', { name: /شناسه|آیدی|ایدی/ })).toHaveCount(0);
   await a.getByLabel('تصویر پروفایل مسئول (اختیاری)').setInputFiles('tests/fixtures/photo.png');
   await a.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }).click();
+  await expect(a.getByRole('dialog', { name: 'ایجاد واحد و حساب مسئول' })).toHaveCount(0, {
+    timeout: 30000,
+  });
   await expect(a.getByRole('heading', { name, exact: true })).toBeVisible();
   const department = await db.department.findFirstOrThrow({ where: { name } }),
     officer = await db.user.findUniqueOrThrow({ where: { phoneNumber: officerPhone } });
@@ -315,6 +321,9 @@ test('three roles complete a ticket with private history notes, file previews an
   await login(s, f.student.phoneNumber!, f.password);
   await expect(s.locator('html')).toHaveAttribute('dir', 'rtl');
   await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
+  await expect(s.getByRole('heading', { name: 'به کدام واحد پیام می‌دهید؟' })).toBeVisible();
+  if (await s.getByLabel('جستجوی واحد', { exact: true }).count())
+    await s.getByLabel('جستجوی واحد', { exact: true }).fill(name);
   await s.getByRole('button', { name: `انتخاب ${name}`, exact: true }).click();
   await expect(s).toHaveURL(/\/tickets\/[a-f0-9-]+/);
   await s

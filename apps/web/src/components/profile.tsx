@@ -7,6 +7,7 @@ import { request } from '@/lib/utils';
 import { AvatarUpload } from './avatar-upload';
 import { useReauthentication } from './reauthentication';
 import { LogOut } from 'lucide-react';
+import { AccountSessions } from './account-sessions';
 
 export function Profile({
   profile,
@@ -142,6 +143,7 @@ export function Profile({
           {success}
         </p>
       )}
+      <AccountSessions />
       <div className="easy-profile-signout">
         <Button
           type="button"

@@ -1,9 +1,9 @@
 import { currentActor } from '@/lib/session';
-import { listDepartments } from '@niticket/core/application/administration';
+import { conversationChoices } from '@niticket/core/application/administration';
+import { uuid } from '@niticket/core/validation';
 import { NewTicket } from '@/components/new-ticket';
 import { redirect } from 'next/navigation';
 import { userRole } from '@niticket/core/domain/authorization';
-import { db } from '@niticket/database';
 
 export default async function Page({
   searchParams,
@@ -12,19 +12,21 @@ export default async function Page({
 }) {
   const actor = await currentActor();
   if (userRole(actor) !== 'STUDENT') redirect('/');
-  const [departments, params, existing] = await Promise.all([
-    listDepartments(actor),
-    searchParams,
-    db.ticket.groupBy({ by: ['departmentId'], where: { creatorId: actor.id } }),
+  const params = await searchParams;
+  const selected = uuid.safeParse(params.departmentId);
+  const [data, target] = await Promise.all([
+    conversationChoices(actor),
+    selected.success ? conversationChoices(actor, { departmentId: selected.data }) : null,
   ]);
-  const previous = new Set(existing.map((chat) => chat.departmentId));
+  const department = target?.items[0];
   return (
     <NewTicket
-      departments={departments.map((department) => ({
-        ...department,
-        canContinue: previous.has(department.id),
-      }))}
-      initialDepartment={params.departmentId}
+      initial={data}
+      initialDepartment={
+        department && (department.acceptingTickets || department.canContinue)
+          ? department.id
+          : undefined
+      }
     />
   );
 }

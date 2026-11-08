@@ -1,5 +1,5 @@
 import { currentActor } from '@/lib/session';
-import { reports, listDepartments } from '@niticket/core/application/administration';
+import { reports, departmentChoices } from '@niticket/core/application/administration';
 import { notFound } from 'next/navigation';
 import { statusNames, priorityNames, digits } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ export default async function Page({
     from: query.from ? new Date(query.from + 'T00:00:00+03:30').toISOString() : undefined,
     to: query.to ? new Date(query.to + 'T23:59:59+03:30').toISOString() : undefined,
   };
-  const [data, departments] = await Promise.all([reports(a, input), listDepartments(a, true)]);
+  const [data, departments] = await Promise.all([reports(a, input), departmentChoices(a, true)]);
   return (
     <>
       <div className="page-heading">

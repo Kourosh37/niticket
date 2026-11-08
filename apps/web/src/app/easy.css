@@ -1566,3 +1566,101 @@
     transition: none !important;
   }
 }
+
+.account-sessions {
+  grid-column: 1 / -1;
+  padding: 26px;
+  min-width: 0;
+  border-radius: 22px;
+}
+.sessions-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.sessions-heading h2 {
+  font-size: 20px;
+}
+.sessions-heading p {
+  font-size: 13px;
+  color: #687b71;
+}
+.account-session {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 20px 0;
+  border-bottom: 1px solid #e3ebe7;
+}
+.account-session > svg {
+  flex-shrink: 0;
+  color: #527b65;
+  margin-top: 5px;
+}
+.account-session-details {
+  flex: 1;
+  min-width: 0;
+}
+.account-session-details strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.account-session-details dl {
+  margin: 9px 0 0;
+  color: #607568;
+  font-size: 12px;
+}
+.account-session-details dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+}
+.account-session-details dd {
+  margin: 0;
+}
+.session-current-tag,
+.session-active-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: #e8f2ea;
+  color: #286846;
+  font-size: 11px;
+}
+.session-active-tag {
+  background: #f0f3f1;
+  color: #627468;
+}
+.other-sessions-title {
+  margin-top: 24px;
+  font-size: 15px;
+}
+.account-sessions > .button {
+  margin-top: 20px;
+}
+@media (max-width: 640px) {
+  .account-sessions {
+    padding: 20px 16px;
+  }
+  .account-session {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .account-session-details {
+    min-width: calc(100% - 42px);
+  }
+  .account-session > .button {
+    margin-inline-start: 36px;
+  }
+}
+
+.unit-load-more {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 22px;
+}

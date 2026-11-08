@@ -9,6 +9,7 @@ import { settings, saveSettings } from '../application/settings';
 import { failedJobs, retryJob } from '../application/operations';
 import { assertAdmin } from '../domain/authorization';
 import * as credentials from '../application/credentials';
+import * as sessions from '../application/sessions';
 import { getAuth } from '../infrastructure/auth';
 
 export async function dispatch(
@@ -58,6 +59,8 @@ export async function dispatch(
       if (action === 'status' || action === 'reopen') return tickets.changeStatus(actor, id, body);
     }
   }
+  if (resource === 'departments' && id === 'choices' && method === 'GET')
+    return admin.conversationChoices(actor, query);
   if (resource === 'departments' && method === 'GET')
     return admin.listDepartments(actor, false, { q: query.q });
   if (resource === 'reports' && method === 'GET') return admin.reports(actor, query);
@@ -70,6 +73,12 @@ export async function dispatch(
     if (method === 'PATCH') return admin.readNotification(actor, await readJson(request));
   }
   if (resource === 'users' && id === 'me') {
+    if (action === 'sessions') {
+      if (method === 'GET' && !segments[3]) return sessions.listSessions(actor, query.cursor);
+      if (method === 'DELETE' && segments[3]) return sessions.revokeSessions(actor, segments[3]);
+      if (method === 'DELETE' && !segments[3]) return sessions.revokeSessions(actor);
+      fail();
+    }
     if (action === 'password' && method === 'POST')
       return credentials.setPassword(actor, await readJson(request));
     if (method === 'GET') return admin.getProfile(actor);
@@ -138,7 +147,13 @@ export async function dispatch(
         return admin.saveCategory(actor, departmentId, await readJson(request));
     }
     if (id === 'users') {
-      if (method === 'GET') return admin.listUsers(actor, query.q, query.cursor);
+      if (method === 'GET')
+        return admin.listUsers(
+          actor,
+          query.q,
+          query.cursor,
+          query.direction as 'next' | 'previous' | undefined,
+        );
       if (method === 'POST') return admin.createUser(actor, await readJson(request));
       if (departmentId && method === 'PATCH')
         return admin.updateUser(actor, departmentId, await readJson(request));

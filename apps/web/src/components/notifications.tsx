@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck } from 'lucide-react';
 import { request, dateTime } from '@/lib/utils';
@@ -10,15 +10,23 @@ import type { notifications } from '@niticket/core/application/administration';
 
 export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifications>> }) {
   const router = useRouter();
-  const [error, setError] = useState('');
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const pending = useRef(false);
 
-  async function read(id?: string) {
+  async function read(id?: string, refresh = true) {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
     try {
       await request('/api/v1/notifications', { method: 'PATCH', body: JSON.stringify({ id }) });
       window.dispatchEvent(new Event('notifications:changed'));
-      router.refresh();
+      if (refresh && window.location.pathname === '/notifications') router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ذخیره انجام نشد.');
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   }
 
@@ -29,7 +37,7 @@ export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifi
           <h1>اعلان‌ها</h1>
           <p>تازه‌ترین خبرها از روند پیگیری درخواست‌های شما</p>
         </div>
-        <Button variant="outline" onClick={() => read()}>
+        <Button variant="outline" disabled={busy} onClick={() => read()}>
           <CheckCheck size={17} /> خواندن همه
         </Button>
       </div>
@@ -47,7 +55,7 @@ export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifi
               </span>
               <div>
                 {n.ticketId ? (
-                  <Link href={`/tickets/${n.ticketId}`} onClick={() => void read(n.id)}>
+                  <Link href={`/tickets/${n.ticketId}`} onClick={() => void read(n.id, false)}>
                     <strong>{n.title}</strong>
                   </Link>
                 ) : (
@@ -56,7 +64,7 @@ export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifi
                 <time>{dateTime(n.createdAt)}</time>
               </div>
               {!n.readAt && (
-                <Button variant="ghost" size="sm" onClick={() => read(n.id)}>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => read(n.id)}>
                   خوانده شد
                 </Button>
               )}

@@ -75,6 +75,7 @@ function createAuth() {
       revokeSessionsOnPasswordReset: true,
     },
     session: {
+      additionalFields: { lastSeenAt: { type: 'date', required: false, input: false } },
       expiresIn: c.SESSION_DAYS * 86400,
       updateAge: 86400,
       freshAge: 300,

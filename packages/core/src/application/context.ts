@@ -6,7 +6,17 @@ import type { Actor } from '../domain/authorization';
 export async function actorFromHeaders(headers: Headers): Promise<Actor> {
   const session = await getAuth().api.getSession({ headers, query: { disableRefresh: true } });
   if (!session) fail('UNAUTHENTICATED', 401, 'برای ادامه وارد حساب خود شوید.');
-  return loadActor(db, session.user.id, session.session.id, new Date(session.session.createdAt));
+  const actor = await loadActor(
+    db,
+    session.user.id,
+    session.session.id,
+    new Date(session.session.createdAt),
+  );
+  const cutoff = new Date(Date.now() - 300000);
+  if (!session.session.lastSeenAt || new Date(session.session.lastSeenAt) < cutoff)
+    // Keep Better Auth's updatedAt/expiry markers independent of activity tracking.
+    await db.$executeRaw`UPDATE "Session" SET "lastSeenAt"=CURRENT_TIMESTAMP WHERE id=${actor.sessionId} AND "userId"=${actor.id} AND "lastSeenAt"<${cutoff} AND "expiresAt">CURRENT_TIMESTAMP`;
+  return actor;
 }
 
 export async function loadActor(

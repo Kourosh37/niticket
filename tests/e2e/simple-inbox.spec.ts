@@ -39,6 +39,9 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
     o = await officer.newPage();
   await login(s, f.student.phoneNumber!, f.password);
   await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
+  await expect(s.getByRole('heading', { name: 'به کدام واحد پیام می‌دهید؟' })).toBeVisible();
+  if (await s.getByLabel('جستجوی واحد', { exact: true }).count())
+    await s.getByLabel('جستجوی واحد', { exact: true }).fill(f.department.name);
   await s.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }).click();
   await expect(s).toHaveURL(/\/tickets\/[a-f0-9-]+$/);
   const id = s.url().split('/').at(-1)!;
@@ -64,6 +67,9 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   await processScan(event.id, event.payload);
   await s.getByRole('link', { name: 'بازگشت به گفتگوها', exact: true }).click();
   await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
+  await expect(s.getByRole('heading', { name: 'به کدام واحد پیام می‌دهید؟' })).toBeVisible();
+  if (await s.getByLabel('جستجوی واحد', { exact: true }).count())
+    await s.getByLabel('جستجوی واحد', { exact: true }).fill(f.department.name);
   await s.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }).click();
   await expect(s).toHaveURL(`${origin}/tickets/${id}`);
   expect(
@@ -202,12 +208,11 @@ test('long chats use a single message scroller, preserve older-message position 
     })),
   });
   await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
-  await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeAttached({
+  await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeInViewport({
     timeout: 15000,
   });
-  await area.evaluate((element) => {
-    element.scrollTop = 0;
-  });
+  await area.hover();
+  await s.mouse.wheel(0, -100000);
   const preserved = s.getByText('پیام شماره 60 برای بررسی گفتگو', { exact: true });
   await expect(preserved).toBeInViewport();
   const position = (await preserved.boundingBox())!.y;

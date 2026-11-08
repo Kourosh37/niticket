@@ -10,6 +10,7 @@ export function InboxRefresh() {
     let active = true,
       checking = false,
       revision: string | undefined;
+    const abort = new AbortController();
     const refresh = async () => {
       if (
         checking ||
@@ -19,7 +20,9 @@ export function InboxRefresh() {
         return;
       checking = true;
       try {
-        const result = await request<{ revision: string }>('/api/v1/inbox/revision');
+        const result = await request<{ revision: string }>('/api/v1/inbox/revision', {
+          signal: abort.signal,
+        });
         if (active && revision !== result.revision) {
           revision = result.revision;
           router.refresh();
@@ -40,6 +43,7 @@ export function InboxRefresh() {
     document.addEventListener('visibilitychange', refresh);
     return () => {
       active = false;
+      abort.abort();
       clearInterval(timer);
       window.removeEventListener('focus', focus);
       document.removeEventListener('visibilitychange', refresh);

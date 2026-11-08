@@ -19,7 +19,7 @@ import {
   responsibleSchema,
 } from '../validation';
 import { internalIdentityEmail } from './mobile-identity';
-import { iranianPhoneSchema } from '../domain/phone';
+import { iranianPhoneSchema, asciiDigits, normalizeIranianPhone } from '../domain/phone';
 import { config } from '../infrastructure/config';
 import { transaction } from '../infrastructure/transaction';
 import { refreshActor, requireFresh } from './context';
@@ -32,6 +32,81 @@ async function audit(
   metadata: Prisma.InputJsonValue = {},
 ) {
   await tx.auditLog.create({ data: { actorId: actor.id, action, resourceId, metadata } });
+}
+
+export async function departmentChoices(actor: Actor, admin = false) {
+  const scope: Prisma.DepartmentWhereInput = admin
+    ? actor.isAdmin
+      ? {}
+      : { memberships: { some: { userId: actor.id, active: true } } }
+    : {
+        active: true,
+        OR: [
+          { visible: true },
+          { memberships: { some: { userId: actor.id, active: true } } },
+          ...(actor.isAdmin ? [{}] : []),
+        ],
+      };
+  return db.department.findMany({
+    where: scope,
+    orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    take: 1000,
+    select: { id: true, name: true, description: true, acceptingTickets: true },
+  });
+}
+
+export async function conversationChoices(actor: Actor, input: unknown = {}) {
+  if (userRole(actor) !== 'STUDENT') fail('FORBIDDEN', 403);
+  const data = z
+    .object({
+      q: z.string().trim().max(100).optional(),
+      cursor: uuid.optional(),
+      departmentId: uuid.optional(),
+    })
+    .strict()
+    .parse(input);
+  const where: Prisma.DepartmentWhereInput = {
+    active: true,
+    ...(data.departmentId ? { id: data.departmentId } : {}),
+    AND: [
+      { OR: [{ visible: true }, { memberships: { some: { userId: actor.id, active: true } } }] },
+      data.q
+        ? {
+            OR: [
+              { name: { contains: data.q, mode: 'insensitive' } },
+              { description: { contains: data.q, mode: 'insensitive' } },
+            ],
+          }
+        : {},
+    ],
+  };
+  if (
+    data.cursor &&
+    !(await db.department.findFirst({
+      where: { AND: [where, { id: data.cursor }] },
+      select: { id: true },
+    }))
+  )
+    fail();
+  const rows = await db.department.findMany({
+    where,
+    orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    take: 51,
+    ...(data.cursor ? { cursor: { id: data.cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      acceptingTickets: true,
+      tickets: { where: { creatorId: actor.id }, take: 1, select: { id: true } },
+    },
+  });
+  return {
+    items: rows
+      .slice(0, 50)
+      .map(({ tickets, ...department }) => ({ ...department, canContinue: tickets.length > 0 })),
+    nextCursor: rows.length > 50 ? rows[49].id : null,
+  };
 }
 
 export async function listDepartments(
@@ -212,20 +287,48 @@ export async function saveCategory(actor: Actor, departmentId: string, input: un
   });
 }
 
-export async function listUsers(actor: Actor, q = '', cursor?: string) {
+export async function listUsers(
+  actor: Actor,
+  q = '',
+  cursor?: string,
+  direction: 'next' | 'previous' = 'next',
+) {
   assertAdmin(actor);
   if (cursor) uuid.parse(cursor);
-  const rows = await db.user.findMany({
-    where: q
+  z.enum(['next', 'previous']).parse(direction);
+  q = q.trim().slice(0, 100);
+  const digits = asciiDigits(q).replace(/[\s()-]/g, '');
+  const phone = normalizeIranianPhone(q);
+  const fullPhone = /^\+989\d{9}$/.test(phone);
+  const numeric = /^\+?\d+$/.test(digits);
+  const phonePart = digits.startsWith('09') ? digits.slice(1) : digits.replace(/^\+/, '');
+  const where: Prisma.UserWhereInput = !q
+    ? {}
+    : fullPhone
       ? {
           OR: [
-            { name: { contains: q.slice(0, 100), mode: 'insensitive' } },
-            { phoneNumber: { contains: q.slice(0, 100) } },
-            { studentNumber: { contains: q.slice(0, 100) } },
+            { phoneNumber: phone },
+            { phone: { in: [phone, phone.replace('+98', '0'), phone.slice(3)] } },
           ],
         }
-      : {},
-    orderBy: { id: 'asc' },
+      : numeric
+        ? {
+            OR: [
+              { phoneNumber: { contains: phonePart } },
+              { phone: { contains: digits } },
+              { studentNumber: { contains: digits } },
+            ],
+          }
+        : { name: { contains: q, mode: 'insensitive' } };
+  if (
+    cursor &&
+    !(await db.user.findFirst({ where: { AND: [where, { id: cursor }] }, select: { id: true } }))
+  )
+    fail();
+  const backward = direction === 'previous' && !!cursor;
+  const rows = await db.user.findMany({
+    where,
+    orderBy: { id: backward ? 'desc' : 'asc' },
     take: 31,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: {
@@ -233,15 +336,21 @@ export async function listUsers(actor: Actor, q = '', cursor?: string) {
       name: true,
       active: true,
       isAdmin: true,
-      accountType: true,
       role: true,
-      studentNumber: true,
       phoneNumber: true,
+      phone: true,
+      phoneNumberVerified: true,
       image: true,
-      createdAt: true,
+      lastLoginAt: true,
     },
   });
-  return { items: rows.slice(0, 30), nextCursor: rows.length > 30 ? rows[29].id : null };
+  const items = rows.slice(0, 30);
+  if (backward) items.reverse();
+  return {
+    items,
+    nextCursor: (backward ? !!cursor : rows.length > 30) ? (items.at(-1)?.id ?? null) : null,
+    previousCursor: (backward ? rows.length > 30 : !!cursor) ? (items[0]?.id ?? null) : null,
+  };
 }
 
 async function provisionStaff(

@@ -3,7 +3,7 @@ import { Building2, ChevronLeft, MessageCircle, Plus, Search } from 'lucide-reac
 import type { Actor } from '@niticket/core/domain/authorization';
 import { userRole } from '@niticket/core/domain/authorization';
 import { listTickets } from '@niticket/core/application/tickets';
-import { listDepartments } from '@niticket/core/application/administration';
+import { departmentChoices } from '@niticket/core/application/administration';
 import { Avatar } from './avatar';
 import { Button } from './ui/button';
 import { InboxRefresh } from './inbox-refresh';
@@ -37,7 +37,7 @@ export async function Inbox({
   };
   const [result, departments] = await Promise.all([
     listTickets(actor, filters),
-    listDepartments(actor, staff),
+    departmentChoices(actor, staff),
   ]);
 
   function href(changes: Record<string, string>) {

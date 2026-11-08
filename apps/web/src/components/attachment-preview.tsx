@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist';
 import { Download, FileText, ImageIcon, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
@@ -18,6 +19,39 @@ export type AttachmentInfo = {
   waveform?: unknown;
 };
 
+const MAX_PREVIEW_BYTES = 20971520;
+
+async function previewBytes(url: string, signal: AbortSignal) {
+  const response = await fetch(url, { signal });
+  checkSession(response);
+  if (!response.ok) throw new Error('اجازه مشاهده فایل وجود ندارد.');
+  if (Number(response.headers.get('content-length')) > MAX_PREVIEW_BYTES) {
+    await response.body?.cancel();
+    throw new Error('این فایل برای پیش‌نمایش بزرگ است؛ آن را دریافت کنید.');
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('دریافت فایل انجام نشد.');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_PREVIEW_BYTES) {
+      await reader.cancel();
+      throw new Error('این فایل برای پیش‌نمایش بزرگ است؛ آن را دریافت کنید.');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes.buffer;
+}
+
 function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
@@ -26,37 +60,44 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
     [page, setPage] = useState(1),
     [pages, setPages] = useState(1);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const pdfSource = useRef<{
+    task: PDFDocumentLoadingTask;
+    document: Promise<PDFDocumentProxy>;
+  } | null>(null);
   useEffect(() => {
     const abort = new AbortController();
     let active = true;
-    let task: { destroy: () => Promise<void> } | undefined;
     let rendering: { cancel: () => void } | undefined;
 
     async function load() {
       try {
-        const response = await fetch(url, { signal: abort.signal });
-        checkSession(response);
-        if (!response.ok) throw new Error('اجازه مشاهده فایل وجود ندارد.');
-        const blob = await response.blob();
-        if (blob.size > 20971520)
+        if (file.size && file.size > MAX_PREVIEW_BYTES)
           throw new Error('این فایل برای پیش‌نمایش بزرگ است؛ آن را دریافت کنید.');
-        const data = await blob.arrayBuffer();
+        const data =
+          file.detectedMime === 'application/pdf' && pdfSource.current
+            ? null
+            : await previewBytes(url, abort.signal);
+        if (!active) return;
         if (file.detectedMime === 'application/pdf') {
-          const pdfjs = await import('pdfjs-dist');
-          pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-          const loadingTask = pdfjs.getDocument({
-            data: new Uint8Array(data),
-            useSystemFonts: true,
-            cMapUrl: '/pdf-assets/cmaps/',
-            cMapPacked: true,
-            standardFontDataUrl: '/pdf-assets/standard_fonts/',
-            wasmUrl: '/pdf-assets/wasm/',
-          });
-          task = loadingTask;
-          const pdf = await loadingTask.promise;
+          if (!pdfSource.current) {
+            const pdfjs = await import('pdfjs-dist');
+            if (!active) return;
+            pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+            const loadingTask = pdfjs.getDocument({
+              data: new Uint8Array(data!),
+              useSystemFonts: true,
+              cMapUrl: '/pdf-assets/cmaps/',
+              cMapPacked: true,
+              standardFontDataUrl: '/pdf-assets/standard_fonts/',
+              wasmUrl: '/pdf-assets/wasm/',
+            });
+            pdfSource.current = { task: loadingTask, document: loadingTask.promise };
+          }
+          const pdf = await pdfSource.current.document;
           if (!active) return;
           setPages(pdf.numPages);
           const p = await pdf.getPage(Math.min(page, pdf.numPages));
+          if (!active) return;
           const initial = p.getViewport({ scale: 1 });
           const width = Math.min(750, window.innerWidth - 90);
           const viewport = p.getViewport({ scale: width / initial.width });
@@ -69,11 +110,11 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
           await render.promise;
         } else if (file.detectedMime?.includes('wordprocessingml')) {
           const mammoth = await import('mammoth');
-          const result = await mammoth.extractRawText({ arrayBuffer: data });
+          const result = await mammoth.extractRawText({ arrayBuffer: data! });
           if (active) setText(result.value.slice(0, 300000));
         } else if (file.detectedMime?.includes('spreadsheetml')) {
           const { readSheet: read } = await import('read-excel-file/browser');
-          const values = await read(new Blob([data]));
+          const values = await read(new Blob([data!]));
           if (active)
             setRows(
               values
@@ -89,7 +130,7 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
                 ),
             );
         } else if (file.detectedMime === 'text/plain') {
-          if (active) setText(new TextDecoder('utf-8').decode(data).slice(0, 300000));
+          if (active) setText(new TextDecoder('utf-8').decode(data!).slice(0, 300000));
         } else throw new Error('پیش‌نمایش این قالب در دسترس نیست. فایل را دریافت کنید.');
       } catch (error) {
         if (active && !(error instanceof DOMException && error.name === 'AbortError'))
@@ -104,9 +145,15 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
       active = false;
       abort.abort();
       rendering?.cancel();
-      void task?.destroy();
     };
-  }, [file.detectedMime, url, page]);
+  }, [file.detectedMime, file.size, url, page]);
+  useEffect(
+    () => () => {
+      void pdfSource.current?.task.destroy();
+      pdfSource.current = null;
+    },
+    [url],
+  );
   return (
     <div className="document-preview">
       {loading && (
