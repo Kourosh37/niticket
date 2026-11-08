@@ -38,10 +38,11 @@ function ResponsibleFields({ person }: { person?: Person }) {
           id="responsible-phone"
           name="phoneNumber"
           type="tel"
+          inputMode="numeric"
+          autoComplete="tel"
           dir="ltr"
           required
           maxLength={40}
-          autoComplete="off"
           defaultValue={person?.phoneNumber ?? ''}
           placeholder="09123456789"
         />

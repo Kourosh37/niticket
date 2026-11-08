@@ -13,7 +13,8 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/database/package.json packages/database/package.json
-RUN pnpm install --frozen-lockfile --network-concurrency=4 --child-concurrency=1
+RUN --mount=type=cache,id=niticket-pnpm-store,target=/pnpm/store \
+    pnpm install --store-dir=/pnpm/store --prefer-offline --frozen-lockfile --network-concurrency=4 --child-concurrency=1
 
 FROM dependencies AS tools
 COPY . .

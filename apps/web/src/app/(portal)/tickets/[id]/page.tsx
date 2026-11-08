@@ -2,20 +2,22 @@ import { notFound } from 'next/navigation';
 import { currentActor } from '@/lib/session';
 import { getTicket } from '@niticket/core/application/tickets';
 import { AppError } from '@niticket/core/domain/errors';
-import { settings } from '@niticket/core/application/settings';
+import { currentPolicy } from '@/lib/policy';
 import { Conversation } from '@/components/conversation';
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const a = await currentActor();
   const { id } = await params;
-  let detail;
+  let detail, policy;
   try {
-    detail = await getTicket(a, id);
+    [detail, policy] = await Promise.all([
+      getTicket(a, id, undefined, undefined, false),
+      currentPolicy(),
+    ]);
   } catch (error) {
     if (error instanceof AppError && error.status === 404) notFound();
     throw error;
   }
-  const policy = await settings();
   return (
     <Conversation
       key={id}

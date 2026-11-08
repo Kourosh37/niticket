@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { asciiDigits } from '@niticket/core/domain/phone';
 import { Button } from './ui/button';
 import { request, RequestError } from '@/lib/utils';
 
@@ -89,9 +90,16 @@ function PasswordConfirmation({
             type={method === 'password' ? 'password' : 'text'}
             inputMode={method === 'code' ? 'numeric' : undefined}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) =>
+              setValue(
+                method === 'code'
+                  ? asciiDigits(e.target.value).replace(/\D/g, '').slice(0, 6)
+                  : e.target.value,
+              )
+            }
             autoComplete={method === 'code' ? 'one-time-code' : 'current-password'}
             dir="ltr"
+            enterKeyHint="done"
             maxLength={method === 'code' ? 6 : 128}
             disabled={busy}
             onKeyDown={(e) => {

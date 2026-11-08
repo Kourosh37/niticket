@@ -5,19 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const digits = (n: number) => new Intl.NumberFormat('fa-IR').format(n);
+const numberFormat = new Intl.NumberFormat('fa-IR');
+const dateFormat = new Intl.DateTimeFormat('fa-IR', {
+  dateStyle: 'medium',
+  timeZone: 'Asia/Tehran',
+});
+const dateTimeFormat = new Intl.DateTimeFormat('fa-IR', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Tehran',
+});
 
-export const date = (value: string | Date) =>
-  new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeZone: 'Asia/Tehran' }).format(
-    new Date(value),
-  );
+export const digits = (n: number) => numberFormat.format(n);
 
-export const dateTime = (value: string | Date) =>
-  new Intl.DateTimeFormat('fa-IR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Tehran',
-  }).format(new Date(value));
+export const date = (value: string | Date) => dateFormat.format(new Date(value));
+
+export const dateTime = (value: string | Date) => dateTimeFormat.format(new Date(value));
 
 export const statusNames: Record<string, string> = {
   OPEN: 'باز',

@@ -191,6 +191,8 @@ export function AdminUsers({
                   id="edit-user-phone"
                   name="phoneNumber"
                   type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
                   dir="ltr"
                   defaultValue={editing.phoneNumber ?? ''}
                   maxLength={40}

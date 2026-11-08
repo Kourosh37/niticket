@@ -1,36 +1,52 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import {
-  ArrowDown,
-  ArrowRight,
-  Check,
-  Info,
-  LoaderCircle,
-  Lock,
-  MessageCircle,
-  Paperclip,
-  Send,
-  X,
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { ArrowDown, ArrowRight, Info, Lock, Paperclip, Send, X } from 'lucide-react';
 import type { getTicket } from '@niticket/core/application/tickets';
+import { ActiveAudio } from './audio-player';
+import { stopAudio } from '@/lib/audio-playback';
 import { Avatar } from './avatar';
+import { HistoryNote } from './history-note';
 import { AttachmentPreview } from './attachment-preview';
 import { Button } from './ui/button';
-import { HistoryNote } from './history-note';
+import dynamic from 'next/dynamic';
+import type { TimelineHandle } from './message-timeline';
 import { Modal } from './ui/dialog';
 import { UploadProgress } from './upload-progress';
 import { VoiceRecorder } from './voice-recorder';
 import { date, dateTime, digits, request, RequestError } from '@/lib/utils';
 import { uploadFile } from '@/lib/upload';
 
+const MessageTimeline = dynamic(
+  () => import('./message-timeline').then((module) => module.MessageTimeline),
+  {
+    ssr: false,
+    loading: () => (
+      <p role="status" className="messenger-timeline-loading">
+        در حال دریافت پیام‌ها…
+      </p>
+    ),
+  },
+);
+
 type Detail = Awaited<ReturnType<typeof getTicket>>;
 type ChatMessage = Detail['messages'][number];
 
 function mergeMessages(previous: ChatMessage[], incoming: ChatMessage[]) {
   const byId = new Map(previous.map((message) => [message.id, message]));
-  for (const message of incoming) byId.set(message.id, message);
+  for (const message of incoming) {
+    const previous = byId.get(message.id);
+    if (
+      !previous ||
+      previous.body !== message.body ||
+      previous.visibility !== message.visibility ||
+      previous.sender.name !== message.sender.name ||
+      previous.sender.image !== message.sender.image ||
+      JSON.stringify(previous.attachments) !== JSON.stringify(message.attachments)
+    )
+      byId.set(message.id, message);
+  }
   return [...byId.values()].sort(
     (a, b) =>
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id),
@@ -70,6 +86,7 @@ export function Conversation({
     [error, setError] = useState(''),
     [info, setInfo] = useState(false),
     [newMessages, setNewMessages] = useState(false),
+    [jumpRequest, setJumpRequest] = useState(0),
     [progress, setProgress] = useState<number | null>(null),
     [filename, setFilename] = useState(''),
     [pendingMessage, setPendingMessage] = useState<string | null>(null),
@@ -77,13 +94,9 @@ export function Conversation({
   const [olderActivities, setOlderActivities] = useState<Detail['activities']>(detail.activities),
     [activityCursor, setActivityCursor] = useState(detail.nextActivityCursor),
     [loadingHistory, setLoadingHistory] = useState(false);
-  const viewport = useRef<HTMLDivElement>(null),
-    stream = useRef<HTMLDivElement>(null),
+  const timeline = useRef<TimelineHandle>(null),
     input = useRef<HTMLTextAreaElement>(null),
     followLatest = useRef(true),
-    anchor = useRef<{ height: number; top: number; messageId?: string; offset?: number } | null>(
-      null,
-    ),
     mounted = useRef(true),
     sending = useRef(false),
     revision = useRef(
@@ -92,7 +105,6 @@ export function Conversation({
     currentVersion = useRef(detail.ticket.version),
     fetching = useRef<Promise<void> | null>(null),
     latestId = useRef(detail.messages.at(-1)?.id),
-    latestActivityId = useRef(detail.activities[0]?.id),
     attempt = useRef<{ id: string; body: string; visibility: string } | null>(null);
   const { ticket, permissions } = data;
   const id = ticket.id;
@@ -100,6 +112,7 @@ export function Conversation({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      stopAudio();
     };
   }, []);
 
@@ -122,21 +135,9 @@ export function Conversation({
           (!latestId.current || !latest.messages.some((message) => message.id === latestId.current))
         )
           setOlderCursor(latest.nextMessageCursor);
-        if (
-          latest.nextActivityCursor &&
-          (!latestActivityId.current ||
-            !latest.activities.some((activity) => activity.id === latestActivityId.current))
-        )
-          setActivityCursor(latest.nextActivityCursor);
         latestId.current = lastId;
-        latestActivityId.current = latest.activities[0]?.id;
         setData(latest);
         setMessages((previous) => mergeMessages(previous, latest.messages));
-        setOlderActivities((previous) => [
-          ...new Map(
-            [...previous, ...latest.activities].map((activity) => [activity.id, activity]),
-          ).values(),
-        ]);
       })
       .finally(() => {
         fetching.current = null;
@@ -162,61 +163,29 @@ export function Conversation({
     };
   }, [busy, recording, refresh]);
 
-  useLayoutEffect(() => {
-    const area = viewport.current;
-    if (!area) return;
-    if (anchor.current) {
-      const target = anchor.current.messageId
-        ? area.querySelector<HTMLElement>(`[data-message-id="${anchor.current.messageId}"]`)
-        : null;
-      if (target && anchor.current.offset !== undefined)
-        area.scrollTop +=
-          target.getBoundingClientRect().top -
-          area.getBoundingClientRect().top -
-          anchor.current.offset;
-      else area.scrollTop = anchor.current.top + area.scrollHeight - anchor.current.height;
-      anchor.current = null;
-    } else if (followLatest.current) area.scrollTop = area.scrollHeight;
-  }, [messages]);
-
-  useEffect(() => {
-    if (!stream.current) return;
-    const observer = new ResizeObserver(() => {
-      if (followLatest.current && !anchor.current && viewport.current)
-        viewport.current.scrollTop = viewport.current.scrollHeight;
-    });
-    observer.observe(stream.current);
-    return () => observer.disconnect();
-  }, []);
-
-  async function loadOlder() {
+  const loadOlder = useCallback(async () => {
     if (!olderCursor || loadingOlder) return;
     setLoadingOlder(true);
     try {
-      const previous = await request<Detail>(`/api/v1/tickets/${id}?messageCursor=${olderCursor}`);
+      const previous = await request<{ items: ChatMessage[]; nextCursor: string | null }>(
+        `/api/v1/tickets/${id}/messages?cursor=${olderCursor}`,
+      );
       if (!mounted.current) return;
-      const area = viewport.current;
-      if (area) {
-        const top = area.getBoundingClientRect().top;
-        const visible = Array.from(area.querySelectorAll<HTMLElement>('[data-message-id]')).find(
-          (message) => message.getBoundingClientRect().bottom > top,
-        );
-        anchor.current = {
-          height: area.scrollHeight,
-          top: area.scrollTop,
-          messageId: visible?.dataset.messageId,
-          offset: visible ? visible.getBoundingClientRect().top - top : undefined,
-        };
-      }
       followLatest.current = false;
-      setMessages((current) => mergeMessages(previous.messages, current));
-      setOlderCursor(previous.nextMessageCursor);
+      timeline.current?.preserveAnchor();
+      setMessages((current) => mergeMessages(previous.items, current));
+      setOlderCursor(previous.nextCursor);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'پیام‌های قبلی دریافت نشد.');
     } finally {
       setLoadingOlder(false);
     }
-  }
+  }, [id, olderCursor, loadingOlder]);
+
+  const onBottomChange = useCallback((atBottom: boolean) => {
+    followLatest.current = atBottom;
+    if (atBottom) setNewMessages(false);
+  }, []);
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -283,6 +252,7 @@ export function Conversation({
       setNewMessages(false);
       await fetching.current?.catch(() => {});
       await refresh();
+      setJumpRequest((value) => value + 1);
     } catch (error) {
       setError(
         `${error instanceof Error ? error.message : 'ارسال انجام نشد.'}${savedId ? ' پیام ذخیره شده؛ ارسال فایل‌ها را دوباره امتحان کنید.' : ''}`,
@@ -294,29 +264,49 @@ export function Conversation({
     }
   }
 
-  async function loadHistory() {
-    if (!activityCursor || loadingHistory) return;
-    setLoadingHistory(true);
-    try {
-      const previous = await request<Detail>(
-        `/api/v1/tickets/${id}?activityCursor=${activityCursor}`,
-      );
-      setOlderActivities((current) => [...current, ...previous.activities]);
-      setActivityCursor(previous.nextActivityCursor);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'تاریخچه دریافت نشد.');
-    } finally {
-      setLoadingHistory(false);
-    }
-  }
-
-  const activities = [
-    ...new Map(
-      [...olderActivities, ...data.activities].map((activity) => [activity.id, activity]),
-    ).values(),
-  ].sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id.localeCompare(a.id),
+  const [historyOpen, setHistoryOpen] = useState(false),
+    [historyError, setHistoryError] = useState('');
+  const historyInFlight = useRef(false);
+  const fetchHistory = useCallback(
+    async (cursor?: string) => {
+      if (historyInFlight.current) return;
+      historyInFlight.current = true;
+      try {
+        const page = await request<{ items: Detail['activities']; nextCursor: string | null }>(
+          `/api/v1/tickets/${id}/history${cursor ? `?cursor=${cursor}` : ''}`,
+        );
+        if (!mounted.current) return;
+        setHistoryError('');
+        setOlderActivities((current) =>
+          [
+            ...new Map(
+              [...current, ...page.items].map((activity) => [activity.id, activity]),
+            ).values(),
+          ].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() ||
+              b.id.localeCompare(a.id),
+          ),
+        );
+        setActivityCursor(page.nextCursor);
+      } catch (error) {
+        if (mounted.current)
+          setHistoryError(error instanceof Error ? error.message : 'تاریخچه دریافت نشد.');
+      } finally {
+        historyInFlight.current = false;
+        if (mounted.current) setLoadingHistory(false);
+      }
+    },
+    [id],
+  );
+  useEffect(() => {
+    if (!info || !historyOpen) return;
+    const timer = setInterval(() => void fetchHistory(), 15000);
+    return () => clearInterval(timer);
+  }, [info, historyOpen, fetchHistory]);
+  const activities = useMemo(
+    () => [...new Map(olderActivities.map((activity) => [activity.id, activity])).values()],
+    [olderActivities],
   );
   const counterpart =
     permissions.staff || permissions.readOnly ? ticket.creator.name : ticket.department.name;
@@ -357,82 +347,20 @@ export function Conversation({
           مشاهده گفتگو توسط مدیر
         </p>
       )}
+      <ActiveAudio />
       <div className="messenger-message-area">
-        <div
-          ref={viewport}
-          className="messenger-scroll"
-          aria-label="پیام‌های گفتگو"
-          tabIndex={0}
-          onScroll={(event) => {
-            const area = event.currentTarget;
-            followLatest.current = area.scrollHeight - area.clientHeight - area.scrollTop < 100;
-            if (followLatest.current) setNewMessages(false);
-          }}
-        >
-          <div ref={stream} className="messenger-stream">
-            {olderCursor && (
-              <Button
-                className="messenger-load-older"
-                variant="outline"
-                size="sm"
-                disabled={loadingOlder}
-                onClick={() => void loadOlder()}
-              >
-                {loadingOlder ? <LoaderCircle size={16} className="messenger-loading" /> : null}
-                {loadingOlder ? 'دریافت پیام‌ها…' : 'پیام‌های قبلی'}
-              </Button>
-            )}
-            {!messages.length && (
-              <div className="messenger-empty">
-                <span>
-                  <MessageCircle size={34} />
-                </span>
-                <h2>گفتگو با {ticket.department.name}</h2>
-                <p>پیامتان را بنویسید، وویس ضبط کنید یا فایل بفرستید.</p>
-              </div>
-            )}
-            {messages.map((message, index) => (
-              <div key={message.id}>
-                {(!index || date(messages[index - 1].createdAt) !== date(message.createdAt)) && (
-                  <div className="messenger-day">
-                    <span>{date(message.createdAt)}</span>
-                  </div>
-                )}
-                <article
-                  data-message-id={message.id}
-                  className={`messenger-bubble ${message.sender.id === actorId ? 'bubble-own' : ''} ${message.visibility === 'INTERNAL' ? 'bubble-private' : ''}`}
-                >
-                  {message.visibility === 'INTERNAL' && (
-                    <span className="internal-label">
-                      <Lock size={13} />
-                      یادداشت خصوصی واحد
-                    </span>
-                  )}
-                  <strong className="messenger-sender">
-                    {message.sender.id === actorId ? 'شما' : message.sender.name}
-                  </strong>
-                  <p className="message-body">{message.body}</p>
-                  <div className="message-attachments">
-                    {message.attachments.map((file) => (
-                      <AttachmentPreview key={file.id} file={file} />
-                    ))}
-                  </div>
-                  <time dateTime={new Date(message.createdAt).toISOString()}>
-                    {new Intl.DateTimeFormat('fa-IR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      timeZone: 'Asia/Tehran',
-                    }).format(new Date(message.createdAt))}
-                    {message.sender.id === actorId && <Check size={14} aria-label="ارسال شده" />}
-                  </time>
-                </article>
-              </div>
-            ))}
-            {data.attachments.map((file) => (
-              <AttachmentPreview file={file} key={file.id} />
-            ))}
-          </div>
-        </div>
+        <MessageTimeline
+          messages={messages}
+          actorId={actorId}
+          older={!!olderCursor}
+          loading={loadingOlder}
+          load={loadOlder}
+          attachments={data.attachments}
+          unit={ticket.department.name}
+          apiRef={timeline}
+          onBottomChange={onBottomChange}
+          jumpRequest={jumpRequest}
+        />
         {newMessages && (
           <Button
             type="button"
@@ -440,10 +368,7 @@ export function Conversation({
             size="sm"
             onClick={() => {
               followLatest.current = true;
-              viewport.current?.scrollTo({
-                top: viewport.current.scrollHeight,
-                behavior: 'smooth',
-              });
+              timeline.current?.jumpToLatest();
               setNewMessages(false);
             }}
           >
@@ -596,7 +521,10 @@ export function Conversation({
       )}
       <Modal
         open={info}
-        onOpenChange={setInfo}
+        onOpenChange={(value) => {
+          setInfo(value);
+          if (!value) setHistoryOpen(false);
+        }}
         title="اطلاعات گفتگو"
         description={ticket.department.name}
       >
@@ -615,8 +543,26 @@ export function Conversation({
           </div>
         </dl>
         {(permissions.staff || permissions.readOnly) && (
-          <details className="messenger-history">
+          <details
+            className="messenger-history"
+            onToggle={(event) => {
+              setHistoryOpen(event.currentTarget.open);
+              if (event.currentTarget.open) {
+                setLoadingHistory(true);
+                void fetchHistory();
+              }
+            }}
+          >
             <summary>تاریخچه و یادداشت‌های واحد</summary>
+            {loadingHistory && <p role="status">در حال دریافت تاریخچه…</p>}
+            {historyError && (
+              <p role="alert" className="error-message">
+                {historyError}
+                <Button type="button" variant="ghost" onClick={() => void fetchHistory()}>
+                  تلاش دوباره
+                </Button>
+              </p>
+            )}
             {activities.map((activity) => (
               <article className="history-event" key={activity.id}>
                 <div className="history-event-title">
@@ -638,7 +584,7 @@ export function Conversation({
                     activityId={activity.id}
                     maxSeconds={maxSeconds}
                     maxBytes={maxBytes}
-                    onSaved={() => void refresh().catch(() => {})}
+                    onSaved={() => void fetchHistory()}
                   />
                 )}
               </article>
@@ -648,7 +594,10 @@ export function Conversation({
                 type="button"
                 variant="outline"
                 disabled={loadingHistory}
-                onClick={() => void loadHistory()}
+                onClick={() => {
+                  setLoadingHistory(true);
+                  void fetchHistory(activityCursor ?? undefined);
+                }}
               >
                 رویدادهای قبلی
               </Button>

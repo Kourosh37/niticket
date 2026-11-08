@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { iranianPhoneSchema, asciiDigits, displayPhone } from '@niticket/core/domain/phone';
 import { Button } from './ui/button';
 
 export function AuthForm() {
@@ -47,9 +48,17 @@ export function AuthForm() {
     return result;
   }
 
+  function validatedPhone() {
+    const result = iranianPhoneSchema.safeParse(phoneNumber);
+    if (!result.success) throw new Error('شماره موبایل ایرانی معتبر وارد کنید.');
+    return result.data;
+  }
+
   async function sendCode() {
-    const result = await send('phone-number/send-otp', { phoneNumber });
+    const phone = validatedPhone();
+    const result = await send('phone-number/send-otp', { phoneNumber: phone });
     setResendAt(Date.now() + result.resendAfter * 1000);
+    setPhoneNumber(displayPhone(phone));
     setCode('');
     setMode('code');
   }
@@ -64,7 +73,9 @@ export function AuthForm() {
       else {
         await send(
           mode === 'code' ? 'phone-number/verify' : 'sign-in/phone-number',
-          mode === 'code' ? { phoneNumber, code } : { phoneNumber, password },
+          mode === 'code'
+            ? { phoneNumber: validatedPhone(), code }
+            : { phoneNumber: validatedPhone(), password },
         );
         router.replace('/');
         router.refresh();
@@ -97,9 +108,10 @@ export function AuthForm() {
               id="phone-number"
               name="phoneNumber"
               type="tel"
-              inputMode="tel"
+              inputMode="numeric"
+              enterKeyHint="next"
               dir="ltr"
-              autoComplete="tel-national"
+              autoComplete="tel"
               placeholder="09123456789"
               maxLength={40}
               value={phoneNumber}
@@ -121,9 +133,11 @@ export function AuthForm() {
               autoComplete="one-time-code"
               autoFocus
               minLength={6}
-              maxLength={6}
+              maxLength={12}
+              enterKeyHint="done"
+              pattern="[0-9]{6}"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(asciiDigits(e.target.value).replace(/\D/g, '').slice(0, 6))}
               required
             />
           </div>

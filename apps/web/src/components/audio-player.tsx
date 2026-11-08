@@ -1,7 +1,18 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Play, Pause, Volume2 } from 'lucide-react';
+import { useMemo, useState, useSyncExternalStore, useEffect } from 'react';
+import { Play, Pause, Volume2, X } from 'lucide-react';
+import {
+  getPlayback,
+  getIdlePlayback,
+  playbackFor,
+  subscribePlayback,
+  playAudio,
+  pauseAudio,
+  seekAudio,
+  setAudioSpeed,
+  stopAudio,
+} from '@/lib/audio-playback';
 
 export const audioTime = (seconds: number) => {
   const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
@@ -23,54 +34,44 @@ export function AudioPlayer({
   waveform?: unknown;
   label?: string;
 }) {
-  const ref = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false),
-    [time, setTime] = useState(0),
-    [duration, setDuration] = useState(durationSeconds ?? 0),
-    [error, setError] = useState(''),
-    [speed, setSpeed] = useState(1);
-  const bars =
-    Array.isArray(waveform) && waveform.length
-      ? waveform
-          .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-          .slice(0, 100)
-      : Array.from({ length: 64 }, () => 0);
+  const playback = useSyncExternalStore(subscribePlayback, () => playbackFor(src), getIdlePlayback);
+  const [position, setPosition] = useState(0),
+    [preferredSpeed, setSpeed] = useState(1);
+  const selected = playback.src === src;
+  const { playing, error } = playback;
+  const speed = selected ? playback.speed : preferredSpeed;
+  const time = selected ? playback.time : position;
+  const duration = selected ? playback.duration || durationSeconds || 0 : durationSeconds || 0;
+  useEffect(
+    () => () => {
+      if (src.startsWith('blob:')) stopAudio(src);
+    },
+    [src],
+  );
+  const bars = useMemo(
+    () =>
+      Array.isArray(waveform) && waveform.length
+        ? waveform
+            .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+            .slice(0, 100)
+        : Array.from({ length: 64 }, () => 0),
+    [waveform],
+  );
 
   function seek(value: number) {
-    if (ref.current) {
-      ref.current.currentTime = value;
-      setTime(value);
-    }
+    setPosition(value);
+    if (selected) seekAudio(value);
   }
 
   return (
     <div className="audio-player" aria-label={label}>
-      <audio
-        ref={ref}
-        src={src}
-        preload="metadata"
-        onLoadedMetadata={() => {
-          const d = ref.current?.duration;
-          if (d && Number.isFinite(d)) setDuration(d);
-        }}
-        onTimeUpdate={() => setTime(ref.current?.currentTime ?? 0)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-        onError={() => setError('دریافت صدا انجام نشد. دوباره تلاش کنید.')}
-      />
       <button
         className="audio-play"
         type="button"
         aria-label={playing ? `مکث ${label}` : `پخش ${label}`}
-        onClick={async () => {
-          setError('');
-          try {
-            if (playing) ref.current?.pause();
-            else await ref.current?.play();
-          } catch {
-            setError('پخش صدا انجام نشد. دوباره تلاش کنید.');
-          }
+        onClick={() => {
+          if (playing) pauseAudio();
+          else void playAudio(src, label, duration, speed, time);
         }}
       >
         {playing ? <Pause size={20} /> : <Play size={20} />}
@@ -107,7 +108,7 @@ export function AudioPlayer({
             onClick={() => {
               const value = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
               setSpeed(value);
-              if (ref.current) ref.current.playbackRate = value;
+              if (selected) setAudioSpeed(value);
             }}
           >
             <Volume2 size={11} />
@@ -120,6 +121,40 @@ export function AudioPlayer({
           {error}
         </small>
       )}
+    </div>
+  );
+}
+
+// Outside the virtualized rows: playback survives scrolling, with controls always reachable.
+export function ActiveAudio() {
+  const playback = useSyncExternalStore(subscribePlayback, getPlayback, getIdlePlayback);
+  if (!playback.src) return null;
+  return (
+    <div className="messenger-audio-bar" aria-label="پخش صوتی فعال">
+      <button
+        type="button"
+        aria-label={playback.playing ? 'مکث پخش صوتی فعال' : 'ادامه پخش صوتی فعال'}
+        onClick={() => {
+          if (playback.playing) pauseAudio();
+          else
+            void playAudio(
+              playback.src,
+              playback.label,
+              playback.duration,
+              playback.speed,
+              playback.time,
+            );
+        }}
+      >
+        {playback.playing ? <Pause size={17} /> : <Play size={17} />}
+      </button>
+      <span>{playback.label}</span>
+      <bdi>
+        {audioTime(playback.time)} / {audioTime(playback.duration)}
+      </bdi>
+      <button type="button" aria-label="بستن پخش صوتی" onClick={() => stopAudio()}>
+        <X size={17} />
+      </button>
     </div>
   );
 }

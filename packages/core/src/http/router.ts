@@ -46,10 +46,10 @@ export async function dispatch(
       );
     if (id && !action && method === 'GET')
       return tickets.getTicket(actor, id, query.messageCursor, query.activityCursor);
-    if (id && action === 'history' && method === 'GET') {
-      const detail = await tickets.getTicket(actor, id, undefined, query.cursor);
-      return { items: detail.activities, nextCursor: detail.nextActivityCursor };
-    }
+    if (id && action === 'messages' && method === 'GET')
+      return tickets.getMessagePage(actor, id, query.cursor);
+    if (id && action === 'history' && method === 'GET')
+      return tickets.getHistoryPage(actor, id, query.cursor);
     if (id && method === 'POST') {
       const body = await readJson(request);
       if (action === 'activities' && segments[3] && segments[4] === 'notes')

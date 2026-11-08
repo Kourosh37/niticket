@@ -240,20 +240,7 @@ export async function listTickets(actor: Actor, input: unknown) {
   };
 }
 
-export async function getTicket(
-  actor: Actor,
-  id: string,
-  messageCursor?: string,
-  activityCursor?: string,
-) {
-  uuid.parse(id);
-  if (messageCursor) uuid.parse(messageCursor);
-  if (activityCursor) uuid.parse(activityCursor);
-  const ticket = await ticketRepository.detail(id);
-  if (!ticket) fail();
-  assertRead(actor, ticket);
-  const staff = isStaff(actor, ticket);
-  const internal = canReadInternal(actor, ticket);
+async function readMessagePage(id: string, messageCursor: string | undefined, internal: boolean) {
   const messageWhere: Prisma.MessageWhereInput = {
     ticketId: id,
     ...(!internal ? { visibility: 'PUBLIC' } : {}),
@@ -290,6 +277,13 @@ export async function getTicket(
       },
     },
   });
+  return {
+    items: messages.slice(0, 50).reverse(),
+    nextCursor: messages.length > 50 ? messages[49].id : null,
+  };
+}
+
+async function readHistoryPage(id: string, activityCursor: string | undefined, internal: boolean) {
   const activityWhere: Prisma.ActivityWhereInput = {
     ticketId: id,
     ...(!internal ? { visibility: 'PUBLIC' } : {}),
@@ -336,26 +330,74 @@ export async function getTicket(
       },
     },
   });
-  const attachments = await db.attachment.findMany({
-    where: { ticketId: id, messageId: null, noteId: null },
-    take: 50,
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      filename: true,
-      detectedMime: true,
-      size: true,
-      scanStatus: true,
-      durationSeconds: true,
-      waveform: true,
-    },
+  return {
+    items: activities.slice(0, 50),
+    nextCursor: activities.length > 50 ? activities[49].id : null,
+  };
+}
+
+async function authorizeConversation(actor: Actor, id: string) {
+  uuid.parse(id);
+  const ticket = await db.ticket.findUnique({
+    where: { id },
+    select: { departmentId: true, creatorId: true },
   });
+  if (!ticket) fail();
+  assertRead(actor, ticket);
+  return canReadInternal(actor, ticket);
+}
+
+export async function getMessagePage(actor: Actor, id: string, cursor?: string) {
+  if (cursor) uuid.parse(cursor);
+  return readMessagePage(id, cursor, await authorizeConversation(actor, id));
+}
+
+export async function getHistoryPage(actor: Actor, id: string, cursor?: string) {
+  if (cursor) uuid.parse(cursor);
+  return readHistoryPage(id, cursor, await authorizeConversation(actor, id));
+}
+
+export async function getTicket(
+  actor: Actor,
+  id: string,
+  messageCursor?: string,
+  activityCursor?: string,
+  includeHistory = true,
+) {
+  uuid.parse(id);
+  if (messageCursor) uuid.parse(messageCursor);
+  if (activityCursor) uuid.parse(activityCursor);
+  const ticket = await ticketRepository.detail(id);
+  if (!ticket) fail();
+  assertRead(actor, ticket);
+  const staff = isStaff(actor, ticket);
+  const internal = canReadInternal(actor, ticket);
+  const [messagePage, historyPage, attachments] = await Promise.all([
+    readMessagePage(id, messageCursor, internal),
+    includeHistory
+      ? readHistoryPage(id, activityCursor, internal)
+      : Promise.resolve({ items: [], nextCursor: null }),
+    db.attachment.findMany({
+      where: { ticketId: id, messageId: null, noteId: null },
+      take: 50,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        filename: true,
+        detectedMime: true,
+        size: true,
+        scanStatus: true,
+        durationSeconds: true,
+        waveform: true,
+      },
+    }),
+  ]);
   return {
     ticket,
-    messages: messages.slice(0, 50).reverse(),
-    nextMessageCursor: messages.length > 50 ? messages[49].id : null,
-    activities: activities.slice(0, 50),
-    nextActivityCursor: activities.length > 50 ? activities[49].id : null,
+    messages: messagePage.items,
+    nextMessageCursor: messagePage.nextCursor,
+    activities: historyPage.items,
+    nextActivityCursor: historyPage.nextCursor,
     attachments,
     permissions: {
       staff,
@@ -578,7 +620,7 @@ export async function syncTicket(actor: Actor, id: string, since?: string) {
   if (!ticket) fail();
   const revision = `${ticket.version}:${ticket.updatedAt.toISOString()}`;
   if (since === revision) return { revision, detail: null };
-  const detail = await getTicket(actor, id);
+  const detail = await getTicket(actor, id, undefined, undefined, false);
   // Use the detail's revision to avoid losing an update racing the first read.
   return { revision: `${detail.ticket.version}:${detail.ticket.updatedAt.toISOString()}`, detail };
 }

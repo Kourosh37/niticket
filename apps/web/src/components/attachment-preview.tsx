@@ -223,6 +223,8 @@ export function AttachmentPreview({ file }: { file: AttachmentInfo }) {
               src={url}
               unoptimized
               alt={file.filename}
+              loading="lazy"
+              decoding="async"
               width={300}
               height={180}
               style={{ objectFit: 'cover', width: '100%', height: '100%' }}

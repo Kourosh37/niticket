@@ -25,7 +25,7 @@ export function Profile({
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
   return (
-    <>
+    <div className="easy-profile">
       <div className="page-heading">
         <div>
           <h1>حساب کاربری</h1>
@@ -171,6 +171,6 @@ export function Profile({
           خروج از حساب
         </Button>
       </div>
-    </>
+    </div>
   );
 }

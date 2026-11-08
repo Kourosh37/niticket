@@ -8,6 +8,8 @@ import {
   inboxRevision,
   addMessage,
   addActivityNote,
+  getHistoryPage,
+  getMessagePage,
 } from '@niticket/core/application/tickets';
 import { cleanupExpiredAuth } from '@niticket/core/application/jobs';
 
@@ -32,9 +34,11 @@ it('returns no history for an unchanged chat and preserves authorization and pri
   const privateUpdate = await syncTicket(student, id, updated.revision);
   expect(privateUpdate.detail).not.toBeNull();
   expect(JSON.stringify(privateUpdate)).not.toContain('PRIVATE_SYNC_NOTE');
-  expect(JSON.stringify(await syncTicket(staff, id, updated.revision))).toContain(
-    'PRIVATE_SYNC_NOTE',
-  );
+  expect((await syncTicket(staff, id, updated.revision)).detail?.activities).toEqual([]);
+  expect(JSON.stringify(await getHistoryPage(staff, id))).toContain('PRIVATE_SYNC_NOTE');
+  expect(JSON.stringify(await getHistoryPage(student, id))).not.toContain('PRIVATE_SYNC_NOTE');
+  await expect(getMessagePage(await f.actor(f.outsider.id), id)).rejects.toThrow();
+  await expect(getHistoryPage(await f.actor(f.outsider.id), id)).rejects.toThrow();
 });
 
 it('limits the inbox revision to visible conversations', async () => {

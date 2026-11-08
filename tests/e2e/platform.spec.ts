@@ -455,11 +455,15 @@ test('three roles complete a ticket with private history notes, file previews an
   await u.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
   await u.getByRole('button', { name: 'یادداشت یا وویس', exact: true }).first().click();
   await u.getByLabel('یادداشت متنی (اختیاری)').fill('PRIVATE_HISTORY_BROWSER');
+  await expect(u.getByLabel('یادداشت متنی (اختیاری)')).toHaveValue('PRIVATE_HISTORY_BROWSER');
   const noteDialog = u.getByRole('dialog', { name: 'یادداشت برای این رویداد', exact: true });
   await noteDialog.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
   await u.waitForTimeout(1100);
   await noteDialog.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
   await expect(noteDialog.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toBeVisible();
+  await expect(noteDialog.getByLabel('یادداشت متنی (اختیاری)')).toHaveValue(
+    'PRIVATE_HISTORY_BROWSER',
+  );
   await noteDialog.getByRole('button', { name: 'ثبت یادداشت', exact: true }).click();
   await expect(noteDialog).toHaveCount(0);
   await expect(u.getByText('PRIVATE_HISTORY_BROWSER', { exact: true })).toBeVisible();

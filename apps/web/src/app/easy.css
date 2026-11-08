@@ -1172,23 +1172,59 @@
   justify-content: flex-start;
 }
 @media (min-width: 1000px) {
-  .easy-navigation {
-    top: 7px;
-    bottom: auto;
-    width: 390px;
-    padding: 3px;
-    box-shadow: none;
-    border-color: transparent;
-    background: transparent;
+  .easy-header-inner {
+    max-width: 1480px;
+    padding-inline: 36px;
   }
-}
-@media (min-width: 1100px) {
   .easy-main {
-    padding-top: 46px;
+    max-width: 1440px;
+    padding: 36px 36px 140px;
   }
-  .easy-chat {
-    max-width: 820px;
-    margin: 0 auto;
+  .easy-navigation {
+    width: 520px;
+    bottom: 20px;
+  }
+  .easy-navigation a {
+    flex-direction: row;
+    gap: 9px;
+    min-height: 56px;
+    font-size: 14px;
+  }
+  .easy-new-ticket {
+    max-width: 100%;
+  }
+  .messenger-picker .new-ticket-card {
+    max-width: none;
+  }
+  .unit-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .unit-choice {
+    height: 100%;
+  }
+  .easy-app:has(.easy-profile) .easy-main {
+    max-width: 1180px;
+  }
+  .easy-profile {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+  }
+  .easy-profile > .page-heading,
+  .easy-profile > .error-message,
+  .easy-profile > .success-message,
+  .easy-profile > .easy-profile-signout {
+    grid-column: 1 / -1;
+  }
+  .easy-profile > .page-heading {
+    margin-bottom: 0;
+  }
+  .easy-profile > .form-surface {
+    margin-top: 0 !important;
+    width: 100%;
   }
 }
 @media (max-width: 640px) {

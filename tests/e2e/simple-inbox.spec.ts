@@ -147,14 +147,26 @@ test('long chats use a single message scroller, preserve older-message position 
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
   await expect(page.getByText('پیام شماره 159 برای بررسی گفتگو', { exact: true })).toBeInViewport();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.locator('[data-testid="virtuoso-item-list"]')).toHaveCSS(
+    'visibility',
+    'visible',
+  );
   await area.evaluate((element) => {
     element.scrollTop = 0;
   });
+  await expect(page.getByText('پیام شماره 110 برای بررسی گفتگو', { exact: true })).toBeInViewport();
   const oldMessage = page.getByText('پیام شماره 110 برای بررسی گفتگو', { exact: true });
   const before = (await oldMessage.boundingBox())!.y;
+  const olderResponse = page.waitForResponse(
+    (r) => r.url().includes(`/tickets/${ticket.id}/messages?cursor=`) && r.status() === 200,
+  );
   await page.getByRole('button', { name: 'پیام‌های قبلی', exact: true }).click();
-  await expect(page.getByText('پیام شماره 60 برای بررسی گفتگو', { exact: true })).toBeAttached();
-  expect(Math.abs((await oldMessage.boundingBox())!.y - before)).toBeLessThan(4);
+  expect((await (await olderResponse).json()).data.items[0].body).toContain('پیام شماره 60');
+  await expect(oldMessage).toBeInViewport();
+  expect(await page.locator('[data-message-id]').count()).toBeLessThan(35);
+  await expect
+    .poll(async () => Math.abs((await oldMessage.boundingBox())!.y - before))
+    .toBeLessThan(4);
   const top = await area.evaluate((element) => element.scrollTop);
   await page.getByLabel('پاسخ شما', { exact: true }).fill('پیش‌نویس من حفظ شود');
   const staff = await browser.newContext({
@@ -197,10 +209,21 @@ test('long chats use a single message scroller, preserve older-message position 
     element.scrollTop = 0;
   });
   const preserved = s.getByText('پیام شماره 60 برای بررسی گفتگو', { exact: true });
+  await expect(preserved).toBeInViewport();
   const position = (await preserved.boundingBox())!.y;
+  const gapResponse = s.waitForResponse(
+    (r) => r.url().includes(`/tickets/${ticket.id}/messages?cursor=`) && r.status() === 200,
+  );
   await s.getByRole('button', { name: 'پیام‌های قبلی', exact: true }).click();
-  await expect(s.getByText('پیام پس از اتصال 0', { exact: true })).toBeAttached();
-  expect(Math.abs((await preserved.boundingBox())!.y - position)).toBeLessThan(4);
+  expect(
+    (await (await gapResponse).json()).data.items.some(
+      (m: { body: string }) => m.body === 'پیام پس از اتصال 0',
+    ),
+  ).toBe(true);
+  await expect(preserved).toBeInViewport();
+  await expect
+    .poll(async () => Math.abs((await preserved.boundingBox())!.y - position))
+    .toBeLessThan(4);
   await area.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
