@@ -27,6 +27,7 @@ import {
   priorities,
   versionSchema,
   uuid,
+  conversationSchema,
 } from '../validation';
 import { transaction } from '../infrastructure/transaction';
 import { settings } from './settings';
@@ -147,11 +148,45 @@ export async function createTicket(actor: Actor, input: unknown, key: string) {
   });
 }
 
+export async function openConversation(actor: Actor, input: unknown) {
+  assertStudent(actor);
+  const { departmentId } = conversationSchema.parse(input);
+  return transaction(async (tx) => {
+    actor = await refreshActor(tx, actor);
+    assertStudent(actor);
+    // Serializable isolation prevents simultaneous opens from creating duplicate chats.
+    const existing = await tx.ticket.findFirst({
+      where: { creatorId: actor.id, departmentId },
+      orderBy: [{ lastActivityAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    if (existing) return existing;
+    const department = await tx.department.findUnique({ where: { id: departmentId } });
+    if (!department?.active || !department.visible || !department.acceptingTickets)
+      fail('VALIDATION', 400, 'این واحد در حال حاضر گفتگوی جدید نمی‌پذیرد.');
+    const ticket = await tx.ticket.create({
+      data: { creatorId: actor.id, departmentId, subject: `گفتگو با ${department.name}` },
+      select: { id: true },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: actor.id,
+        action: 'CONVERSATION_OPENED',
+        resourceId: ticket.id,
+        metadata: { departmentId },
+      },
+    });
+    // Opening a chat alone does not notify the unit; the first message does.
+    return ticket;
+  });
+}
+
 export async function listTickets(actor: Actor, input: unknown) {
   const q = listSchema.parse(input);
   const where: Prisma.TicketWhereInput = {
     AND: [
       ticketScope(actor),
+      userRole(actor) === 'STAFF' ? { messages: { some: { visibility: 'PUBLIC' } } } : {},
       q.scope === 'mine'
         ? { creatorId: actor.id }
         : q.scope === 'assigned'
@@ -167,13 +202,26 @@ export async function listTickets(actor: Actor, input: unknown) {
               in:
                 userRole(actor) === 'STAFF'
                   ? ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_DEPARTMENT', 'REOPENED']
-                  : ['WAITING_FOR_USER'],
+                  : ['WAITING_FOR_USER', 'RESOLVED', 'CLOSED'],
             },
           }
-        : q.view === 'done'
-          ? { status: { in: ['RESOLVED', 'CLOSED'] } }
+        : q.view === 'done' || q.view === 'answered'
+          ? { status: { in: ['WAITING_FOR_USER', 'RESOLVED', 'CLOSED'] } }
           : {},
-      q.q ? { OR: [{ subject: { contains: q.q, mode: 'insensitive' } }] } : {},
+      q.q
+        ? {
+            OR: [
+              { subject: { contains: q.q, mode: 'insensitive' } },
+              { department: { name: { contains: q.q, mode: 'insensitive' } } },
+              { creator: { name: { contains: q.q, mode: 'insensitive' } } },
+              {
+                messages: {
+                  some: { visibility: 'PUBLIC', body: { contains: q.q, mode: 'insensitive' } },
+                },
+              },
+            ],
+          }
+        : {},
     ],
   };
   // Validate cursors within the same scope; do not use inaccessible resources as anchors.
@@ -313,11 +361,8 @@ export async function getTicket(
       staff,
       manage: false,
       readOnly: userRole(actor) === 'ADMIN',
-      reopen:
-        ticket.creatorId === actor.id &&
-        ticket.status === 'RESOLVED' &&
-        canReopen(ticket.resolvedAt, (await settings()).reopenDays),
-      reply: userRole(actor) !== 'ADMIN' && ticket.status !== 'CLOSED',
+      reopen: false,
+      reply: userRole(actor) !== 'ADMIN',
     },
   };
 }
@@ -326,21 +371,46 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
   uuid.parse(id);
   const data = messageSchema.parse(input);
   return transaction(async (tx) => {
+    if (data.clientId) {
+      actor = await refreshActor(tx, actor);
+      const existing = await tx.message.findUnique({
+        where: { id: data.clientId },
+        include: { ticket: true },
+      });
+      if (existing) {
+        assertParticipant(actor, existing.ticket);
+        if (existing.ticketId !== id || existing.senderId !== actor.id) fail();
+        if (existing.body !== data.body || existing.visibility !== data.visibility)
+          fail('IDEMPOTENCY_CONFLICT', 409, 'شناسه پیام برای محتوای دیگری استفاده شده است.');
+        return { id: existing.id, version: existing.ticket.version };
+      }
+    }
     const loaded = await getLocked(tx, actor, id, data.version);
     actor = loaded.actor;
     const ticket = loaded.ticket;
     assertParticipant(actor, ticket);
-    if (ticket.status === 'CLOSED') fail('CONFLICT', 409, 'درخواست بسته شده است.');
     const internal = data.visibility === 'INTERNAL';
     if (internal) assertStaff(actor, ticket);
     const staff = isStaff(actor, ticket);
+    const firstPublicMessage =
+      !internal &&
+      !(await tx.message.findFirst({
+        where: { ticketId: id, visibility: 'PUBLIC' },
+        select: { id: true },
+      }));
     const message = await tx.message.create({
-      data: { ticketId: id, senderId: actor.id, body: data.body, visibility: data.visibility },
+      data: {
+        ...(data.clientId ? { id: data.clientId } : {}),
+        ticketId: id,
+        senderId: actor.id,
+        body: data.body,
+        visibility: data.visibility,
+      },
     });
     await update(tx, ticket, {
       ...(!internal && staff && !ticket.firstResponseAt ? { firstResponseAt: new Date() } : {}),
-      ...(!internal && !staff && ticket.status === 'WAITING_FOR_USER'
-        ? { status: 'IN_PROGRESS' }
+      ...(!internal
+        ? { status: staff ? 'WAITING_FOR_USER' : 'OPEN', resolvedAt: null, closedAt: null }
         : {}),
     });
     if (staff && !internal)
@@ -348,9 +418,14 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
         where: { userId: actor.id, ticketId: id, readAt: null },
         data: { readAt: new Date() },
       });
-    await event(tx, actor, ticket, internal ? 'INTERNAL_NOTE' : 'PUBLIC_REPLY', {}, internal);
-    if (!internal && !staff && ticket.status === 'WAITING_FOR_USER')
-      await event(tx, actor, ticket, 'STATUS_CHANGED', { from: ticket.status, to: 'IN_PROGRESS' });
+    await event(
+      tx,
+      actor,
+      ticket,
+      internal ? 'INTERNAL_NOTE' : firstPublicMessage ? 'TICKET_CREATED' : 'PUBLIC_REPLY',
+      {},
+      internal,
+    );
     return { id: message.id, version: ticket.version + 1 };
   });
 }
@@ -358,6 +433,8 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
 export async function changeStatus(actor: Actor, id: string, input: unknown) {
   uuid.parse(id);
   const data = statusSchema.parse(input);
+  if (['RESOLVED', 'CLOSED', 'REOPENED'].includes(data.status))
+    fail('CONTINUOUS_CONVERSATION', 409, 'گفتگوها همیشه قابل ادامه هستند و بسته نمی‌شوند.');
   const policy = await settings();
   return transaction(async (tx) => {
     const loaded = await getLocked(tx, actor, id, data.version);

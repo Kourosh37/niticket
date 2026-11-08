@@ -14,7 +14,7 @@ export function InboxRefresh() {
         return;
       router.refresh();
     };
-    const timer = setInterval(refresh, 20000);
+    const timer = setInterval(refresh, 5000);
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {

@@ -5,19 +5,12 @@ import { AppError } from '@niticket/core/domain/errors';
 import { settings } from '@niticket/core/application/settings';
 import { Conversation } from '@/components/conversation';
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ messageCursor?: string; activityCursor?: string }>;
-}) {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const a = await currentActor();
   const { id } = await params;
-  const query = await searchParams;
   let detail;
   try {
-    detail = await getTicket(a, id, query.messageCursor, query.activityCursor);
+    detail = await getTicket(a, id);
   } catch (error) {
     if (error instanceof AppError && error.status === 404) notFound();
     throw error;

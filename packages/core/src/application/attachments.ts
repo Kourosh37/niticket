@@ -76,8 +76,6 @@ export async function createUpload(actor: Actor, input: unknown) {
   };
   const ticket = await authorize(actor, context, true);
   if (!ticket) fail();
-  if (ticket.status === 'CLOSED' && !data.noteId)
-    fail('CONFLICT', 409, 'این درخواست بسته شده است.');
   if (data.noteId) assertStaff(actor, ticket);
   const id = randomUUID(),
     objectKey = `pending/${randomUUID()}`;
@@ -91,7 +89,7 @@ export async function createUpload(actor: Actor, input: unknown) {
         where: {
           ticketId: ticket.id,
           uploaderId: actor.id,
-          scanStatus: { in: ['PENDING', 'QUARANTINED', 'CLEAN'] },
+          scanStatus: { in: ['PENDING', 'QUARANTINED'] },
         },
       })) >= 100
     )

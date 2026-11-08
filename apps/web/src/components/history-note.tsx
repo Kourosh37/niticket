@@ -15,11 +15,13 @@ export function HistoryNote({
   activityId,
   maxSeconds,
   maxBytes,
+  onSaved,
 }: {
   ticketId: string;
   activityId: string;
   maxSeconds: number;
   maxBytes: number;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false),
@@ -71,10 +73,12 @@ export function HistoryNote({
               setPercent(null);
               setKey((k) => k + 1);
               setOpen(false);
-              router.refresh();
+              if (onSaved) onSaved();
+              else router.refresh();
             } catch (error) {
               setError(error instanceof Error ? error.message : 'ثبت یادداشت انجام نشد.');
-              router.refresh();
+              if (onSaved) onSaved();
+              else router.refresh();
             } finally {
               setBusy(false);
             }

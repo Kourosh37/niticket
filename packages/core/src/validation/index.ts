@@ -14,6 +14,8 @@ export const statuses = z.enum([
 
 export const priorities = z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']);
 
+export const conversationSchema = z.object({ departmentId: uuid }).strict();
+
 export const createTicketSchema = z
   .object({
     departmentId: uuid,
@@ -31,7 +33,7 @@ export const listSchema = z.object({
   status: statuses.optional(),
   departmentId: uuid.optional(),
   scope: z.enum(['mine', 'department', 'assigned', 'unassigned']).default('mine'),
-  view: z.enum(['all', 'action', 'done']).default('all'),
+  view: z.enum(['all', 'action', 'answered', 'done']).default('all'),
 });
 
 export const versionSchema = z.object({ version: z.number().int().positive() });
@@ -40,6 +42,7 @@ export const messageSchema = versionSchema
   .extend({
     body: z.string().trim().min(1).max(20000),
     visibility: z.enum(['PUBLIC', 'INTERNAL']).default('PUBLIC'),
+    clientId: uuid.optional(),
   })
   .strict();
 

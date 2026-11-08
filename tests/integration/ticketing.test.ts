@@ -116,11 +116,15 @@ describe('PostgreSQL ticket use cases and authorization', () => {
     await assignTicket(await f.actor(f.manager.id), id, { version: 2, assigneeId: f.agent.id });
     expect((await db.ticket.findUniqueOrThrow({ where: { id } })).assigneeId).toBe(f.agent.id);
   });
-  it('enforces workflow and requester reopening', async () => {
+  it('keeps conversations open and updates the inbox automatically after each reply', async () => {
     await changeStatus(await f.actor(f.agent.id), id, { version: 3, status: 'IN_PROGRESS' });
-    await changeStatus(await f.actor(f.agent.id), id, { version: 4, status: 'RESOLVED' });
-    await changeStatus(await f.actor(f.student.id), id, { version: 5, status: 'REOPENED' });
-    expect((await db.ticket.findUniqueOrThrow({ where: { id } })).reopenCount).toBe(1);
+    await expect(
+      changeStatus(await f.actor(f.agent.id), id, { version: 4, status: 'CLOSED' }),
+    ).rejects.toThrow();
+    await addMessage(await f.actor(f.agent.id), id, { version: 4, body: 'پاسخ واحد به درخواست' });
+    expect((await db.ticket.findUniqueOrThrow({ where: { id } })).status).toBe('WAITING_FOR_USER');
+    await addMessage(await f.actor(f.student.id), id, { version: 5, body: 'ادامه گفتگو با واحد' });
+    expect((await db.ticket.findUniqueOrThrow({ where: { id } })).status).toBe('OPEN');
   });
   it('transfers history and immediately removes old department access', async () => {
     await transferTicket(await f.actor(f.manager.id), id, {
@@ -232,11 +236,11 @@ describe('PostgreSQL ticket use cases and authorization', () => {
       body: 'پاسخ برای محاسبه زمان رسیدگی',
       visibility: 'PUBLIC',
     });
-    await changeStatus(manager, ticket.id, { version: 3, status: 'RESOLVED' });
+    await addMessage(manager, ticket.id, { version: 3, body: 'پاسخ مسئول برای بررسی گزارش' });
     const report = await reports(student);
     expect(report.total).toBe(await db.ticket.count({ where: { creatorId: f.student.id } }));
     expect(report.timing.firstResponseSeconds).toBeGreaterThanOrEqual(0);
-    expect(report.timing.resolutionSeconds).toBeGreaterThanOrEqual(0);
+    expect(report.timing.resolutionSeconds).toBeNull();
     await expect(reports(student, { departmentId: f.destination.id })).rejects.toThrow();
     const staleAdmin = {
       ...(await f.actor(f.admin.id)),

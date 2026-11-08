@@ -292,14 +292,14 @@ test('three roles complete a ticket with private history notes, file previews an
   ).toBeVisible();
   await login(s, f.student.studentNumber!, f.password);
   await expect(s.locator('html')).toHaveAttribute('dir', 'rtl');
-  await s.getByRole('link', { name: 'درخواست جدید', exact: true }).click();
+  await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
   await s.getByRole('button', { name: `انتخاب ${name}`, exact: true }).click();
-  await s.getByLabel('موضوع درخواست').fill('درخواست آزمون سه نقش و پیوست‌ها');
-  await s
-    .getByLabel('شرح درخواست')
-    .fill('لطفاً این درخواست آزمایشی را برای بررسی مسیر کامل رسیدگی بررسی کنید.');
-  await s.getByRole('button', { name: 'ارسال درخواست', exact: true }).click();
   await expect(s).toHaveURL(/\/tickets\/[a-f0-9-]+/);
+  await s
+    .getByLabel('پاسخ شما', { exact: true })
+    .fill('لطفاً این گفتگو را برای بررسی مسیر کامل رسیدگی بررسی کنید.');
+  await s.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
+  await expect(s.locator('.message-body')).toContainText('لطفاً این گفتگو');
   const ticketUrl = s.url(),
     id = ticketUrl.split('/').pop()!;
   const creation = await db.outboxEvent.findFirstOrThrow({
@@ -311,15 +311,14 @@ test('three roles complete a ticket with private history notes, file previews an
   await u.goto('/notifications');
   await expect(u.getByText('درخواست جدید ثبت شد', { exact: true })).toBeVisible();
   await u.goto(ticketUrl);
-  await expect(u.getByAltText('تصویر مسئول آزمون مرورگر').first()).toBeVisible();
-  await expect(u.locator('.notification-count')).toHaveText('۱');
+  await expect(u.locator('.messenger-contact h1')).toHaveText(f.student.name);
   await u.getByLabel('پاسخ شما', { exact: true }).fill('پاسخ مسئول واحد به دانشجو');
   await u.locator('#attachment').setInputFiles({
     name: 'officer.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('پیوست پاسخ مسئول واحد'),
   });
-  await u.getByRole('button', { name: 'ارسال پاسخ', exact: true }).click();
+  await u.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
   await expect(
     u.locator('.message-body').filter({ hasText: 'پاسخ مسئول واحد به دانشجو' }),
   ).toBeVisible();
@@ -358,7 +357,7 @@ test('three roles complete a ticket with private history notes, file previews an
       'tests/fixtures/photo.png',
     ]);
   await expect(s.locator('.selected-files > span')).toHaveCount(4);
-  await s.getByRole('button', { name: 'ارسال پاسخ', exact: true }).click();
+  await s.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
   await expect.poll(() => db.attachment.count({ where: { ticketId: id } })).toBe(5);
   for (const attachment of await db.attachment.findMany({ where: { ticketId: id } })) {
     const event = await db.outboxEvent.findFirstOrThrow({
@@ -404,7 +403,7 @@ test('three roles complete a ticket with private history notes, file previews an
     await p.getByRole('button', { name: 'ادامه ضبط', exact: true }).click();
     await p.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
     await expect(p.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toBeVisible();
-    await p.getByRole('button', { name: 'ارسال پاسخ', exact: true }).click();
+    await p.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
     await expect(p.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toHaveCount(0);
   }
   await expect
@@ -424,12 +423,12 @@ test('three roles complete a ticket with private history notes, file previews an
   }
   await u.reload();
   await expect(u.getByLabel('پیام صوتی', { exact: true })).toHaveCount(2);
-  await u.getByRole('button', { name: 'شروع رسیدگی', exact: true }).click();
-  await expect(u.locator('.conversation-heading .status')).toHaveText('در حال رسیدگی');
-  await u.getByRole('tab', { name: 'تاریخچه کامل', exact: true }).click();
+  await expect(u.getByRole('button', { name: 'پایان رسیدگی', exact: true })).toHaveCount(0);
+  await u.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
+  await u.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
   await u.getByRole('button', { name: 'یادداشت یا وویس', exact: true }).first().click();
   await u.getByLabel('یادداشت متنی (اختیاری)').fill('PRIVATE_HISTORY_BROWSER');
-  const noteDialog = u.getByRole('dialog');
+  const noteDialog = u.getByRole('dialog', { name: 'یادداشت برای این رویداد', exact: true });
   await noteDialog.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
   await u.waitForTimeout(1100);
   await noteDialog.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
@@ -445,16 +444,16 @@ test('three roles complete a ticket with private history notes, file previews an
   });
   await scanInContainer(noteEvent.id);
   await s.reload();
-  await s.getByRole('tab', { name: 'تاریخچه کامل', exact: true }).click();
   await expect(s.getByText('PRIVATE_HISTORY_BROWSER', { exact: true })).toHaveCount(0);
   expect((await student.request.get(`/api/v1/attachments/${noteVoice.id}/access`)).status()).toBe(
     404,
   );
   await a.goto(`/admin/departments/${department.id}/history`);
-  await a.locator('.ticket-row').filter({ hasText: 'درخواست آزمون سه نقش و پیوست‌ها' }).click();
+  await a.locator('.ticket-row').filter({ hasText: name }).click();
   await expect(a.getByLabel('پاسخ شما', { exact: true })).toHaveCount(0);
   await expect(a.getByLabel('تغییر وضعیت', { exact: true })).toHaveCount(0);
-  await a.getByRole('tab', { name: 'تاریخچه کامل', exact: true }).click();
+  await a.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
+  await a.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
   await expect(a.getByText('PRIVATE_HISTORY_BROWSER', { exact: true })).toBeVisible();
   expect(
     (

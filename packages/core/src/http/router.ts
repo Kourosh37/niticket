@@ -20,6 +20,8 @@ export async function dispatch(
   const [resource, id, action] = segments;
   const method = request.method;
   const query = Object.fromEntries(new URL(request.url).searchParams);
+  if (resource === 'conversations' && !id && method === 'POST')
+    return tickets.openConversation(actor, await readJson(request));
   if (resource === 'session' && method === 'GET') {
     const session = await getAuth().api.getSession({ headers: request.headers });
     if (!session) fail('UNAUTHENTICATED', 401, 'برای ادامه وارد حساب خود شوید.');

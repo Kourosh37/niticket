@@ -20,11 +20,14 @@ export async function Inbox({
   base?: string;
 }) {
   const staff = userRole(actor) === 'STAFF';
-  const view = ['all', 'action', 'done'].includes(query.view ?? '')
-    ? query.view!
-    : staff
-      ? 'action'
-      : 'all';
+  const view =
+    query.view === 'done'
+      ? 'answered'
+      : ['all', 'action', 'answered'].includes(query.view ?? '')
+        ? query.view!
+        : staff
+          ? 'action'
+          : 'all';
   const filters = {
     scope: staff ? 'department' : 'mine',
     view,
@@ -64,18 +67,24 @@ export async function Inbox({
         {!staff && (
           <Button asChild className="inbox-create">
             <Link href="/tickets/new">
-              <Plus size={21} /> درخواست جدید
+              <Plus size={21} /> گفتگوی جدید
             </Link>
           </Button>
         )}
       </div>
       <section className="inbox-panel" aria-label="فهرست گفتگوها">
         <nav className="inbox-tabs" aria-label="نمایش گفتگوها">
-          {[
-            ['all', 'همه گفتگوها'],
-            ['action', staff ? 'نیاز به پاسخ' : 'نوبت پاسخ من'],
-            ['done', 'پایان‌یافته'],
-          ].map(([key, label]) => (
+          {(staff
+            ? [
+                ['action', 'پیام‌های جدید'],
+                ['answered', 'پاسخ داده‌شده'],
+                ['all', 'همه گفتگوها'],
+              ]
+            : [
+                ['all', 'همه گفتگوها'],
+                ['action', 'پاسخ‌های واحد'],
+              ]
+          ).map(([key, label]) => (
             <Link
               key={key}
               href={href({ view: key })}
@@ -91,7 +100,7 @@ export async function Inbox({
             <Search size={20} aria-hidden="true" />
             <input
               name="q"
-              aria-label="جستجوی موضوع درخواست"
+              aria-label="جستجو در گفتگوها"
               placeholder="جستجو در گفتگوها"
               defaultValue={query.q}
               maxLength={100}
@@ -149,11 +158,10 @@ export async function Inbox({
                         {date(ticket.lastActivityAt)}
                       </time>
                     </div>
-                    <h2>{ticket.subject}</h2>
-                    <p>
+                    <p className="messenger-thread-preview">
                       {preview
                         ? `${preview.senderId === actor.id ? 'شما: ' : ''}${preview.body}`
-                        : 'برای دیدن پیام‌ها، گفتگو را باز کنید.'}
+                        : 'هنوز پیامی نفرستاده‌اید.'}
                     </p>
                     <span className={`thread-state ${action ? 'state-action' : ''}`}>
                       {ticketState(ticket.status, staff)}
@@ -214,7 +222,7 @@ export async function Inbox({
           </div>
         )}
       </section>
-      {!staff && <p className="inbox-footnote">برای ادامه هر درخواست، روی همان گفتگو بزنید.</p>}
+      {!staff && <p className="inbox-footnote">برای پیام دادن، روی نام واحد بزنید.</p>}
     </div>
   );
 }

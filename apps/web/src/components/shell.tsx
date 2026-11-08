@@ -111,6 +111,7 @@ export function Shell({
   }
 
   if (!user.isAdmin) {
+    const chatPage = /^\/tickets\/(?!new$)[^/]+$/.test(path);
     const navigation = [
       {
         href: '/',
@@ -136,39 +137,43 @@ export function Shell({
       { href: '/profile', label: 'حساب من', icon: UserRound, active: path === '/profile' },
     ];
     return (
-      <div className="easy-app">
+      <div className={cn('easy-app', chatPage && 'messenger-app')}>
         <SessionGuard />
-        <header className="easy-header">
-          <div className="easy-header-inner">
-            <Link href="/" className="easy-brand" aria-label="نیتیکت، گفتگوها">
-              <span>
-                <MessageCircle size={25} />
-              </span>
-              <div>
-                <strong>نیتیکت</strong>
-                <small>{universityName}</small>
-              </div>
-            </Link>
-            <div className="easy-header-actions">
-              <NotificationBell />
-              <Link href="/profile" className="easy-account" aria-label="حساب من">
-                <Avatar name={user.name} image={user.image} small />
-                <span>{user.name}</span>
+        {!chatPage && (
+          <header className="easy-header">
+            <div className="easy-header-inner">
+              <Link href="/" className="easy-brand" aria-label="نیتیکت، گفتگوها">
+                <span>
+                  <MessageCircle size={25} />
+                </span>
+                <div>
+                  <strong>نیتیکت</strong>
+                  <small>{universityName}</small>
+                </div>
               </Link>
+              <div className="easy-header-actions">
+                <NotificationBell />
+                <Link href="/profile" className="easy-account" aria-label="حساب من">
+                  <Avatar name={user.name} image={user.image} small />
+                  <span>{user.name}</span>
+                </Link>
+              </div>
             </div>
-          </div>
-        </header>
-        <main id="main-content" className="easy-main">
+          </header>
+        )}
+        <main id="main-content" className={cn('easy-main', chatPage && 'messenger-main')}>
           {children}
         </main>
-        <nav className="easy-navigation" aria-label="ناوبری اصلی">
-          {navigation.map(({ href, label, icon: Icon, active }) => (
-            <Link href={href} key={href} aria-current={active ? 'page' : undefined}>
-              <Icon size={23} />
-              <span>{label}</span>
-            </Link>
-          ))}
-        </nav>
+        {!chatPage && (
+          <nav className="easy-navigation" aria-label="ناوبری اصلی">
+            {navigation.map(({ href, label, icon: Icon, active }) => (
+              <Link href={href} key={href} aria-current={active ? 'page' : undefined}>
+                <Icon size={23} />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </nav>
+        )}
         {error && (
           <p role="alert" className="easy-shell-error">
             {error}
