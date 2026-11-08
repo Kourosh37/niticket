@@ -2,8 +2,20 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { ArrowDown, ArrowRight, Info, Lock, Paperclip, Send, X } from 'lucide-react';
-import type { getTicket } from '@niticket/core/application/tickets';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowRight,
+  Info,
+  Lock,
+  Paperclip,
+  Search,
+  Send,
+  X,
+} from 'lucide-react';
+import type { getTicket, getMessageContext } from '@niticket/core/application/tickets';
+import type { SearchSelection, SearchResult, SearchData } from './message-search';
+import { searchParameters } from '@/lib/search';
 import { ActiveAudio } from './audio-player';
 import { stopAudio } from '@/lib/audio-playback';
 import { Avatar } from './avatar';
@@ -27,6 +39,12 @@ const MessageTimeline = dynamic(
         در حال دریافت پیام‌ها…
       </p>
     ),
+  },
+);
+const MessageSearch = dynamic(
+  () => import('./message-search').then((module) => module.MessageSearch),
+  {
+    loading: () => <p role="status">در حال آماده‌سازی جستجو…</p>,
   },
 );
 
@@ -67,15 +85,30 @@ export function Conversation({
   actorId,
   maxSeconds,
   maxBytes,
+  initialContext,
+  initialTerms = [],
+  returnTo,
 }: {
   detail: Detail;
   actorId: string;
   maxSeconds: number;
   maxBytes: number;
+  initialContext?: Pick<Awaited<ReturnType<typeof getMessageContext>>, 'focusId' | 'newerCursor'>;
+  initialTerms?: string[];
+  returnTo?: string;
 }) {
   const [data, setData] = useState(detail),
     [messages, setMessages] = useState(detail.messages),
     [olderCursor, setOlderCursor] = useState(detail.nextMessageCursor);
+  const [searchOpen, setSearchOpen] = useState(false),
+    [searchSelection, setSearchSelection] = useState<SearchSelection | null>(null),
+    [focusId, setFocusId] = useState(initialContext?.focusId ?? null),
+    [highlightTerms, setHighlightTerms] = useState(initialTerms),
+    [newerCursor, setNewerCursor] = useState(initialContext?.newerCursor ?? null),
+    [windowKey, setWindowKey] = useState(0),
+    [finding, setFinding] = useState(false);
+  const browsing = useRef(!!initialContext),
+    contextRequest = useRef<AbortController | null>(null);
   const [body, setBody] = useState(''),
     [visibility, setVisibility] = useState<'PUBLIC' | 'INTERNAL'>('PUBLIC'),
     [files, setFiles] = useState<File[]>([]),
@@ -112,6 +145,7 @@ export function Conversation({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      contextRequest.current?.abort();
       stopAudio();
     };
   }, []);
@@ -128,16 +162,18 @@ export function Conversation({
         if (!mounted.current) return;
         currentVersion.current = Math.max(currentVersion.current, latest.ticket.version);
         const lastId = latest.messages.at(-1)?.id;
-        if (lastId !== latestId.current && !followLatest.current) setNewMessages(true);
+        if (lastId !== latestId.current && (!followLatest.current || browsing.current))
+          setNewMessages(true);
         // A long offline interval may exceed one page; allow the missing interval to be loaded.
         if (
+          !browsing.current &&
           latest.nextMessageCursor &&
           (!latestId.current || !latest.messages.some((message) => message.id === latestId.current))
         )
           setOlderCursor(latest.nextMessageCursor);
         latestId.current = lastId;
         setData(latest);
-        setMessages((previous) => mergeMessages(previous, latest.messages));
+        if (!browsing.current) setMessages((previous) => mergeMessages(previous, latest.messages));
       })
       .finally(() => {
         fetching.current = null;
@@ -164,7 +200,7 @@ export function Conversation({
   }, [busy, recording, refresh]);
 
   const loadOlder = useCallback(async () => {
-    if (!olderCursor || loadingOlder) return;
+    if (!olderCursor || loadingOlder || finding) return;
     setLoadingOlder(true);
     try {
       const previous = await request<{ items: ChatMessage[]; nextCursor: string | null }>(
@@ -180,9 +216,146 @@ export function Conversation({
     } finally {
       setLoadingOlder(false);
     }
-  }, [id, olderCursor, loadingOlder]);
+  }, [id, olderCursor, loadingOlder, finding]);
+
+  const loadNewer = useCallback(async () => {
+    if (!newerCursor || loadingOlder || finding) return;
+    setLoadingOlder(true);
+    try {
+      const page = await request<{ items: ChatMessage[]; nextCursor: string | null }>(
+        `/api/v1/tickets/${id}/messages?direction=newer&cursor=${newerCursor}`,
+      );
+      if (!mounted.current) return;
+      timeline.current?.preserveAnchor();
+      setMessages((current) => mergeMessages(current, page.items));
+      setNewerCursor(page.nextCursor);
+    } catch (error) {
+      if (mounted.current)
+        setError(error instanceof Error ? error.message : 'پیام‌های بعدی دریافت نشد.');
+    } finally {
+      if (mounted.current) setLoadingOlder(false);
+    }
+  }, [id, newerCursor, loadingOlder, finding]);
+
+  async function showResult(result: SearchResult, selection?: SearchSelection) {
+    if (loadingOlder) return;
+    contextRequest.current?.abort();
+    const abort = new AbortController();
+    contextRequest.current = abort;
+    browsing.current = true;
+    followLatest.current = false;
+    setFinding(true);
+    setError('');
+    setSearchOpen(false);
+    if (selection) setSearchSelection(selection);
+    try {
+      const context = await request<Awaited<ReturnType<typeof getMessageContext>>>(
+        `/api/v1/tickets/${id}/messages/context?messageId=${result.id}`,
+        { signal: abort.signal },
+      );
+      if (!mounted.current || abort.signal.aborted) return;
+      setMessages(context.items);
+      setOlderCursor(context.olderCursor);
+      setNewerCursor(context.newerCursor);
+      setFocusId(context.focusId);
+      setHighlightTerms(selection?.data.terms ?? []);
+      setWindowKey((value) => value + 1);
+    } catch (error) {
+      if (mounted.current && !abort.signal.aborted) {
+        browsing.current = !!focusId;
+        setError(error instanceof Error ? error.message : 'پیام دریافت نشد.');
+      }
+    } finally {
+      if (mounted.current && !abort.signal.aborted) setFinding(false);
+    }
+  }
+
+  async function latestMessages() {
+    contextRequest.current?.abort();
+    const abort = new AbortController();
+    contextRequest.current = abort;
+    setFinding(true);
+    try {
+      const page = await request<{ items: ChatMessage[]; nextCursor: string | null }>(
+        `/api/v1/tickets/${id}/messages`,
+        { signal: abort.signal },
+      );
+      if (!mounted.current || abort.signal.aborted) return;
+      browsing.current = false;
+      followLatest.current = true;
+      setMessages(page.items);
+      setOlderCursor(page.nextCursor);
+      setNewerCursor(null);
+      setFocusId(null);
+      setHighlightTerms([]);
+      setNewMessages(false);
+      latestId.current = page.items.at(-1)?.id;
+      setWindowKey((value) => value + 1);
+    } catch (error) {
+      if (mounted.current && !abort.signal.aborted)
+        setError(error instanceof Error ? error.message : 'دریافت پیام‌ها انجام نشد.');
+    } finally {
+      if (mounted.current && !abort.signal.aborted) setFinding(false);
+    }
+  }
+
+  async function nextResult(delta: number) {
+    if (!searchSelection || finding) return;
+    const selected = searchSelection,
+      index = selected.index + delta;
+    if (selected.data.items[index]) {
+      await showResult(selected.data.items[index], { ...selected, index });
+      return;
+    }
+    const cursor = delta > 0 ? selected.data.nextCursor : selected.previous.at(-1);
+    if (delta > 0 ? !cursor : !selected.previous.length) return;
+    contextRequest.current?.abort();
+    const abort = new AbortController();
+    contextRequest.current = abort;
+    setFinding(true);
+    try {
+      const page = await request<SearchData>(
+        `/api/v1/search?${searchParameters({ ...selected.filters, cursor: cursor ?? undefined })}`,
+        { signal: abort.signal },
+      );
+      if (!mounted.current || abort.signal.aborted) return;
+      const index = delta > 0 ? 0 : page.items.length - 1;
+      if (!page.items[index]) {
+        setFinding(false);
+        return;
+      }
+      await showResult(page.items[index], {
+        filters: selected.filters,
+        data: page,
+        index,
+        cursor: cursor ?? undefined,
+        previous:
+          delta > 0 ? [...selected.previous, selected.cursor] : selected.previous.slice(0, -1),
+      });
+    } catch (error) {
+      if (mounted.current && !abort.signal.aborted) {
+        setError(error instanceof Error ? error.message : 'جستجو انجام نشد.');
+        setFinding(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', keydown);
+    return () => document.removeEventListener('keydown', keydown);
+  }, []);
 
   const onBottomChange = useCallback((atBottom: boolean) => {
+    if (browsing.current) {
+      followLatest.current = false;
+      return;
+    }
     followLatest.current = atBottom;
     if (atBottom) setNewMessages(false);
   }, []);
@@ -191,6 +364,7 @@ export function Conversation({
     event.preventDefault();
     if (
       sending.current ||
+      finding ||
       recording ||
       (!pendingMessage && !body.trim() && !files.length && !voice)
     )
@@ -252,7 +426,8 @@ export function Conversation({
       setNewMessages(false);
       await fetching.current?.catch(() => {});
       await refresh();
-      setJumpRequest((value) => value + 1);
+      if (browsing.current) await latestMessages();
+      else setJumpRequest((value) => value + 1);
     } catch (error) {
       setError(
         `${error instanceof Error ? error.message : 'ارسال انجام نشد.'}${savedId ? ' پیام ذخیره شده؛ ارسال فایل‌ها را دوباره امتحان کنید.' : ''}`,
@@ -314,8 +489,11 @@ export function Conversation({
     <div className="messenger-chat">
       <header className="messenger-header">
         <Link
-          href={permissions.readOnly ? `/admin/departments/${ticket.departmentId}/history` : '/'}
-          aria-label="بازگشت به گفتگوها"
+          href={
+            returnTo ??
+            (permissions.readOnly ? `/admin/departments/${ticket.departmentId}/history` : '/')
+          }
+          aria-label={returnTo ? 'بازگشت به نتایج جستجو' : 'بازگشت به گفتگوها'}
           className="messenger-back"
         >
           <ArrowRight size={24} />
@@ -335,6 +513,15 @@ export function Conversation({
         <button
           type="button"
           className="messenger-info-button"
+          aria-label="جستجو در این گفتگو"
+          disabled={busy || recording || loadingOlder || finding}
+          onClick={() => setSearchOpen(true)}
+        >
+          <Search size={22} />
+        </button>
+        <button
+          type="button"
+          className="messenger-info-button"
           aria-label="اطلاعات گفتگو"
           onClick={() => setInfo(true)}
         >
@@ -348,18 +535,88 @@ export function Conversation({
         </p>
       )}
       <ActiveAudio />
+      {(focusId || finding) && (
+        <div className="messenger-search-context" aria-label="پیام پیدا‌شده">
+          <div>
+            <strong>
+              {finding
+                ? 'در حال دریافت پیام…'
+                : searchSelection
+                  ? `نتیجه ${digits(searchSelection.previous.length * 20 + searchSelection.index + 1)}`
+                  : 'پیام پیدا‌شده'}
+            </strong>
+            {searchSelection && (
+              <button type="button" onClick={() => setSearchOpen(true)} disabled={finding}>
+                مشاهده نتایج
+              </button>
+            )}
+          </div>
+          {searchSelection && (
+            <div className="messenger-match-navigation">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="نتیجه قبلی"
+                disabled={
+                  finding ||
+                  loadingOlder ||
+                  (!searchSelection.index && !searchSelection.previous.length)
+                }
+                onClick={() => void nextResult(-1)}
+              >
+                <ArrowUp size={18} />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="نتیجه بعدی"
+                disabled={
+                  finding ||
+                  loadingOlder ||
+                  (searchSelection.index === searchSelection.data.items.length - 1 &&
+                    !searchSelection.data.nextCursor)
+                }
+                onClick={() => void nextResult(1)}
+              >
+                <ArrowDown size={18} />
+              </Button>
+            </div>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={finding || loadingOlder}
+            onClick={() => void latestMessages()}
+          >
+            آخرین پیام‌ها
+          </Button>
+        </div>
+      )}
+      {error && !permissions.reply && (
+        <p role="alert" className="error-message messenger-search-feedback">
+          {error}
+        </p>
+      )}
       <div className="messenger-message-area">
         <MessageTimeline
+          key={windowKey}
           messages={messages}
           actorId={actorId}
           older={!!olderCursor}
-          loading={loadingOlder}
+          loading={loadingOlder || finding}
           load={loadOlder}
-          attachments={data.attachments}
+          attachments={focusId ? [] : data.attachments}
           unit={ticket.department.name}
           apiRef={timeline}
           onBottomChange={onBottomChange}
           jumpRequest={jumpRequest}
+          focusId={focusId}
+          highlightTerms={highlightTerms}
+          newer={!!newerCursor}
+          loadNewer={loadNewer}
         />
         {newMessages && (
           <Button
@@ -367,6 +624,10 @@ export function Conversation({
             className="messenger-jump"
             size="sm"
             onClick={() => {
+              if (browsing.current) {
+                void latestMessages();
+                return;
+              }
               followLatest.current = true;
               timeline.current?.jumpToLatest();
               setNewMessages(false);
@@ -466,7 +727,10 @@ export function Conversation({
               className="messenger-send"
               aria-label={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام'}
               disabled={
-                busy || recording || (!pendingMessage && !body.trim() && !files.length && !voice)
+                busy ||
+                finding ||
+                recording ||
+                (!pendingMessage && !body.trim() && !files.length && !voice)
               }
             >
               <Send size={22} />
@@ -519,6 +783,21 @@ export function Conversation({
           )}
         </form>
       )}
+      <Modal
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        title="جستجو در این گفتگو"
+        description={counterpart}
+        wide
+      >
+        <MessageSearch
+          actorId={actorId}
+          privateAllowed={permissions.staff || permissions.readOnly}
+          initial={{ ticketId: id }}
+          restore={searchSelection}
+          onSelect={(result, selected) => void showResult(result, selected)}
+        />
+      </Modal>
       <Modal
         open={info}
         onOpenChange={(value) => {

@@ -240,7 +240,31 @@ export async function listTickets(actor: Actor, input: unknown) {
   };
 }
 
-async function readMessagePage(id: string, messageCursor: string | undefined, internal: boolean) {
+export const messageSelect = {
+  id: true,
+  body: true,
+  visibility: true,
+  createdAt: true,
+  sender: { select: { id: true, name: true, image: true } },
+  attachments: {
+    select: {
+      id: true,
+      filename: true,
+      detectedMime: true,
+      size: true,
+      scanStatus: true,
+      durationSeconds: true,
+      waveform: true,
+    },
+  },
+} satisfies Prisma.MessageSelect;
+
+async function readMessagePage(
+  id: string,
+  messageCursor: string | undefined,
+  internal: boolean,
+  direction: 'older' | 'newer' = 'older',
+) {
   const messageWhere: Prisma.MessageWhereInput = {
     ticketId: id,
     ...(!internal ? { visibility: 'PUBLIC' } : {}),
@@ -255,30 +279,16 @@ async function readMessagePage(id: string, messageCursor: string | undefined, in
     fail();
   const messages = await db.message.findMany({
     where: messageWhere,
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    orderBy: [
+      { createdAt: direction === 'newer' ? 'asc' : 'desc' },
+      { id: direction === 'newer' ? 'asc' : 'desc' },
+    ],
     take: 51,
     ...(messageCursor ? { cursor: { id: messageCursor }, skip: 1 } : {}),
-    select: {
-      id: true,
-      body: true,
-      visibility: true,
-      createdAt: true,
-      sender: { select: { id: true, name: true, image: true } },
-      attachments: {
-        select: {
-          id: true,
-          filename: true,
-          detectedMime: true,
-          size: true,
-          scanStatus: true,
-          durationSeconds: true,
-          waveform: true,
-        },
-      },
-    },
+    select: messageSelect,
   });
   return {
-    items: messages.slice(0, 50).reverse(),
+    items: direction === 'newer' ? messages.slice(0, 50) : messages.slice(0, 50).reverse(),
     nextCursor: messages.length > 50 ? messages[49].id : null,
   };
 }
@@ -347,14 +357,76 @@ async function authorizeConversation(actor: Actor, id: string) {
   return canReadInternal(actor, ticket);
 }
 
-export async function getMessagePage(actor: Actor, id: string, cursor?: string) {
+export async function getMessagePage(
+  actor: Actor,
+  id: string,
+  cursor?: string,
+  direction: 'older' | 'newer' = 'older',
+) {
+  z.enum(['older', 'newer']).parse(direction);
+  if (direction === 'newer' && !cursor) fail('VALIDATION', 400);
   if (cursor) uuid.parse(cursor);
-  return readMessagePage(id, cursor, await authorizeConversation(actor, id));
+  return readMessagePage(id, cursor, await authorizeConversation(actor, id), direction);
 }
 
 export async function getHistoryPage(actor: Actor, id: string, cursor?: string) {
   if (cursor) uuid.parse(cursor);
   return readHistoryPage(id, cursor, await authorizeConversation(actor, id));
+}
+
+export async function getMessageContext(actor: Actor, id: string, messageId: string) {
+  uuid.parse(messageId);
+  const internal = await authorizeConversation(actor, id);
+  const scope: Prisma.MessageWhereInput = {
+    ticketId: id,
+    ...(!internal ? { visibility: 'PUBLIC' as const } : {}),
+  };
+  const anchor = await db.message.findFirst({
+    where: { ...scope, id: messageId },
+    select: messageSelect,
+  });
+  if (!anchor) fail();
+  const [before, after] = await Promise.all([
+    db.message.findMany({
+      where: {
+        AND: [
+          scope,
+          {
+            OR: [
+              { createdAt: { lt: anchor.createdAt } },
+              { createdAt: anchor.createdAt, id: { lt: anchor.id } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 26,
+      select: messageSelect,
+    }),
+    db.message.findMany({
+      where: {
+        AND: [
+          scope,
+          {
+            OR: [
+              { createdAt: { gt: anchor.createdAt } },
+              { createdAt: anchor.createdAt, id: { gt: anchor.id } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 25,
+      select: messageSelect,
+    }),
+  ]);
+  const items = [...before.slice(0, 25).reverse(), anchor, ...after.slice(0, 24)];
+  return {
+    items,
+    olderCursor: before.length > 25 ? items[0].id : null,
+    newerCursor: after.length > 24 ? items.at(-1)!.id : null,
+    focusId: anchor.id,
+  };
 }
 
 export async function getTicket(
@@ -363,6 +435,7 @@ export async function getTicket(
   messageCursor?: string,
   activityCursor?: string,
   includeHistory = true,
+  focusMessageId?: string,
 ) {
   uuid.parse(id);
   if (messageCursor) uuid.parse(messageCursor);
@@ -373,7 +446,18 @@ export async function getTicket(
   const staff = isStaff(actor, ticket);
   const internal = canReadInternal(actor, ticket);
   const [messagePage, historyPage, attachments] = await Promise.all([
-    readMessagePage(id, messageCursor, internal),
+    focusMessageId
+      ? getMessageContext(actor, id, focusMessageId).then((context) => ({
+          items: context.items,
+          nextCursor: context.olderCursor,
+          focusId: context.focusId,
+          newerCursor: context.newerCursor,
+        }))
+      : readMessagePage(id, messageCursor, internal).then((page) => ({
+          ...page,
+          focusId: null,
+          newerCursor: null,
+        })),
     includeHistory
       ? readHistoryPage(id, activityCursor, internal)
       : Promise.resolve({ items: [], nextCursor: null }),
@@ -396,6 +480,9 @@ export async function getTicket(
     ticket,
     messages: messagePage.items,
     nextMessageCursor: messagePage.nextCursor,
+    messageFocus: messagePage.focusId
+      ? { focusId: messagePage.focusId, newerCursor: messagePage.newerCursor }
+      : null,
     activities: historyPage.items,
     nextActivityCursor: historyPage.nextCursor,
     attachments,

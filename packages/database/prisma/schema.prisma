@@ -223,6 +223,9 @@ model Message {
   attachments Attachment[]
 
   @@index([ticketId, createdAt, id])
+  @@index([createdAt, id])
+  @@index([senderId, createdAt, id])
+  // Expression GIN indexes and clean-file partial indexes live in the search SQL migration.
 }
 
 model Activity {

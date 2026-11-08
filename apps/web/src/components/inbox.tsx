@@ -101,12 +101,12 @@ export async function Inbox({
             <input
               name="q"
               aria-label="جستجو در گفتگوها"
-              placeholder="جستجو در گفتگوها"
+              placeholder="جستجو در همه پیام‌ها"
               defaultValue={query.q}
               maxLength={100}
             />
           </div>
-          <Button variant="ghost" type="submit">
+          <Button variant="ghost" type="submit" formAction="/search">
             جستجو
           </Button>
           {departments.length > 1 && (

@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   MessageCircle,
   UserRound,
+  Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
@@ -152,6 +153,9 @@ export function Shell({
                 </div>
               </Link>
               <div className="easy-header-actions">
+                <Link href="/search" className="icon-link" aria-label="جستجو در همه پیام‌ها">
+                  <Search size={21} />
+                </Link>
                 <NotificationBell />
                 <Link href="/profile" className="easy-account" aria-label="حساب من">
                   <Avatar name={user.name} image={user.image} small />
@@ -275,6 +279,9 @@ export function Shell({
             <span title={supportDescription}>{supportDescription}</span>
           </div>
           <div className="topbar-actions">
+            <Link href="/search" className="icon-link" aria-label="جستجو در همه پیام‌ها">
+              <Search size={21} />
+            </Link>
             <span className="today">
               {new Intl.DateTimeFormat('fa-IR', {
                 dateStyle: 'long',

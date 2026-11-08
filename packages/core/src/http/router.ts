@@ -11,6 +11,8 @@ import { assertAdmin } from '../domain/authorization';
 import * as credentials from '../application/credentials';
 import * as sessions from '../application/sessions';
 import { getAuth } from '../infrastructure/auth';
+import { searchMessages, searchSenders } from '../application/message-search';
+import { rateLimit } from '../infrastructure/redis';
 
 export async function dispatch(
   request: Request,
@@ -20,6 +22,11 @@ export async function dispatch(
   const [resource, id, action] = segments;
   const method = request.method;
   const query = Object.fromEntries(new URL(request.url).searchParams);
+  if (resource === 'search' && method === 'GET' && (!id || id === 'senders')) {
+    if (!(await rateLimit(`${actor.id}:message-search`, 90, 60)))
+      fail('RATE_LIMITED', 429, 'کمی صبر کنید و جستجو را دوباره انجام دهید.');
+    return id === 'senders' ? searchSenders(actor, query) : searchMessages(actor, query);
+  }
   if (resource === 'conversations' && !id && method === 'POST')
     return tickets.openConversation(actor, await readJson(request));
   if (resource === 'session' && method === 'GET') {
@@ -48,7 +55,14 @@ export async function dispatch(
     if (id && !action && method === 'GET')
       return tickets.getTicket(actor, id, query.messageCursor, query.activityCursor);
     if (id && action === 'messages' && method === 'GET')
-      return tickets.getMessagePage(actor, id, query.cursor);
+      return segments[3] === 'context'
+        ? tickets.getMessageContext(actor, id, query.messageId)
+        : tickets.getMessagePage(
+            actor,
+            id,
+            query.cursor,
+            query.direction as 'older' | 'newer' | undefined,
+          );
     if (id && action === 'history' && method === 'GET')
       return tickets.getHistoryPage(actor, id, query.cursor);
     if (id && method === 'POST') {

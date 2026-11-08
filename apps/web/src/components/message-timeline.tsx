@@ -15,6 +15,7 @@ import type { getTicket } from '@niticket/core/application/tickets';
 import { AttachmentPreview } from './attachment-preview';
 import { Button } from './ui/button';
 import { date } from '@/lib/utils';
+import { SearchHighlight } from './search-highlight';
 
 type Detail = Awaited<ReturnType<typeof getTicket>>;
 type Message = Detail['messages'][number];
@@ -27,6 +28,8 @@ type Context = {
   load: () => void;
   attachments: Detail['attachments'];
   unit: string;
+  newer: boolean;
+  loadNewer: () => void;
 };
 const timeFormat = new Intl.DateTimeFormat('fa-IR', {
   hour: '2-digit',
@@ -38,10 +41,14 @@ const MessageRow = memo(function MessageRow({
   message,
   actorId,
   day,
+  focused,
+  terms,
 }: {
   message: Message;
   actorId: string;
   day: string | null;
+  focused: boolean;
+  terms: string[];
 }) {
   const own = message.sender.id === actorId;
   return (
@@ -53,6 +60,7 @@ const MessageRow = memo(function MessageRow({
       )}
       <article
         data-message-id={message.id}
+        data-search-focused={focused || undefined}
         className={`messenger-bubble ${own ? 'bubble-own' : ''} ${message.visibility === 'INTERNAL' ? 'bubble-private' : ''}`}
       >
         {message.visibility === 'INTERNAL' && (
@@ -62,7 +70,9 @@ const MessageRow = memo(function MessageRow({
           </span>
         )}
         <strong className="messenger-sender">{own ? 'شما' : message.sender.name}</strong>
-        <p className="message-body">{message.body}</p>
+        <p className="message-body">
+          {focused ? <SearchHighlight text={message.body} terms={terms} /> : message.body}
+        </p>
         <div className="message-attachments">
           {message.attachments.map((file) => (
             <AttachmentPreview key={file.id} file={file} />
@@ -101,6 +111,17 @@ const components: Components<Message, Context> = {
   ),
   Footer: ({ context }) => (
     <div className="messenger-timeline-footer">
+      {context?.newer && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={context.loading}
+          onClick={context.loadNewer}
+        >
+          پیام‌های بعدی
+        </Button>
+      )}
       {context?.attachments.map((file) => (
         <AttachmentPreview key={file.id} file={file} />
       ))}
@@ -128,6 +149,10 @@ export const MessageTimeline = memo(function MessageTimeline({
   apiRef,
   onBottomChange,
   jumpRequest,
+  focusId,
+  highlightTerms,
+  newer,
+  loadNewer,
 }: {
   messages: Message[];
   actorId: string;
@@ -139,6 +164,10 @@ export const MessageTimeline = memo(function MessageTimeline({
   apiRef: RefObject<TimelineHandle | null>;
   onBottomChange: (value: boolean) => void;
   jumpRequest: number;
+  focusId?: string | null;
+  highlightTerms: string[];
+  newer: boolean;
+  loadNewer: () => void;
 }) {
   const virtual = useRef<VirtuosoHandle>(null),
     scroller = useRef<HTMLElement | null>(null);
@@ -211,15 +240,27 @@ export const MessageTimeline = memo(function MessageTimeline({
       aria-label="پیام‌های گفتگو"
       tabIndex={0}
       data={messages}
-      context={{ older, loading, load, attachments, unit }}
+      context={{ older, loading, load, attachments, unit, newer, loadNewer }}
       components={components}
       firstItemIndex={position.firstIndex}
-      initialTopMostItemIndex={messages.length ? { index: 'LAST', align: 'end' } : 0}
+      initialTopMostItemIndex={
+        focusId
+          ? {
+              index: Math.max(
+                0,
+                messages.findIndex((message) => message.id === focusId),
+              ),
+              align: 'center',
+            }
+          : messages.length
+            ? { index: 'LAST', align: 'end' }
+            : 0
+      }
       defaultItemHeight={126}
       increaseViewportBy={{ top: 350, bottom: 350 }}
       atBottomThreshold={100}
       atBottomStateChange={onBottomChange}
-      followOutput="auto"
+      followOutput={focusId ? false : 'auto'}
       computeItemKey={(_, message) => message.id}
       itemContent={(index, message) => {
         const local = index - position.firstIndex;
@@ -229,6 +270,8 @@ export const MessageTimeline = memo(function MessageTimeline({
             message={message}
             actorId={actorId}
             day={(!local ? !older : date(messages[local - 1].createdAt) !== day) ? day : null}
+            focused={message.id === focusId}
+            terms={highlightTerms}
           />
         );
       }}
