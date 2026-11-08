@@ -31,6 +31,7 @@ export const listSchema = z.object({
   status: statuses.optional(),
   departmentId: uuid.optional(),
   scope: z.enum(['mine', 'department', 'assigned', 'unassigned']).default('mine'),
+  view: z.enum(['all', 'action', 'done']).default('all'),
 });
 
 export const versionSchema = z.object({ version: z.number().int().positive() });

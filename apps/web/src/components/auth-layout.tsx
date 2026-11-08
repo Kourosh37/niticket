@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="auth-page" id="main-content">
+    <main className="auth-page auth-simple" id="main-content">
       <section className="auth-story">
         <Link href="/login" className="brand">
           <span className="brand-mark">
@@ -16,12 +16,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
             <small>سامانه پشتیبانی دانشگاه</small>
           </span>
         </Link>
-        <h1>
-          ارتباطی روشن.
-          <br />
-          همراهی تا رسیدن به پاسخ.
-        </h1>
-        <p>یک فضای یکپارچه برای طرح پرسش‌ها، پیگیری درخواست‌ها و ارتباط با واحدهای دانشگاه.</p>
+        <h1>راه ساده گفت‌وگو با دانشگاه</h1>
       </section>
       <section className="auth-form-area">{children}</section>
     </main>

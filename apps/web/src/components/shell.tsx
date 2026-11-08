@@ -17,6 +17,8 @@ import {
   ArrowUpLeft,
   Settings,
   ChevronLeft,
+  MessageCircle,
+  UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
@@ -93,15 +95,87 @@ export function Shell({
         ];
 
   async function logout() {
-    const res = await fetch('/api/auth/sign-out', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
-    if (res.ok || res.status === 401) {
-      router.replace('/login');
-      router.refresh();
-    } else setError('خروج انجام نشد. دوباره تلاش کنید.');
+    try {
+      const res = await fetch('/api/auth/sign-out', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      if (res.ok || res.status === 401) {
+        router.replace('/login');
+        router.refresh();
+      } else setError('خروج انجام نشد. دوباره تلاش کنید.');
+    } catch {
+      setError('ارتباط برقرار نشد. برای خروج دوباره تلاش کنید.');
+    }
+  }
+
+  if (!user.isAdmin) {
+    const navigation = [
+      {
+        href: '/',
+        label: 'گفتگوها',
+        icon: MessageCircle,
+        active:
+          path === '/' ||
+          path === '/tickets' ||
+          path.startsWith('/workspace') ||
+          (path.startsWith('/tickets/') && path !== '/tickets/new'),
+      },
+      ...(!user.staff
+        ? [
+            {
+              href: '/tickets/new',
+              label: 'پیام جدید',
+              icon: Plus,
+              active: path === '/tickets/new',
+            },
+          ]
+        : []),
+      { href: '/notifications', label: 'اعلان‌ها', icon: Bell, active: path === '/notifications' },
+      { href: '/profile', label: 'حساب من', icon: UserRound, active: path === '/profile' },
+    ];
+    return (
+      <div className="easy-app">
+        <SessionGuard />
+        <header className="easy-header">
+          <div className="easy-header-inner">
+            <Link href="/" className="easy-brand" aria-label="نیتیکت، گفتگوها">
+              <span>
+                <MessageCircle size={25} />
+              </span>
+              <div>
+                <strong>نیتیکت</strong>
+                <small>{universityName}</small>
+              </div>
+            </Link>
+            <div className="easy-header-actions">
+              <NotificationBell />
+              <Link href="/profile" className="easy-account" aria-label="حساب من">
+                <Avatar name={user.name} image={user.image} small />
+                <span>{user.name}</span>
+              </Link>
+            </div>
+          </div>
+        </header>
+        <main id="main-content" className="easy-main">
+          {children}
+        </main>
+        <nav className="easy-navigation" aria-label="ناوبری اصلی">
+          {navigation.map(({ href, label, icon: Icon, active }) => (
+            <Link href={href} key={href} aria-current={active ? 'page' : undefined}>
+              <Icon size={23} />
+              <span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+        {error && (
+          <p role="alert" className="easy-shell-error">
+            {error}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (

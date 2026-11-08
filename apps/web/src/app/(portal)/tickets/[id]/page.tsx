@@ -25,6 +25,7 @@ export default async function Page({
   const policy = await settings();
   return (
     <Conversation
+      key={id}
       detail={detail}
       actorId={a.id}
       maxSeconds={policy.maxVoiceSeconds}

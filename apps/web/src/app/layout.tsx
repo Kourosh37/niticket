@@ -1,9 +1,10 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import '@fontsource/vazirmatn/400.css';
 import '@fontsource/vazirmatn/500.css';
 import '@fontsource/vazirmatn/600.css';
 import '@fontsource/vazirmatn/700.css';
 import './globals.css';
+import './easy.css';
 
 export const metadata: Metadata = {
   title: { default: 'نیتیکت | پشتیبانی دانشگاه', template: '%s | نیتیکت' },
@@ -12,6 +13,13 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = 'force-dynamic';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

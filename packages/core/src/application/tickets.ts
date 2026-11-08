@@ -161,6 +161,18 @@ export async function listTickets(actor: Actor, input: unknown) {
             : {},
       q.departmentId ? { departmentId: q.departmentId } : {},
       q.status ? { status: q.status } : {},
+      q.view === 'action'
+        ? {
+            status: {
+              in:
+                userRole(actor) === 'STAFF'
+                  ? ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_DEPARTMENT', 'REOPENED']
+                  : ['WAITING_FOR_USER'],
+            },
+          }
+        : q.view === 'done'
+          ? { status: { in: ['RESOLVED', 'CLOSED'] } }
+          : {},
       q.q ? { OR: [{ subject: { contains: q.q, mode: 'insensitive' } }] } : {},
     ],
   };
@@ -208,7 +220,7 @@ export async function getTicket(
     fail();
   const messages = await db.message.findMany({
     where: messageWhere,
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: 51,
     ...(messageCursor ? { cursor: { id: messageCursor }, skip: 1 } : {}),
     select: {
@@ -292,7 +304,7 @@ export async function getTicket(
   });
   return {
     ticket,
-    messages: messages.slice(0, 50),
+    messages: messages.slice(0, 50).reverse(),
     nextMessageCursor: messages.length > 50 ? messages[49].id : null,
     activities: activities.slice(0, 50),
     nextActivityCursor: activities.length > 50 ? activities[49].id : null,
@@ -301,7 +313,10 @@ export async function getTicket(
       staff,
       manage: false,
       readOnly: userRole(actor) === 'ADMIN',
-      reopen: ticket.creatorId === actor.id,
+      reopen:
+        ticket.creatorId === actor.id &&
+        ticket.status === 'RESOLVED' &&
+        canReopen(ticket.resolvedAt, (await settings()).reopenDays),
       reply: userRole(actor) !== 'ADMIN' && ticket.status !== 'CLOSED',
     },
   };

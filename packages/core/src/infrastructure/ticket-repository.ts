@@ -19,6 +19,12 @@ export const ticketSummarySelect = {
   category: { select: { id: true, name: true } },
   creator: { select: { id: true, name: true, image: true } },
   assignee: { select: { id: true, name: true, image: true } },
+  messages: {
+    where: { visibility: 'PUBLIC' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 1,
+    select: { body: true, senderId: true },
+  },
 } satisfies Prisma.TicketSelect;
 
 export const ticketRepository = {

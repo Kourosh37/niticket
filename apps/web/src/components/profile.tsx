@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from './ui/button';
 import { request, checkSession } from '@/lib/utils';
 import { AvatarUpload } from './avatar-upload';
+import { LogOut } from 'lucide-react';
 
 export function Profile({
   profile,
@@ -183,6 +184,35 @@ export function Profile({
           {success}
         </p>
       )}
+      <div className="easy-profile-signout">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError('');
+            try {
+              const response = await fetch('/api/auth/sign-out', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: '{}',
+              });
+              if (!response.ok && response.status !== 401)
+                throw new Error('خروج انجام نشد. دوباره تلاش کنید.');
+              router.replace('/login');
+              router.refresh();
+            } catch (error) {
+              setError(error instanceof Error ? error.message : 'ارتباط برقرار نشد.');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <LogOut size={18} />
+          خروج از حساب
+        </Button>
+      </div>
     </>
   );
 }

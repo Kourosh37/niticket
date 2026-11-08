@@ -1,31 +1,51 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Send, Paperclip, ChevronLeft, Lock, RefreshCw, X, History, Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowDown,
+  ArrowRight,
+  Send,
+  Paperclip,
+  Lock,
+  RefreshCw,
+  X,
+  History,
+  Check,
+  MessageCircle,
+  Info,
+} from 'lucide-react';
 import type { getTicket } from '@niticket/core/application/tickets';
 import { transitions } from '@niticket/core/domain/workflow';
 import { Button } from './ui/button';
-import { Status } from './status';
 import { VoiceRecorder } from './voice-recorder';
 import { AttachmentPreview } from './attachment-preview';
 import { UploadProgress } from './upload-progress';
 import { Avatar } from './avatar';
 import { HistoryNote } from './history-note';
-import { request, date, dateTime, statusNames, priorityNames, digits } from '@/lib/utils';
+import { request, date, dateTime, statusNames, digits } from '@/lib/utils';
+import { ticketState } from '@/lib/ticket-ui';
 import { uploadFile } from '@/lib/upload';
 
 type Detail = Awaited<ReturnType<typeof getTicket>>;
 const activityNames: Record<string, string> = {
   TICKET_CREATED: 'درخواست ثبت شد',
-  PUBLIC_REPLY: 'پاسخ جدید ثبت شد',
-  INTERNAL_NOTE: 'یادداشت داخلی ثبت شد',
-  STATUS_CHANGED: 'وضعیت درخواست تغییر کرد',
-  ASSIGNED: 'کارشناس درخواست تغییر کرد',
-  TRANSFERRED: 'درخواست به واحد دیگری ارجاع شد',
-  ATTACHMENT_READY: 'پیوست بررسی شد',
-  PRIORITY_CHANGED: 'اولویت درخواست تغییر کرد',
+  PUBLIC_REPLY: 'پیام جدید ارسال شد',
+  INTERNAL_NOTE: 'یادداشت خصوصی ثبت شد',
+  STATUS_CHANGED: 'وضعیت رسیدگی تغییر کرد',
+  ASSIGNED: 'مسئول درخواست تغییر کرد',
+  TRANSFERRED: 'درخواست به واحد دیگری فرستاده شد',
+  ATTACHMENT_READY: 'پیوست آماده شد',
+  PRIORITY_CHANGED: 'اولویت تغییر کرد',
+};
+const actionNames: Record<string, string> = {
+  IN_PROGRESS: 'شروع رسیدگی',
+  WAITING_FOR_USER: 'منتظر پاسخ فرستنده',
+  WAITING_FOR_DEPARTMENT: 'پیگیری از واحد دیگر',
+  RESOLVED: 'پایان رسیدگی',
+  REOPENED: 'ادامه رسیدگی',
+  CLOSED: 'بستن نهایی گفتگو',
 };
 
 export function Conversation({
@@ -40,6 +60,7 @@ export function Conversation({
   maxBytes: number;
 }) {
   const router = useRouter();
+  const params = useSearchParams();
   const { ticket, messages, permissions } = detail;
   const [body, setBody] = useState(''),
     [visibility, setVisibility] = useState<'PUBLIC' | 'INTERNAL'>('PUBLIC'),
@@ -53,22 +74,66 @@ export function Conversation({
     [filename, setFilename] = useState(''),
     [pendingMessage, setPendingMessage] = useState<string | null>(null),
     [recorderKey, setRecorderKey] = useState(0),
-    [status, setStatus] = useState(''),
-    [tab, setTab] = useState<'conversation' | 'history'>('conversation');
+    [tab, setTab] = useState<'conversation' | 'history'>('conversation'),
+    [newMessage, setNewMessage] = useState(false);
+  const bottom = useRef<HTMLDivElement>(null),
+    input = useRef<HTMLTextAreaElement>(null),
+    nearBottom = useRef(true),
+    firstView = useRef(true),
+    sending = useRef(false);
+  const lastMessageId = messages.at(-1)?.id;
+  const olderPage = !!params.get('messageCursor');
+  useEffect(() => {
+    const onScroll = () => {
+      nearBottom.current =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 350;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  useEffect(() => {
+    if (tab !== 'conversation') return;
+    if (firstView.current || nearBottom.current) {
+      bottom.current?.scrollIntoView({ behavior: 'instant', block: 'end' });
+      setNewMessage(false);
+    } else setNewMessage(true);
+    firstView.current = false;
+  }, [lastMessageId, tab]);
+  useEffect(() => {
+    if (busy || recording) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') router.refresh();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [busy, recording, router]);
   const hasPending = [
     ...detail.attachments,
     ...messages.flatMap((m) => m.attachments),
     ...detail.activities.flatMap((a) => a.notes.flatMap((n) => n.attachments)),
   ].some((a) => ['PENDING', 'QUARANTINED'].includes(a.scanStatus));
   useEffect(() => {
-    if (!hasPending) return;
-    const timer = setInterval(() => router.refresh(), 5000);
+    if (!hasPending || busy || recording) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') router.refresh();
+    }, 5000);
     return () => clearInterval(timer);
-  }, [hasPending, router]);
+  }, [hasPending, busy, recording, router]);
+
+  function refreshLatest() {
+    nearBottom.current = true;
+    if (olderPage) router.replace(`/tickets/${ticket.id}`);
+    router.refresh();
+  }
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (busy || recording) return;
+    if (
+      sending.current ||
+      recording ||
+      (!pendingMessage && !body.trim() && !files.length && !voice)
+    )
+      return;
+    sending.current = true;
     setError('');
     setSuccess('');
     setBusy(true);
@@ -105,19 +170,23 @@ export function Conversation({
       }
       setPendingMessage(null);
       setProgress(null);
-      setSuccess('پیام شما ثبت شد. پیوست‌ها پس از بررسی امنیتی نمایش داده می‌شوند.');
-      router.refresh();
+      setSuccess('ارسال شد');
+      refreshLatest();
+      input.current?.focus();
     } catch (error) {
       setError(
-        `${error instanceof Error ? error.message : 'ارسال انجام نشد.'}${savedId ? ' پیام ذخیره شده است؛ برای پیوست دوباره تلاش کنید.' : ''}`,
+        `${error instanceof Error ? error.message : 'ارسال انجام نشد.'}${savedId ? ' متن پیام ذخیره شد. برای ارسال فایل‌ها دوباره بزنید.' : ''}`,
       );
       router.refresh();
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
 
   async function changeStatus(value: string) {
+    if (sending.current || recording) return;
+    sending.current = true;
     setBusy(true);
     setError('');
     setSuccess('');
@@ -126,195 +195,332 @@ export function Conversation({
         method: 'POST',
         body: JSON.stringify({ version: ticket.version, status: value }),
       });
-      setStatus('');
-      setSuccess('وضعیت درخواست ذخیره شد.');
+      setSuccess('وضعیت رسیدگی تغییر کرد.');
       router.refresh();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'تغییر وضعیت انجام نشد.');
       router.refresh();
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
 
+  const back = permissions.readOnly ? `/admin/departments/${ticket.departmentId}/history` : '/';
   return (
-    <>
-      <div className="breadcrumb">
-        <Link
-          href={
-            permissions.readOnly
-              ? `/admin/departments/${ticket.departmentId}/history`
-              : permissions.staff
-                ? '/workspace'
-                : '/tickets'
-          }
-        >
-          {permissions.readOnly
-            ? 'تاریخچه واحد'
-            : permissions.staff
-              ? 'درخواست‌های واحد'
-              : 'درخواست‌های من'}
+    <div className="easy-chat">
+      <header className="chat-heading conversation-heading">
+        <Link href={back} className="chat-back" aria-label="بازگشت به گفتگوها">
+          <ArrowRight size={24} />
         </Link>
-        <ChevronLeft size={12} />
-        <bdi dir="ltr">
-          NIT-{new Date(ticket.createdAt).getUTCFullYear()}-{String(ticket.number).padStart(6, '0')}
-        </bdi>
-      </div>
-      <div className="page-heading conversation-heading">
-        <div>
-          <h1>{ticket.subject}</h1>
-          <p>
-            {ticket.department.name} · ثبت‌شده در {date(ticket.createdAt)}
-          </p>
+        <Avatar
+          name={
+            permissions.staff || permissions.readOnly ? ticket.creator.name : ticket.department.name
+          }
+          image={permissions.staff || permissions.readOnly ? ticket.creator.image : null}
+        />
+        <div className="chat-title">
+          <span>
+            {permissions.staff || permissions.readOnly
+              ? ticket.creator.name
+              : ticket.department.name}
+          </span>
+          <h1 title={ticket.subject}>{ticket.subject}</h1>
+          <span className={`status chat-state status-${ticket.status.toLowerCase()}`}>
+            <i />
+            {ticketState(ticket.status, permissions.staff)}
+          </span>
         </div>
-        <Status value={ticket.status} />
-      </div>
+        <details className="chat-info">
+          <summary aria-label="اطلاعات درخواست">
+            <Info size={22} />
+          </summary>
+          <div>
+            <strong>اطلاعات درخواست</strong>
+            <p>موضوع: {ticket.subject}</p>
+            <p>واحد: {ticket.department.name}</p>
+            <p>فرستنده: {ticket.creator.name}</p>
+            <p>تاریخ: {date(ticket.createdAt)}</p>
+            <bdi dir="ltr">
+              NIT-{new Date(ticket.createdAt).getUTCFullYear()}-
+              {String(ticket.number).padStart(6, '0')}
+            </bdi>
+          </div>
+        </details>
+      </header>
       {permissions.readOnly && (
-        <p className="readonly-notice">
-          <History size={17} /> مشاهده تاریخچه توسط مدیر سامانه؛ ارسال پیام و تغییر وضعیت برای این
-          حساب غیرفعال است.
+        <p className="chat-notice">
+          <Lock size={16} /> این گفتگو برای مدیر فقط قابل مشاهده است.
         </p>
       )}
-      <div className="conversation-layout">
-        <section className="surface">
-          <div className="conversation-tabs">
-            <button
-              type="button"
-              className={tab === 'conversation' ? 'selected' : ''}
-              onClick={() => setTab('conversation')}
-            >
-              گفتگو و پیوست‌ها
-            </button>
-            <button
-              type="button"
-              className={tab === 'history' ? 'selected' : ''}
-              onClick={() => setTab('history')}
-            >
-              تاریخچه کامل
-            </button>
-            <Button variant="ghost" size="sm" onClick={() => router.refresh()}>
-              <RefreshCw size={14} /> تازه‌سازی
-            </Button>
-          </div>
-          {tab === 'conversation' ? (
-            <>
-              <div className="messages">
-                {messages.map((message) => (
+      {permissions.staff && transitions[ticket.status].length > 0 && (
+        <div className="chat-workflow" aria-label="رسیدگی به درخواست">
+          <span>رسیدگی:</span>
+          {transitions[ticket.status]
+            .filter((s) => s !== 'CLOSED')
+            .map((s) => (
+              <Button
+                key={s}
+                type="button"
+                size="sm"
+                variant={s === 'RESOLVED' ? 'default' : 'outline'}
+                disabled={busy || recording}
+                onClick={() => void changeStatus(s)}
+              >
+                {s === 'RESOLVED' && <Check size={17} />}
+                {actionNames[s]}
+              </Button>
+            ))}
+          {transitions[ticket.status].includes('CLOSED') && (
+            <details className="chat-close-option">
+              <summary>بستن گفتگو</summary>
+              <p>پس از بستن نهایی، دیگر نمی‌توان در این گفتگو پیام فرستاد.</p>
+              <Button
+                variant="outline"
+                disabled={busy || recording}
+                onClick={() => void changeStatus('CLOSED')}
+              >
+                بستن نهایی گفتگو
+              </Button>
+            </details>
+          )}
+        </div>
+      )}
+      <div
+        className="chat-tabs"
+        role="tablist"
+        aria-label="بخش‌های درخواست"
+        onKeyDown={(event) => {
+          if ((event.target as HTMLElement).getAttribute('role') !== 'tab' || busy || recording)
+            return;
+          const next =
+            event.key === 'ArrowLeft' || event.key === 'End'
+              ? 'history'
+              : event.key === 'ArrowRight' || event.key === 'Home'
+                ? 'conversation'
+                : null;
+          if (!next) return;
+          event.preventDefault();
+          setTab(next);
+          document.getElementById(next === 'history' ? 'history-tab' : 'conversation-tab')?.focus();
+        }}
+      >
+        <button
+          type="button"
+          role="tab"
+          id="conversation-tab"
+          aria-controls="conversation-panel"
+          aria-selected={tab === 'conversation'}
+          tabIndex={tab === 'conversation' ? 0 : -1}
+          onClick={() => setTab('conversation')}
+        >
+          <MessageCircle size={18} />
+          گفتگو
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="history-tab"
+          aria-controls="history-panel"
+          aria-selected={tab === 'history'}
+          tabIndex={tab === 'history' ? 0 : -1}
+          disabled={busy || recording}
+          onClick={() => setTab('history')}
+        >
+          <History size={17} />
+          تاریخچه کامل
+        </button>
+        <button
+          type="button"
+          className="chat-refresh"
+          aria-label="تازه‌سازی گفتگو"
+          onClick={() => router.refresh()}
+        >
+          <RefreshCw size={18} />
+        </button>
+      </div>
+      {tab === 'conversation' ? (
+        <section role="tabpanel" id="conversation-panel" aria-labelledby="conversation-tab">
+          <div className="chat-messages messages" aria-label="پیام‌های گفتگو">
+            {olderPage && (
+              <Link className="chat-older" href={`/tickets/${ticket.id}`}>
+                بازگشت به آخرین پیام‌ها <ArrowDown size={17} />
+              </Link>
+            )}
+            {detail.nextMessageCursor && (
+              <Link
+                className="chat-older"
+                href={`/tickets/${ticket.id}?messageCursor=${detail.nextMessageCursor}`}
+              >
+                پیام‌های قبلی
+              </Link>
+            )}
+            {messages.map((message, index) => {
+              const own = message.sender.id === actorId;
+              const newDay =
+                !index || date(messages[index - 1].createdAt) !== date(message.createdAt);
+              return (
+                <div key={message.id}>
+                  {newDay && (
+                    <div className="chat-day">
+                      <span>{date(message.createdAt)}</span>
+                    </div>
+                  )}
                   <article
-                    key={message.id}
-                    className={`message ${message.sender.id === actorId ? 'message-own' : ''} ${message.visibility === 'INTERNAL' ? 'message-internal' : ''}`}
+                    className={`message chat-bubble ${own ? 'message-own' : ''} ${message.visibility === 'INTERNAL' ? 'message-internal' : ''}`}
                   >
                     {message.visibility === 'INTERNAL' && (
                       <span className="internal-label">
-                        <Lock size={12} /> یادداشت داخلی واحد
+                        <Lock size={13} />
+                        یادداشت خصوصی واحد
                       </span>
                     )}
-                    <div className="message-head">
-                      <Avatar name={message.sender.name} image={message.sender.image} small />
-                      <strong>{message.sender.name}</strong>
-                      <time dateTime={new Date(message.createdAt).toISOString()}>
-                        {dateTime(message.createdAt)}
-                      </time>
-                    </div>
+                    <strong className="chat-sender">{own ? 'شما' : message.sender.name}</strong>
                     <p className="message-body">{message.body}</p>
                     <div className="message-attachments">
                       {message.attachments.map((file) => (
                         <AttachmentPreview file={file} key={file.id} />
                       ))}
                     </div>
+                    <time dateTime={new Date(message.createdAt).toISOString()}>
+                      {new Intl.DateTimeFormat('fa-IR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'Asia/Tehran',
+                      }).format(new Date(message.createdAt))}
+                      {own && <Check size={13} aria-label="ارسال شده" />}
+                    </time>
                   </article>
-                ))}
-                {detail.nextMessageCursor && (
-                  <Button asChild variant="outline">
-                    <Link href={`/tickets/${ticket.id}?messageCursor=${detail.nextMessageCursor}`}>
-                      پیام‌های بعدی
-                    </Link>
-                  </Button>
-                )}
-                {detail.attachments.map((file) => (
-                  <AttachmentPreview file={file} key={file.id} />
-                ))}
-              </div>
-              {permissions.reply ? (
-                <form className="composer" onSubmit={send}>
-                  <label htmlFor="reply">
-                    {pendingMessage ? 'تکمیل پیوست پیام ذخیره‌شده' : 'پاسخ شما'}
-                  </label>
-                  <textarea
-                    id="reply"
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    maxLength={20000}
-                    rows={4}
+                </div>
+              );
+            })}
+            {detail.attachments.map((file) => (
+              <AttachmentPreview file={file} key={file.id} />
+            ))}
+            <div ref={bottom} className="chat-bottom-anchor" />
+          </div>
+          {newMessage && (
+            <Button
+              className="chat-new-message"
+              size="sm"
+              onClick={() => {
+                bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                setNewMessage(false);
+              }}
+            >
+              پیام جدید <ArrowDown size={16} />
+            </Button>
+          )}
+          {permissions.reply ? (
+            <form
+              className={`chat-composer ${visibility === 'INTERNAL' ? 'composer-private' : ''}`}
+              onSubmit={send}
+            >
+              {permissions.staff && (
+                <div className="composer-visibility" aria-label="نوع پیام">
+                  <button
+                    type="button"
+                    aria-pressed={visibility === 'PUBLIC'}
                     disabled={busy || !!pendingMessage}
-                    placeholder={
-                      visibility === 'INTERNAL'
-                        ? 'یادداشتی برای واحد بنویسید…'
-                        : 'پاسخ یا توضیحات خود را بنویسید…'
-                    }
-                  />
-                  <div className="composer-tools-row">
-                    <label htmlFor="attachment" className="button button-outline button-sm">
-                      <Paperclip size={16} /> پیوست فایل
-                    </label>
-                    <input
-                      className="sr-only"
-                      id="attachment"
-                      type="file"
-                      multiple
-                      disabled={busy}
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp3,.wav"
-                      onChange={(e) => {
-                        const chosen = Array.from(e.target.files ?? []);
-                        if (chosen.some((f) => f.size > maxBytes)) {
-                          setError(
-                            `حجم هر فایل حداکثر ${digits(Math.round(maxBytes / 1048576))} مگابایت باشد.`,
-                          );
-                          return;
-                        }
-                        if (files.length + chosen.length > 5) {
-                          setError('حداکثر ۵ فایل را در هر پیام بفرستید.');
-                          return;
-                        }
-                        setFiles((current) => [...current, ...chosen]);
-                        e.target.value = '';
-                      }}
-                    />
-                    {permissions.staff && (
-                      <select
-                        aria-label="نوع پیام"
-                        value={visibility}
-                        disabled={busy || !!pendingMessage}
-                        onChange={(e) => setVisibility(e.target.value as 'PUBLIC' | 'INTERNAL')}
+                    onClick={() => setVisibility('PUBLIC')}
+                  >
+                    پاسخ به فرستنده
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={visibility === 'INTERNAL'}
+                    disabled={busy || !!pendingMessage}
+                    onClick={() => setVisibility('INTERNAL')}
+                  >
+                    <Lock size={13} />
+                    یادداشت خصوصی
+                  </button>
+                </div>
+              )}
+              {visibility === 'INTERNAL' && (
+                <p className="private-composer-notice">
+                  <Lock size={14} />
+                  این پیام را فقط مسئولان واحد و مدیر می‌بینند.
+                </p>
+              )}
+              {pendingMessage && (
+                <p className="composer-saved">پیام ذخیره شده؛ ارسال فایل‌ها را تکمیل کنید.</p>
+              )}
+              {!!files.length && (
+                <div className="selected-files">
+                  {files.map((file, index) => (
+                    <span key={`${file.name}-${index}`}>
+                      <Paperclip size={14} />
+                      <bdi>{file.name}</bdi>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`حذف ${file.name}`}
+                        onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
                       >
-                        <option value="PUBLIC">پاسخ به دانشجو</option>
-                        <option value="INTERNAL">یادداشت داخلی واحد</option>
-                      </select>
-                    )}
-                    <span className="field-hint">
-                      حداکثر هر فایل {digits(Math.round(maxBytes / 1048576))} مگابایت
+                        <X size={16} />
+                      </button>
                     </span>
-                  </div>
-                  {files.length > 0 && (
-                    <div className="selected-files">
-                      {files.map((file, index) => (
-                        <span key={`${file.name}-${index}`}>
-                          <Paperclip size={13} />
-                          <bdi>{file.name}</bdi>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            aria-label={`حذف ${file.name}`}
-                            onClick={() =>
-                              setFiles((current) => current.filter((_, i) => i !== index))
-                            }
-                          >
-                            <X size={13} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  ))}
+                </div>
+              )}
+              <div className="composer-input-row">
+                <label htmlFor="reply" className="sr-only">
+                  پاسخ شما
+                </label>
+                <textarea
+                  ref={input}
+                  id="reply"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  maxLength={20000}
+                  rows={2}
+                  disabled={busy || !!pendingMessage}
+                  placeholder={
+                    visibility === 'INTERNAL' ? 'یادداشت خصوصی بنویسید…' : 'پیام خود را بنویسید…'
+                  }
+                />
+                <Button
+                  className="chat-send"
+                  disabled={
+                    busy ||
+                    recording ||
+                    (!pendingMessage && !body.trim() && !files.length && !voice)
+                  }
+                >
+                  <Send size={21} />
+                  <span>{busy ? 'ارسال…' : pendingMessage ? 'تلاش دوباره' : 'ارسال پاسخ'}</span>
+                </Button>
+              </div>
+              <div className="composer-tools">
+                <label htmlFor="attachment" className="chat-attach" aria-disabled={busy}>
+                  <Paperclip size={21} />
+                  عکس یا فایل
+                  <input
+                    id="attachment"
+                    type="file"
+                    multiple
+                    disabled={busy}
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp3,.wav"
+                    onChange={(e) => {
+                      const chosen = Array.from(e.target.files ?? []);
+                      e.target.value = '';
+                      if (chosen.some((f) => f.size > maxBytes)) {
+                        setError(
+                          `حجم هر فایل حداکثر ${digits(Math.round(maxBytes / 1048576))} مگابایت باشد.`,
+                        );
+                        return;
+                      }
+                      if (files.length + chosen.length > 5) {
+                        setError('در هر پیام حداکثر ۵ فایل بفرستید.');
+                        return;
+                      }
+                      setError('');
+                      setFiles((current) => [...current, ...chosen]);
+                    }}
+                  />
+                </label>
+                <fieldset disabled={busy} className="composer-voice">
                   <VoiceRecorder
                     key={recorderKey}
                     onFile={setVoice}
@@ -322,173 +528,111 @@ export function Conversation({
                     maxSeconds={maxSeconds}
                     maxBytes={maxBytes}
                   />
-                  {progress !== null && <UploadProgress percent={progress} filename={filename} />}
-                  <div className="composer-bottom">
-                    <small className="muted">
-                      فایل و وویس پس از بررسی امنیتی در گفتگو نمایش داده می‌شوند.
-                    </small>
-                    <Button
-                      disabled={
-                        busy ||
-                        recording ||
-                        (!pendingMessage && !body.trim() && !files.length && !voice)
-                      }
-                    >
-                      <Send size={16} />
-                      {busy
-                        ? 'در حال ارسال…'
-                        : pendingMessage
-                          ? 'تلاش دوباره برای پیوست'
-                          : 'ارسال پاسخ'}
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <div className="composer muted">
-                  {permissions.readOnly
-                    ? 'این گفتگو برای شما فقط قابل مشاهده است.'
-                    : 'این درخواست بسته شده است.'}
-                </div>
+                </fieldset>
+              </div>
+              {progress !== null && <UploadProgress percent={progress} filename={filename} />}
+              {error && (
+                <p role="alert" className="error-message">
+                  {error}
+                </p>
               )}
-            </>
+              {success && (
+                <p role="status" className="chat-send-status">
+                  <Check size={14} />
+                  {success}
+                </p>
+              )}
+            </form>
           ) : (
-            <div className="full-history">
-              {detail.activities.map((activity) => (
-                <article className="history-event" key={activity.id}>
-                  <div className="history-event-title">
-                    <span className="history-event-dot">
-                      <Check size={13} />
-                    </span>
-                    <strong>{activityNames[activity.type] ?? 'درخواست به‌روزرسانی شد'}</strong>
-                    <time>{dateTime(activity.createdAt)}</time>
-                  </div>
-                  {activity.type === 'STATUS_CHANGED' &&
-                    activity.metadata &&
-                    typeof activity.metadata === 'object' &&
-                    !Array.isArray(activity.metadata) && (
-                      <p className="history-state-change">
-                        {statusNames[String(activity.metadata.from)]} ←{' '}
-                        {statusNames[String(activity.metadata.to)]}
-                      </p>
-                    )}
-                  {activity.notes.map((note) => (
-                    <div className="history-note" key={note.id}>
-                      <div className="message-head">
-                        <Avatar name={note.author.name} image={note.author.image} small />
-                        <strong>{note.author.name}</strong>
-                        <span className="internal-label">
-                          <Lock size={11} /> یادداشت واحد
-                        </span>
-                      </div>
-                      {note.body && <p className="message-body">{note.body}</p>}
-                      {note.attachments.map((file) => (
-                        <AttachmentPreview file={file} key={file.id} />
-                      ))}
-                    </div>
-                  ))}
-                  {permissions.staff && (
-                    <HistoryNote
-                      ticketId={ticket.id}
-                      activityId={activity.id}
-                      maxSeconds={maxSeconds}
-                      maxBytes={maxBytes}
-                    />
-                  )}
-                </article>
-              ))}
-              {detail.nextActivityCursor && (
-                <Button asChild variant="outline">
-                  <Link href={`/tickets/${ticket.id}?activityCursor=${detail.nextActivityCursor}`}>
-                    رویدادهای قبلی
-                  </Link>
-                </Button>
-              )}
+            <div className="chat-ended">
+              <Lock size={19} />
+              <p>
+                {permissions.readOnly ? 'گفتگو فقط قابل مشاهده است.' : 'این گفتگو بسته شده است.'}
+              </p>
             </div>
           )}
-          {error && (
-            <p role="alert" className="error-message" style={{ margin: 20 }}>
-              {error}
-            </p>
-          )}
-          {success && (
-            <p role="status" className="success-message" style={{ margin: 20 }}>
-              {success}
-            </p>
-          )}
-        </section>
-        <aside className="detail-sidebar">
-          <section className="surface">
-            <h2>اطلاعات درخواست</h2>
-            <dl className="detail-dl">
-              <div>
-                <dt>دانشجو</dt>
-                <dd>{ticket.creator.name}</dd>
-              </div>
-              <div>
-                <dt>واحد پاسخ‌گو</dt>
-                <dd>{ticket.department.name}</dd>
-              </div>
-              <div>
-                <dt>اولویت</dt>
-                <dd>{priorityNames[ticket.priority]}</dd>
-              </div>
-              <div>
-                <dt>آخرین فعالیت</dt>
-                <dd>{date(ticket.lastActivityAt)}</dd>
-              </div>
-            </dl>
-            {permissions.staff && transitions[ticket.status].length > 0 && (
-              <>
-                <label htmlFor="change-status">تغییر وضعیت</label>
-                <select
-                  id="change-status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  disabled={busy}
-                >
-                  <option value="">وضعیت جدید را انتخاب کنید</option>
-                  {transitions[ticket.status].map((s) => (
-                    <option key={s} value={s}>
-                      {statusNames[s]}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy || !status}
-                  onClick={() => void changeStatus(status)}
-                >
-                  ذخیره وضعیت
-                </Button>
-              </>
-            )}
-            {!permissions.staff &&
-              !permissions.readOnly &&
-              permissions.reopen &&
-              ticket.status === 'RESOLVED' && (
+          {!permissions.staff &&
+            !permissions.readOnly &&
+            permissions.reopen &&
+            ticket.status === 'RESOLVED' && (
+              <div className="chat-reopen">
+                <p>هنوز به کمک نیاز دارید؟</p>
                 <Button
                   variant="outline"
                   disabled={busy}
                   onClick={() => void changeStatus('REOPENED')}
                 >
-                  بازگشایی درخواست
+                  ادامه همین درخواست
                 </Button>
+              </div>
+            )}
+        </section>
+      ) : (
+        <section
+          role="tabpanel"
+          id="history-panel"
+          aria-labelledby="history-tab"
+          className="chat-history"
+        >
+          <p className="history-intro">مراحل رسیدگی به درخواست شما</p>
+          {detail.activities.map((activity) => (
+            <article className="history-event" key={activity.id}>
+              <div className="history-event-title">
+                <span className="history-event-dot">
+                  <Check size={13} />
+                </span>
+                <strong>{activityNames[activity.type] ?? 'درخواست به‌روزرسانی شد'}</strong>
+                <time>{dateTime(activity.createdAt)}</time>
+              </div>
+              {activity.type === 'STATUS_CHANGED' &&
+                activity.metadata &&
+                typeof activity.metadata === 'object' &&
+                !Array.isArray(activity.metadata) && (
+                  <p className="history-state-change">
+                    {statusNames[String(activity.metadata.from)]} ←{' '}
+                    {statusNames[String(activity.metadata.to)]}
+                  </p>
+                )}
+              {activity.notes.map((note) => (
+                <div className="history-note" key={note.id}>
+                  <div className="message-head">
+                    <Avatar name={note.author.name} image={note.author.image} small />
+                    <strong>{note.author.name}</strong>
+                    <span className="internal-label">
+                      <Lock size={12} />
+                      یادداشت خصوصی
+                    </span>
+                  </div>
+                  {note.body && <p className="message-body">{note.body}</p>}
+                  {note.attachments.map((file) => (
+                    <AttachmentPreview file={file} key={file.id} />
+                  ))}
+                </div>
+              ))}
+              {permissions.staff && (
+                <HistoryNote
+                  ticketId={ticket.id}
+                  activityId={activity.id}
+                  maxSeconds={maxSeconds}
+                  maxBytes={maxBytes}
+                />
               )}
-          </section>
-          <section className="surface">
-            <h2>راهنمای پیگیری</h2>
-            <p className="field-hint">
-              {permissions.staff
-                ? 'برای هر مرحله از رسیدگی، می‌توانید در بخش تاریخچه یک یادداشت یا وویس اختیاری ثبت کنید.'
-                : 'پاسخ‌ها و پیوست‌ها در گفتگو نمایش داده می‌شوند. تغییرات وضعیت را در بخش تاریخچه کامل ببینید.'}
-            </p>
-            <Button variant="ghost" size="sm" onClick={() => setTab('history')}>
-              <History size={15} /> مشاهده تاریخچه
+            </article>
+          ))}
+          {detail.nextActivityCursor && (
+            <Button asChild variant="outline">
+              <Link href={`/tickets/${ticket.id}?activityCursor=${detail.nextActivityCursor}`}>
+                رویدادهای قبلی
+              </Link>
             </Button>
-          </section>
-        </aside>
-      </div>
-    </>
+          )}
+        </section>
+      )}
+      {error && tab !== 'conversation' && (
+        <p role="alert" className="error-message">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
