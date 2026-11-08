@@ -1,71 +1,76 @@
 'use client';
 
-import Link from 'next/link';
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from './ui/button';
 
-export function AuthForm({ mode = 'login' }: { mode?: 'login' | 'forgot' | 'reset' }) {
+export function AuthForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [mode, setMode] = useState<'phone' | 'code' | 'password'>('phone');
+  const [code, setCode] = useState(''),
+    [password, setPassword] = useState('');
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const [resendAt, setResendAt] = useState(0),
+    [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    const update = () => setRemaining(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [resendAt]);
+  useEffect(() => {
+    if (mode === 'code' && !busy) document.getElementById('otp-code')?.focus();
+  }, [mode, busy]);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function send(path: string, body: object) {
+    const response = await fetch(`/api/auth/${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new Error(
+        response.status === 429
+          ? 'تعداد تلاش‌ها زیاد است. کمی بعد دوباره تلاش کنید.'
+          : response.status === 503
+            ? 'سرویس ورود موقتاً در دسترس نیست.'
+            : path.includes('verify')
+              ? 'کد معتبر نیست یا منقضی شده است.'
+              : path.includes('sign-in')
+                ? 'شماره موبایل یا رمز عبور معتبر نیست.'
+                : 'شماره موبایل را بررسی کنید.',
+      );
+    return result;
+  }
+
+  async function sendCode() {
+    const result = await send('phone-number/send-otp', { phoneNumber });
+    setResendAt(Date.now() + result.resendAfter * 1000);
+    setCode('');
+    setMode('code');
+  }
+
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
-    const values = new FormData(event.currentTarget);
-    const email = String(values.get('email') ?? '').trim();
-    const password = String(values.get('password') ?? '');
     try {
-      const route =
-        mode === 'login'
-          ? email.includes('@')
-            ? 'sign-in/email'
-            : 'sign-in/username'
-          : mode === 'forgot'
-            ? 'request-password-reset'
-            : 'reset-password';
-      const body =
-        mode === 'login'
-          ? {
-              ...(email.includes('@') ? { email: email.toLowerCase() } : { username: email }),
-              password,
-              rememberMe: false,
-            }
-          : mode === 'forgot'
-            ? { email, redirectTo: `${window.location.origin}/reset-password` }
-            : { newPassword: password, token: params.get('token') };
-      const response = await fetch(`/api/auth/${route}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok)
-        throw new Error(
-          mode === 'login'
-            ? response.status === 403
-              ? 'ابتدا ایمیل دانشجویی خود را تأیید کنید.'
-              : 'اطلاعات ورود معتبر نیست یا ورود موقتاً محدود شده است.'
-            : mode === 'reset'
-              ? 'پیوند بازیابی معتبر نیست یا منقضی شده است.'
-              : 'ارسال درخواست انجام نشد. کمی بعد تلاش کنید.',
+      if (mode === 'phone') await sendCode();
+      else {
+        await send(
+          mode === 'code' ? 'phone-number/verify' : 'sign-in/phone-number',
+          mode === 'code' ? { phoneNumber, code } : { phoneNumber, password },
         );
-      if (mode === 'login') {
-        router.push('/');
+        router.replace('/');
         router.refresh();
-      } else
-        setSuccess(
-          mode === 'forgot'
-            ? 'اگر حساب فعالی با این ایمیل وجود داشته باشد، راهنمای بازیابی برای آن ارسال می‌شود.'
-            : 'رمز عبور تغییر کرد. اکنون می‌توانید وارد شوید.',
-        );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'ارتباط با سامانه برقرار نشد.');
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'ارتباط برقرار نشد. دوباره تلاش کنید.');
     } finally {
       setBusy(false);
     }
@@ -74,111 +79,130 @@ export function AuthForm({ mode = 'login' }: { mode?: 'login' | 'forgot' | 'rese
   return (
     <form className="auth-form" onSubmit={submit}>
       <span className="auth-eyebrow">دانشگاه صنعتی نوشیروانی بابل</span>
-      <h2>
-        {mode === 'login'
-          ? 'به نیتیکت خوش آمدید'
-          : mode === 'forgot'
-            ? 'بازیابی رمز عبور'
-            : 'انتخاب رمز عبور جدید'}
-      </h2>
+      <h2>{mode === 'code' ? 'کد ورود را وارد کنید' : 'به نیتیکت خوش آمدید'}</h2>
       <p>
-        {mode === 'login'
-          ? 'برای ثبت و پیگیری درخواست‌ها وارد حساب خود شوید.'
-          : mode === 'forgot'
-            ? 'نشانی ایمیل حساب دانشگاهی خود را وارد کنید.'
-            : 'یک رمز عبور قوی با حداقل ۱۲ نویسه انتخاب کنید.'}
+        {mode === 'code' ? (
+          <>
+            کد یک‌بارمصرف برای <bdi>{phoneNumber}</bdi>
+          </>
+        ) : (
+          'فقط با شماره موبایل وارد شوید؛ حساب شما خودکار ساخته می‌شود.'
+        )}
       </p>
-      {mode !== 'reset' && (
-        <div className="field">
-          <label htmlFor="email">
-            {mode === 'login' ? 'ایمیل، شماره دانشجویی یا نام کاربری' : 'ایمیل دانشجویی'}
-          </label>
-          <input
-            id="email"
-            name="email"
-            type={mode === 'login' ? 'text' : 'email'}
-            dir="ltr"
-            autoComplete="username"
-            required
-            maxLength={254}
-            placeholder={mode === 'login' ? 'ایمیل یا شناسه ورود شما' : 'name@stu.nit.ac.ir'}
-          />
-        </div>
-      )}
-      {mode !== 'forgot' && (
-        <div className="field">
-          <label htmlFor="password">رمز عبور</label>
-          <div style={{ position: 'relative' }}>
+      <fieldset className="form-fields" disabled={busy}>
+        {mode !== 'code' && (
+          <div className="field">
+            <label htmlFor="phone-number">شماره موبایل</label>
+            <input
+              id="phone-number"
+              name="phoneNumber"
+              type="tel"
+              inputMode="tel"
+              dir="ltr"
+              autoComplete="tel-national"
+              placeholder="09123456789"
+              maxLength={40}
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              required
+            />
+          </div>
+        )}
+        {mode === 'code' && (
+          <div className="field">
+            <label htmlFor="otp-code">کد ۶ رقمی</label>
+            <input
+              key="code"
+              id="otp-code"
+              name="code"
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
+              autoComplete="one-time-code"
+              autoFocus
+              minLength={6}
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+          </div>
+        )}
+        {mode === 'password' && (
+          <div className="field">
+            <label htmlFor="password">رمز عبور</label>
             <input
               id="password"
               name="password"
-              type={visible ? 'text' : 'password'}
+              type="password"
               dir="ltr"
-              autoComplete={mode === 'reset' ? 'new-password' : 'current-password'}
-              minLength={mode === 'reset' ? 12 : 1}
+              autoComplete="current-password"
               maxLength={128}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
-              style={{ paddingInlineEnd: 45 }}
             />
-            <button
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
+        <Button disabled={busy}>
+          {busy ? 'لطفاً صبر کنید…' : mode === 'phone' ? 'دریافت کد ورود' : 'ورود'}
+          <ArrowLeft size={17} />
+        </Button>
+        <div className="auth-links">
+          {mode === 'code' ? (
+            <>
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => {
+                  setMode('phone');
+                  setError('');
+                }}
+              >
+                تغییر شماره
+              </Button>
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={busy || remaining > 0}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    await sendCode();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'ارسال انجام نشد.');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {remaining > 0 ? `ارسال دوباره (${remaining})` : 'ارسال دوباره کد'}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
               type="button"
-              aria-label={visible ? 'پنهان کردن رمز عبور' : 'نمایش رمز عبور'}
-              onClick={() => setVisible(!visible)}
-              style={{
-                position: 'absolute',
-                left: 10,
-                top: 12,
-                background: 'none',
-                border: 0,
-                color: '#8b9b80',
+              onClick={() => {
+                setMode(mode === 'password' ? 'phone' : 'password');
+                setPassword('');
+                setError('');
               }}
             >
-              {visible ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+              {mode === 'password' ? 'ورود با کد یک‌بارمصرف' : 'ورود با رمز'}
+            </Button>
+          )}
         </div>
+      </fieldset>
+      {mode === 'password' && (
+        <p className="auth-footnote">رمز ندارید یا فراموش کرده‌اید؟ با کد یک‌بارمصرف وارد شوید.</p>
       )}
-      {mode === 'login' && (
-        <div className="auth-links">
-          <span>ورود امن با حساب کاربری</span>
-          <Link href="/forgot-password">رمز عبور را فراموش کرده‌اید؟</Link>
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="error-message">
-          {error}
-        </p>
-      )}
-      {mode === 'login' && params.get('verified') === '1' && (
-        <p className="success-message" role="status">
-          ایمیل شما تأیید شد. اکنون وارد شوید.
-        </p>
-      )}
-      {success && (
-        <p role="status" className="success-message">
-          {success}
-        </p>
-      )}
-      <Button disabled={busy}>
-        {busy
-          ? 'لطفاً صبر کنید…'
-          : mode === 'login'
-            ? 'ورود به حساب'
-            : mode === 'forgot'
-              ? 'ارسال پیوند بازیابی'
-              : 'ذخیره رمز عبور'}
-        <ArrowLeft size={17} />
-      </Button>
-      {mode !== 'login' && (
-        <div className="auth-links">
-          <Link href="/login">بازگشت به ورود</Link>
-        </div>
-      )}
-      <div className="auth-links">
-        <span>هنوز حساب دانشجویی ندارید؟</span>
-        <Link href="/register">ثبت‌نام دانشجو</Link>
-      </div>
-      <p className="auth-footnote">حساب مسئول واحد فقط توسط مدیر سامانه ایجاد می‌شود.</p>
     </form>
   );
 }

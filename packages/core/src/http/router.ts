@@ -1,6 +1,4 @@
 import { db } from '@niticket/database';
-import { verify } from '@node-rs/argon2';
-import { z } from 'zod';
 import type { Actor } from '../domain/authorization';
 import { fail } from '../domain/errors';
 import * as tickets from '../application/tickets';
@@ -10,6 +8,7 @@ import { readJson } from './api';
 import { settings, saveSettings } from '../application/settings';
 import { failedJobs, retryJob } from '../application/operations';
 import { assertAdmin } from '../domain/authorization';
+import * as credentials from '../application/credentials';
 import { getAuth } from '../infrastructure/auth';
 
 export async function dispatch(
@@ -23,14 +22,21 @@ export async function dispatch(
   if (resource === 'conversations' && !id && method === 'POST')
     return tickets.openConversation(actor, await readJson(request));
   if (resource === 'session' && method === 'GET') {
-    const session = await getAuth().api.getSession({ headers: request.headers });
+    const session = await getAuth().api.getSession({
+      headers: request.headers,
+      query: { disableRefresh: true },
+    });
     if (!session) fail('UNAUTHENTICATED', 401, 'برای ادامه وارد حساب خود شوید.');
     return {
       expiresAt: session.session.expiresAt,
       expiresInMs: Math.max(0, new Date(session.session.expiresAt).getTime() - Date.now()),
     };
   }
+  if (resource === 'inbox' && id === 'revision' && method === 'GET')
+    return tickets.inboxRevision(actor);
   if (resource === 'tickets') {
+    if (id && action === 'sync' && method === 'GET')
+      return tickets.syncTicket(actor, id, query.since);
     if (!id && method === 'GET') return tickets.listTickets(actor, query);
     if (!id && method === 'POST')
       return tickets.createTicket(
@@ -56,32 +62,22 @@ export async function dispatch(
     return admin.listDepartments(actor, false, { q: query.q });
   if (resource === 'reports' && method === 'GET') return admin.reports(actor, query);
   if (resource === 'notifications') {
+    if (id === 'count' && method === 'GET')
+      return {
+        unreadCount: await db.notification.count({ where: { userId: actor.id, readAt: null } }),
+      };
     if (method === 'GET') return admin.notifications(actor, query.cursor);
     if (method === 'PATCH') return admin.readNotification(actor, await readJson(request));
   }
   if (resource === 'users' && id === 'me') {
+    if (action === 'password' && method === 'POST')
+      return credentials.setPassword(actor, await readJson(request));
     if (method === 'GET') return admin.getProfile(actor);
     if (method === 'PATCH') return admin.updateProfile(actor, await readJson(request));
   }
   if (resource === 'reauthenticate' && method === 'POST') {
-    const { password } = z
-      .object({ password: z.string().min(1).max(128) })
-      .strict()
-      .parse(await readJson(request));
-    const account = await db.account.findFirst({
-      where: { userId: actor.id, providerId: 'credential' },
-    });
-    if (!account?.password || !(await verify(account.password, password)))
-      fail('INVALID_PASSWORD', 400, 'رمز عبور معتبر نیست.');
-    await db.$transaction([
-      db.reauthentication.upsert({
-        where: { sessionId: actor.sessionId },
-        create: { sessionId: actor.sessionId, verifiedAt: new Date() },
-        update: { verifiedAt: new Date() },
-      }),
-      db.auditLog.create({ data: { actorId: actor.id, action: 'REAUTHENTICATED', metadata: {} } }),
-    ]);
-    return { ok: true };
+    if (id === 'code') return credentials.sendReauthenticationCode(actor);
+    if (!id) return credentials.reauthenticate(actor, await readJson(request));
   }
   if (resource === 'uploads' && method === 'POST') {
     if (id === 'intents') return attachments.createUpload(actor, await readJson(request));

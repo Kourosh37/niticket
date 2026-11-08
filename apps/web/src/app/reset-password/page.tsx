@@ -1,13 +1,5 @@
-import { Suspense } from 'react';
-import { AuthForm } from '@/components/auth-form';
-import { AuthLayout } from '@/components/auth-layout';
+import { redirect } from 'next/navigation';
 
-export default function Reset() {
-  return (
-    <AuthLayout>
-      <Suspense fallback={<p>در حال بارگذاری…</p>}>
-        <AuthForm mode="reset" />
-      </Suspense>
-    </AuthLayout>
-  );
+export default function Page() {
+  redirect('/login');
 }

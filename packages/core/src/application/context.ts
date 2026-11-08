@@ -4,7 +4,7 @@ import { fail } from '../domain/errors';
 import type { Actor } from '../domain/authorization';
 
 export async function actorFromHeaders(headers: Headers): Promise<Actor> {
-  const session = await getAuth().api.getSession({ headers });
+  const session = await getAuth().api.getSession({ headers, query: { disableRefresh: true } });
   if (!session) fail('UNAUTHENTICATED', 401, 'برای ادامه وارد حساب خود شوید.');
   return loadActor(db, session.user.id, session.session.id, new Date(session.session.createdAt));
 }
@@ -19,7 +19,8 @@ export async function loadActor(
     where: { id: userId },
     include: { memberships: { where: { active: true, department: { active: true } } } },
   });
-  if (!user?.active) fail('UNAUTHENTICATED', 401, 'حساب شما غیرفعال است.');
+  if (!user?.active || !user.phoneNumber || !user.phoneNumberVerified)
+    fail('UNAUTHENTICATED', 401, 'برای ادامه با شماره موبایل وارد شوید.');
   return {
     id: user.id,
     active: user.active,
@@ -41,5 +42,5 @@ export async function requireFresh(actor: Actor) {
     Date.now() - Math.max(actor.sessionCreatedAt.getTime(), proof?.verifiedAt.getTime() ?? 0) >
     300000
   )
-    fail('REAUTH_REQUIRED', 403, 'برای این عملیات دوباره رمز عبور خود را تأیید کنید.');
+    fail('REAUTH_REQUIRED', 403, 'برای ادامه، هویت خود را با کد موبایل یا رمز عبور تأیید کنید.');
 }

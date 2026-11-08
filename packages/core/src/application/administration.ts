@@ -17,11 +17,10 @@ import {
   uuid,
   provisionDepartmentSchema,
   responsibleSchema,
-  usernameSchema,
-  studentNumberSchema,
-  phoneSchema,
 } from '../validation';
-import { hashPassword } from '../infrastructure/auth';
+import { internalIdentityEmail } from './mobile-identity';
+import { iranianPhoneSchema } from '../domain/phone';
+import { config } from '../infrastructure/config';
 import { transaction } from '../infrastructure/transaction';
 import { refreshActor, requireFresh } from './context';
 
@@ -81,9 +80,7 @@ export async function listDepartments(
             select: {
               id: true,
               name: true,
-              username: admin,
-              email: admin,
-              phone: admin,
+              phoneNumber: admin,
               image: true,
               active: true,
             },
@@ -117,25 +114,10 @@ export async function provisionDepartment(actor: Actor, input: unknown) {
   assertAdmin(actor);
   await requireFresh(actor);
   const data = provisionDepartmentSchema.parse(input);
-  const password = await hashPassword(data.responsible.password);
   return transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     assertAdmin(actor);
-    const id = randomUUID();
-    const person = await tx.user.create({
-      data: {
-        id,
-        name: data.responsible.name,
-        email: data.responsible.email,
-        username: data.responsible.username,
-        displayUsername: data.responsible.username,
-        phone: data.responsible.phone,
-        role: 'STAFF',
-        accountType: 'STAFF',
-        emailVerified: true,
-        accounts: { create: { accountId: id, providerId: 'credential', password } },
-      },
-    });
+    const person = await provisionStaff(tx, data.responsible);
     const department = await tx.department.create({
       data: {
         name: data.name,
@@ -161,7 +143,7 @@ export async function listMembers(actor: Actor, departmentId: string) {
       id: true,
       role: true,
       active: true,
-      user: { select: { id: true, name: true, email: true, active: true } },
+      user: { select: { id: true, name: true, phoneNumber: true, active: true } },
     },
   });
 }
@@ -238,9 +220,8 @@ export async function listUsers(actor: Actor, q = '', cursor?: string) {
       ? {
           OR: [
             { name: { contains: q.slice(0, 100), mode: 'insensitive' } },
-            { email: { contains: q.slice(0, 100), mode: 'insensitive' } },
+            { phoneNumber: { contains: q.slice(0, 100) } },
             { studentNumber: { contains: q.slice(0, 100) } },
-            { username: { contains: q.slice(0, 100), mode: 'insensitive' } },
           ],
         }
       : {},
@@ -250,14 +231,12 @@ export async function listUsers(actor: Actor, q = '', cursor?: string) {
     select: {
       id: true,
       name: true,
-      email: true,
       active: true,
       isAdmin: true,
       accountType: true,
       role: true,
-      username: true,
       studentNumber: true,
-      phone: true,
+      phoneNumber: true,
       image: true,
       createdAt: true,
     },
@@ -265,31 +244,43 @@ export async function listUsers(actor: Actor, q = '', cursor?: string) {
   return { items: rows.slice(0, 30), nextCursor: rows.length > 30 ? rows[29].id : null };
 }
 
+async function provisionStaff(
+  tx: Prisma.TransactionClient,
+  data: z.infer<typeof responsibleSchema>,
+) {
+  const existing = await tx.user.findUnique({ where: { phoneNumber: data.phoneNumber } });
+  if (data.phoneNumber === config().ADMIN_PHONE || existing?.isAdmin || existing?.role === 'ADMIN')
+    fail('VALIDATION', 400, 'حساب مدیر سامانه نمی‌تواند مسئول واحد باشد.');
+  if (existing) {
+    if (!existing.active) fail('VALIDATION', 400, 'ابتدا حساب مسئول را فعال کنید.');
+    await tx.session.deleteMany({ where: { userId: existing.id } });
+    return tx.user.update({
+      where: { id: existing.id },
+      data: { name: data.name, role: 'STAFF', accountType: 'STAFF' },
+    });
+  }
+  return tx.user.create({
+    data: {
+      name: data.name,
+      email: internalIdentityEmail(),
+      phoneNumber: data.phoneNumber,
+      role: 'STAFF',
+      accountType: 'STAFF',
+      emailNotifications: false,
+    },
+  });
+}
+
 export async function createUser(actor: Actor, input: unknown) {
   assertAdmin(actor);
   await requireFresh(actor);
   const data = responsibleSchema.parse(input);
-  const password = await hashPassword(data.password);
   return transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     assertAdmin(actor);
-    const id = randomUUID();
-    await tx.user.create({
-      data: {
-        id,
-        name: data.name,
-        email: data.email,
-        accountType: 'STAFF',
-        role: 'STAFF',
-        username: data.username,
-        displayUsername: data.username,
-        phone: data.phone,
-        emailVerified: true,
-        accounts: { create: { accountId: id, providerId: 'credential', password } },
-      },
-    });
-    await audit(tx, actor, 'USER_CREATED', id);
-    return { id };
+    const person = await provisionStaff(tx, data);
+    await audit(tx, actor, 'STAFF_PROVISIONED', person.id);
+    return { id: person.id };
   });
 }
 
@@ -301,46 +292,27 @@ export async function updateUser(actor: Actor, id: string, input: unknown) {
     .object({
       active: z.boolean().optional(),
       name: z.string().trim().min(2).max(100).optional(),
-      email: z
-        .email()
-        .max(254)
-        .transform((v) => v.toLowerCase())
-        .optional(),
-      username: usernameSchema.optional(),
-      studentNumber: studentNumberSchema.optional(),
-      phone: phoneSchema.optional(),
-      password: z.string().min(12).max(128).optional(),
+      phoneNumber: iranianPhoneSchema.optional(),
     })
     .strict()
     .refine((v) => Object.keys(v).length > 0)
     .parse(input);
-  if (id === actor.id && data.active === false)
-    fail('VALIDATION', 400, 'غیرفعال‌سازی یا لغو دسترسی خودتان مجاز نیست.');
-  const password = data.password ? await hashPassword(data.password) : undefined;
-  const { password: unusedPassword, ...safe } = data;
-  void unusedPassword;
   return transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     assertAdmin(actor);
     const target = await tx.user.findUniqueOrThrow({ where: { id } });
-    if (target.role === 'STUDENT') {
-      if (safe.username && safe.username !== (safe.studentNumber ?? target.studentNumber))
-        fail('VALIDATION', 400, 'نام کاربری دانشجو همان شماره دانشجویی است.');
-      if (safe.studentNumber) {
-        safe.username = safe.studentNumber;
-      }
-    } else if (safe.studentNumber) {
-      fail('VALIDATION', 400, 'شماره دانشجویی فقط برای حساب دانشجو قابل ثبت است.');
-    }
+    const changedPhone = !!data.phoneNumber && data.phoneNumber !== target.phoneNumber;
+    if (id === actor.id && (data.active === false || changedPhone))
+      fail('VALIDATION', 400, 'تغییر شماره یا غیرفعال‌سازی حساب خودتان مجاز نیست.');
+    if (target.phoneNumber === config().ADMIN_PHONE && (changedPhone || data.active === false))
+      fail('FORBIDDEN', 403, 'شماره و دسترسی مدیر اصلی از تنظیمات سرور مدیریت می‌شود.');
     await tx.user.update({
       where: { id },
-      data: { ...safe, ...(safe.username ? { displayUsername: safe.username } : {}) },
+      data: { ...data, ...(changedPhone ? { phoneNumberVerified: false } : {}) },
     });
-    if (password)
-      await tx.account.updateMany({
-        where: { userId: id, providerId: 'credential' },
-        data: { password },
-      });
+    // A password on the old phone must not grant access to the new identity.
+    if (changedPhone)
+      await tx.account.deleteMany({ where: { userId: id, providerId: 'credential' } });
     await tx.session.deleteMany({ where: { userId: id } });
     await audit(tx, actor, 'USER_ACCESS_CHANGED', id, { fields: Object.keys(data) });
     return { id };
@@ -348,27 +320,23 @@ export async function updateUser(actor: Actor, id: string, input: unknown) {
 }
 
 export async function getProfile(actor: Actor) {
-  return db.user.findUniqueOrThrow({
+  const user = await db.user.findUniqueOrThrow({
     where: { id: actor.id },
     select: {
       id: true,
       name: true,
-      email: true,
-      phone: true,
-      emailNotifications: true,
-      accountType: true,
+      phoneNumber: true,
       role: true,
-      username: true,
-      studentNumber: true,
       image: true,
+      accounts: { where: { providerId: 'credential' }, select: { password: true }, take: 1 },
     },
   });
+  const { accounts, ...profile } = user;
+  return { ...profile, hasPassword: !!accounts[0]?.password };
 }
 
 export async function updateProfile(actor: Actor, input: unknown) {
   const data = profileSchema.parse(input);
-  if (userRole(actor) === 'STAFF' && !data.phone)
-    fail('VALIDATION', 400, 'ثبت شماره همراه برای مسئول واحد ضروری است.');
   await db.user.update({ where: { id: actor.id }, data });
   return getProfile(actor);
 }

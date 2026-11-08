@@ -169,6 +169,8 @@ export async function completeUpload(actor: Actor, id: string) {
       where: { id, scanStatus: 'PENDING' },
       data: { scanStatus: 'QUARANTINED' },
     });
+    if (changed.count && a.ticketId)
+      await tx.ticket.update({ where: { id: a.ticketId }, data: { updatedAt: new Date() } });
     if (changed.count)
       await tx.outboxEvent.create({
         data: { type: 'SCAN_ATTACHMENT', payload: { attachmentId: id } },

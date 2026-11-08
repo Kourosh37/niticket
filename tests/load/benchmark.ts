@@ -67,10 +67,14 @@ async function measure(
 
 let cookie = '';
 await measure('login', 1, 1, async () => {
-  const response = await fetch(origin + '/api/auth/sign-in/email', {
+  const response = await fetch(origin + '/api/auth/sign-in/phone-number', {
     method: 'POST',
     headers: { origin, 'content-type': 'application/json' },
-    body: JSON.stringify({ email: f.student.email, password: f.password, rememberMe: false }),
+    body: JSON.stringify({
+      phoneNumber: f.student.phoneNumber,
+      password: f.password,
+      rememberMe: false,
+    }),
   });
   cookie = response.headers
     .getSetCookie()

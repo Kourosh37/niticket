@@ -13,16 +13,6 @@ export const settingsSchema = z
     allowUserUrgent: z.boolean(),
     universityName: z.string().trim().min(2).max(150).default('دانشگاه صنعتی نوشیروانی بابل'),
     supportDescription: z.string().max(1000).default('سامانه ارتباط و پشتیبانی دانشگاه'),
-    studentEmailDomains: z
-      .array(
-        z
-          .string()
-          .toLowerCase()
-          .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/),
-      )
-      .min(1)
-      .max(10)
-      .default(['stu.nit.ac.ir']),
   })
   .strict();
 

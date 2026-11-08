@@ -14,9 +14,10 @@ const origin = 'http://localhost:3001';
 
 async function login(page: Page, identifier: string, password: string) {
   await page.goto('/login');
-  await page.getByLabel('ایمیل، شماره دانشجویی یا نام کاربری').fill(identifier);
+  await page.getByRole('button', { name: 'ورود با رمز', exact: true }).click();
+  await page.getByLabel('شماره موبایل', { exact: true }).fill(identifier);
   await page.getByLabel('رمز عبور', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'ورود به حساب', exact: true }).click();
+  await page.getByRole('button', { name: 'ورود', exact: true }).click();
   await expect(page).toHaveURL(origin + '/');
 }
 
@@ -36,7 +37,7 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
     });
   const s = await student.newPage(),
     o = await officer.newPage();
-  await login(s, f.student.email, f.password);
+  await login(s, f.student.phoneNumber!, f.password);
   await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
   await s.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }).click();
   await expect(s).toHaveURL(/\/tickets\/[a-f0-9-]+$/);
@@ -68,7 +69,7 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   expect(
     await db.ticket.count({ where: { creatorId: f.student.id, departmentId: f.department.id } }),
   ).toBe(1);
-  await login(o, f.agent.email, f.password);
+  await login(o, f.agent.phoneNumber!, f.password);
   await expect(o.getByRole('link', { name: 'پیام‌های جدید', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
@@ -140,7 +141,7 @@ test('long chats use a single message scroller, preserve older-message position 
     extraHTTPHeaders: { 'x-real-ip': '192.0.2.73', 'x-forwarded-for': '192.0.2.73' },
   });
   const page = await context.newPage();
-  await login(page, f.student.email, f.password);
+  await login(page, f.student.phoneNumber!, f.password);
   await page.goto(`/tickets/${ticket.id}`);
   const area = page.locator('.messenger-scroll');
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
@@ -159,9 +160,9 @@ test('long chats use a single message scroller, preserve older-message position 
   const staff = await browser.newContext({
     extraHTTPHeaders: { 'x-real-ip': '192.0.2.74', 'x-forwarded-for': '192.0.2.74' },
   });
-  const loginResponse = await staff.request.post('/api/auth/sign-in/email', {
+  const loginResponse = await staff.request.post('/api/auth/sign-in/phone-number', {
     headers: { origin },
-    data: { email: f.agent.email, password: f.password },
+    data: { phoneNumber: f.agent.phoneNumber, password: f.password },
   });
   expect(loginResponse.status()).toBe(200);
   const reply = await staff.request.post(`/api/v1/tickets/${ticket.id}/messages`, {
@@ -188,6 +189,7 @@ test('long chats use a single message scroller, preserve older-message position 
       createdAt: new Date(later + index * 1000),
     })),
   });
+  await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
   await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeAttached({
     timeout: 15000,
   });

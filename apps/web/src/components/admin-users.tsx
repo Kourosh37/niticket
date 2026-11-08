@@ -83,7 +83,7 @@ export function AdminUsers({
             <input
               name="q"
               aria-label="جستجوی کاربران"
-              placeholder="نام، ایمیل یا شماره دانشجویی…"
+              placeholder="نام یا شماره موبایل…"
               maxLength={100}
               defaultValue={q}
             />
@@ -97,15 +97,7 @@ export function AdminUsers({
               <div style={{ flex: 1 }}>
                 <h3>{user.name}</h3>
                 <p>
-                  <bdi>{user.email}</bdi>
-                </p>
-                <p>
-                  {user.role === 'STUDENT' ? 'شماره دانشجویی' : 'نام کاربری'}:{' '}
-                  <bdi>
-                    {user.role === 'STUDENT'
-                      ? (user.studentNumber ?? 'ثبت نشده')
-                      : (user.username ?? 'ورود با ایمیل')}
-                  </bdi>
+                  <bdi>{user.phoneNumber?.replace('+98', '0') ?? 'شماره ثبت نشده'}</bdi>
                 </p>
               </div>
               <span className="status">
@@ -176,11 +168,7 @@ export function AdminUsers({
               const f = new FormData(e.currentTarget);
               const changes = {
                 name: f.get('name'),
-                email: f.get('email'),
-                ...(f.get('username') ? { username: f.get('username') } : {}),
-                ...(f.get('studentNumber') ? { studentNumber: f.get('studentNumber') } : {}),
-                ...(f.get('phone') ? { phone: f.get('phone') } : {}),
-                ...(f.get('password') ? { password: f.get('password') } : {}),
+                ...(f.get('phoneNumber') ? { phoneNumber: f.get('phoneNumber') } : {}),
               };
               if (await save(editing.id, changes)) setEditing(null);
             }}
@@ -198,56 +186,17 @@ export function AdminUsers({
                 />
               </div>
               <div className="field">
-                <label htmlFor="edit-user-email">ایمیل</label>
-                <input
-                  id="edit-user-email"
-                  name="email"
-                  type="email"
-                  dir="ltr"
-                  defaultValue={editing.email}
-                  required
-                  maxLength={254}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="edit-user-login">
-                  {editing.role === 'STUDENT' ? 'شماره دانشجویی' : 'نام کاربری'}
-                </label>
-                <input
-                  id="edit-user-login"
-                  name={editing.role === 'STUDENT' ? 'studentNumber' : 'username'}
-                  dir="ltr"
-                  defaultValue={
-                    editing.role === 'STUDENT'
-                      ? (editing.studentNumber ?? '')
-                      : (editing.username ?? '')
-                  }
-                  maxLength={40}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="edit-user-phone">شماره همراه</label>
+                <label htmlFor="edit-user-phone">شماره موبایل</label>
                 <input
                   id="edit-user-phone"
-                  name="phone"
-                  dir="ltr"
+                  name="phoneNumber"
                   type="tel"
-                  defaultValue={editing.phone ?? ''}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="edit-user-password">رمز عبور جدید (اختیاری)</label>
-                <input
-                  id="edit-user-password"
-                  name="password"
-                  type="password"
                   dir="ltr"
-                  minLength={12}
-                  maxLength={128}
-                  autoComplete="new-password"
+                  defaultValue={editing.phoneNumber ?? ''}
+                  maxLength={40}
                 />
                 <p className="field-hint">
-                  برای حفظ رمز فعلی خالی بگذارید. تغییر اطلاعات، نشست‌های قبلی کاربر را لغو می‌کند.
+                  تغییر شماره، رمز و نشست‌های قبلی را لغو می‌کند؛ ورود بعدی با کد موبایل است.
                 </p>
               </div>
             </fieldset>

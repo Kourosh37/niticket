@@ -86,6 +86,9 @@ export function Conversation({
     ),
     mounted = useRef(true),
     sending = useRef(false),
+    revision = useRef(
+      `${detail.ticket.version}:${new Date(detail.ticket.updatedAt).toISOString()}`,
+    ),
     currentVersion = useRef(detail.ticket.version),
     fetching = useRef<Promise<void> | null>(null),
     latestId = useRef(detail.messages.at(-1)?.id),
@@ -102,8 +105,13 @@ export function Conversation({
 
   const refresh = useCallback(() => {
     if (fetching.current) return fetching.current;
-    const task = request<Detail>(`/api/v1/tickets/${id}`)
-      .then((latest) => {
+    const task = request<{ revision: string; detail: Detail | null }>(
+      `/api/v1/tickets/${id}/sync?since=${encodeURIComponent(revision.current)}`,
+    )
+      .then((result) => {
+        if (!result.detail) return;
+        const latest = result.detail;
+        revision.current = result.revision;
         if (!mounted.current) return;
         currentVersion.current = Math.max(currentVersion.current, latest.ticket.version);
         const lastId = latest.messages.at(-1)?.id;

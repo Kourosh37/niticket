@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { checkSession } from '@/lib/utils';
 
 export function SessionGuard() {
+  const router = useRouter();
   useEffect(() => {
     let stopped = false;
     let checking = false;
@@ -14,7 +16,7 @@ export function SessionGuard() {
       if (stopped || checking || document.visibilityState === 'hidden') return;
       checking = true;
       try {
-        const response = await fetch('/api/v1/session', {
+        const response = await fetch('/api/auth/get-session', {
           cache: 'no-store',
           signal: controller.signal,
         });
@@ -23,11 +25,16 @@ export function SessionGuard() {
         if (!response.ok) return;
         const result = await response.json();
         if (stopped) return;
-        if (!Number.isFinite(result.data?.expiresInMs)) return;
+        if (!result?.session) {
+          router.replace('/login');
+          return;
+        }
+        const expiresInMs = new Date(result.session.expiresAt).getTime() - Date.now();
+        if (!Number.isFinite(expiresInMs)) return;
         clearTimeout(expiry);
         expiry = setTimeout(
           () => void check(),
-          Math.min(2147483647, Math.max(1000, result.data.expiresInMs + 100)),
+          Math.min(2147483647, Math.max(1000, expiresInMs + 100)),
         );
       } catch {
         /* Network outages are retried without logging the user out. */
@@ -50,6 +57,6 @@ export function SessionGuard() {
       window.removeEventListener('pageshow', check);
       document.removeEventListener('visibilitychange', check);
     };
-  }, []);
+  }, [router]);
   return null;
 }

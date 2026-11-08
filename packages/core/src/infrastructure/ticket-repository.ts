@@ -7,6 +7,7 @@ export const ticketSummarySelect = {
   status: true,
   priority: true,
   version: true,
+  updatedAt: true,
   creatorId: true,
   departmentId: true,
   assigneeId: true,

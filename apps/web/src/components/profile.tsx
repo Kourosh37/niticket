@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from './ui/button';
-import { request, checkSession } from '@/lib/utils';
+import { request } from '@/lib/utils';
 import { AvatarUpload } from './avatar-upload';
+import { useReauthentication } from './reauthentication';
 import { LogOut } from 'lucide-react';
 
 export function Profile({
@@ -12,16 +13,14 @@ export function Profile({
 }: {
   profile: {
     name: string;
-    email: string;
-    phone: string | null;
-    emailNotifications: boolean;
+    phoneNumber: string | null;
+    hasPassword: boolean;
     role?: string;
     image?: string | null;
-    username?: string | null;
-    studentNumber?: string | null;
   };
 }) {
   const router = useRouter();
+  const reauthentication = useReauthentication();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,8 +44,6 @@ export function Profile({
               method: 'PATCH',
               body: JSON.stringify({
                 name: f.get('name'),
-                phone: f.get('phone'),
-                emailNotifications: f.has('emailNotifications'),
               }),
             });
             setSuccess('اطلاعات حساب شما ذخیره شد.');
@@ -60,16 +57,6 @@ export function Profile({
       >
         <h2 style={{ marginBottom: 24 }}>اطلاعات حساب</h2>
         {profile.role === 'STAFF' && <AvatarUpload name={profile.name} image={profile.image} />}
-        {profile.studentNumber && (
-          <p className="field-hint">
-            شماره دانشجویی: <bdi>{profile.studentNumber}</bdi>
-          </p>
-        )}
-        {profile.username && profile.role === 'STAFF' && (
-          <p className="field-hint">
-            نام کاربری: <bdi>{profile.username}</bdi>
-          </p>
-        )}
         <div className="form-grid">
           <div className="field">
             <label htmlFor="name">نام و نام خانوادگی</label>
@@ -83,32 +70,16 @@ export function Profile({
             />
           </div>
           <div className="field">
-            <label htmlFor="profile-email">ایمیل دانشگاهی</label>
-            <input id="profile-email" type="email" dir="ltr" value={profile.email} disabled />
+            <label htmlFor="profile-phone">شماره موبایل</label>
+            <input
+              id="profile-phone"
+              type="tel"
+              dir="ltr"
+              value={profile.phoneNumber?.replace('+98', '0') ?? ''}
+              readOnly
+            />
           </div>
         </div>
-        <div className="field">
-          <label htmlFor="phone">
-            {profile.role === 'STAFF' ? 'شماره همراه' : 'شماره همراه (اختیاری)'}
-          </label>
-          <input
-            id="phone"
-            name="phone"
-            type="tel"
-            required={profile.role === 'STAFF'}
-            dir="ltr"
-            defaultValue={profile.phone ?? ''}
-            placeholder="09123456789"
-          />
-        </div>
-        <label className="checkbox-field">
-          <input
-            name="emailNotifications"
-            type="checkbox"
-            defaultChecked={profile.emailNotifications}
-          />{' '}
-          دریافت اعلان‌های ایمیلی
-        </label>
         <Button disabled={busy}>ذخیره اطلاعات</Button>
       </form>
       <form
@@ -122,19 +93,15 @@ export function Profile({
           const form = e.currentTarget;
           const f = new FormData(form);
           try {
-            const res = await fetch('/api/auth/change-password', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                currentPassword: f.get('current'),
-                newPassword: f.get('next'),
-                revokeOtherSessions: true,
+            await reauthentication.run(() =>
+              request('/api/v1/users/me/password', {
+                method: 'POST',
+                body: JSON.stringify({ newPassword: f.get('next') }),
               }),
-            });
-            checkSession(res);
-            if (!res.ok) throw new Error('رمز فعلی معتبر نیست یا رمز جدید شرایط لازم را ندارد.');
+            );
             setSuccess('رمز عبور تغییر کرد و نشست‌های دیگر لغو شدند.');
             form.reset();
+            router.refresh();
           } catch (e) {
             setError(e instanceof Error ? e.message : 'تغییر رمز انجام نشد.');
           } finally {
@@ -142,20 +109,10 @@ export function Profile({
           }
         }}
       >
-        <h2 style={{ marginBottom: 24 }}>تغییر رمز عبور</h2>
+        <h2 style={{ marginBottom: 24 }}>
+          {profile.hasPassword ? 'تغییر رمز عبور' : 'انتخاب رمز عبور'}
+        </h2>
         <div className="form-grid">
-          <div className="field">
-            <label htmlFor="current">رمز عبور فعلی</label>
-            <input
-              id="current"
-              name="current"
-              type="password"
-              dir="ltr"
-              autoComplete="current-password"
-              required
-              maxLength={128}
-            />
-          </div>
           <div className="field">
             <label htmlFor="next-password">رمز عبور جدید</label>
             <input
@@ -170,8 +127,9 @@ export function Profile({
             />
           </div>
         </div>
+        {reauthentication.confirmation}
         <Button disabled={busy} variant="outline">
-          تغییر رمز عبور
+          ذخیره رمز عبور
         </Button>
       </form>
       {error && (

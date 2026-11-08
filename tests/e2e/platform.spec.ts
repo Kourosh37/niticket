@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { loadEnvFile } from 'node:process';
 import { randomBytes, randomUUID, randomInt } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 try {
   loadEnvFile('.env');
@@ -14,9 +15,10 @@ const origin = 'http://localhost:3001';
 
 async function login(page: Page, identifier: string, password: string) {
   await page.goto('/login');
-  await page.getByLabel('ایمیل، شماره دانشجویی یا نام کاربری').fill(identifier);
+  await page.getByRole('button', { name: 'ورود با رمز', exact: true }).click();
+  await page.getByLabel('شماره موبایل', { exact: true }).fill(identifier);
   await page.getByLabel('رمز عبور', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'ورود به حساب' }).click();
+  await page.getByRole('button', { name: 'ورود', exact: true }).click();
   await expect(page).toHaveURL(origin + '/');
 }
 
@@ -31,9 +33,9 @@ test('expired student and administrator sessions redirect while the page is idle
       page = await context.newPage();
     await page.clock.install();
     const checked = page.waitForResponse(
-      (r) => r.url().endsWith('/api/v1/session') && r.status() === 200,
+      (r) => r.url().endsWith('/api/auth/get-session') && r.status() === 200,
     );
-    await login(page, user.email, f.password);
+    await login(page, user.phoneNumber!, f.password);
     await checked;
     await db.session.updateMany({
       where: { userId: user.id },
@@ -53,9 +55,9 @@ test('an expired session redirects immediately when a protected form is submitte
   const { fixtures } = await import('../helpers/fixtures');
   const { db } = await import('@niticket/database');
   const f = await fixtures();
-  await login(page, f.student.email, f.password);
+  await login(page, f.student.phoneNumber!, f.password);
   const checked = page.waitForResponse(
-    (r) => r.url().endsWith('/api/v1/session') && r.status() === 200,
+    (r) => r.url().endsWith('/api/auth/get-session') && r.status() === 200,
   );
   await page.goto('/profile');
   await checked;
@@ -80,7 +82,7 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
   const { fixtures } = await import('../helpers/fixtures');
   const { db } = await import('@niticket/database');
   const f = await fixtures();
-  await login(page, f.admin.email, f.password);
+  await login(page, f.admin.phoneNumber!, f.password);
   await db.session.updateMany({
     where: { userId: f.admin.id },
     data: { createdAt: new Date(Date.now() - 600000) },
@@ -91,9 +93,10 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
   await page.getByLabel('نام واحد', { exact: true }).fill(updatedName);
   await page.getByRole('button', { name: 'ذخیره واحد', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  const confirmation = dialog.getByRole('group', { name: 'تأیید رمز برای ادامه عملیات' });
+  const confirmation = dialog.getByRole('group', { name: 'تأیید هویت برای ادامه عملیات' });
   await expect(confirmation).toBeVisible();
   await expect(dialog.getByLabel('نام واحد', { exact: true })).toBeDisabled();
+  await confirmation.getByRole('button', { name: 'تأیید با رمز', exact: true }).click();
   await confirmation.getByLabel('رمز عبور فعلی برای تأیید').fill('incorrect-password');
   await confirmation.getByRole('button', { name: 'تأیید و ادامه عملیات', exact: true }).click();
   await expect(confirmation.getByRole('alert')).toHaveText('رمز عبور معتبر نیست.');
@@ -101,6 +104,8 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
   expect((await db.department.findUniqueOrThrow({ where: { id: f.department.id } })).name).toBe(
     f.department.name,
   );
+  if (await confirmation.getByRole('button', { name: 'تأیید با رمز', exact: true }).count())
+    await confirmation.getByRole('button', { name: 'تأیید با رمز', exact: true }).click();
   await confirmation.getByLabel('رمز عبور فعلی برای تأیید').fill(f.password);
   await confirmation.getByRole('button', { name: 'تأیید و ادامه عملیات', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -138,6 +143,9 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
     f.student.name,
   );
   await page.getByRole('button', { name: 'ذخیره اطلاعات کاربر', exact: true }).click();
+  await expect(confirmation).toBeVisible();
+  if (await confirmation.getByRole('button', { name: 'تأیید با رمز', exact: true }).count())
+    await confirmation.getByRole('button', { name: 'تأیید با رمز', exact: true }).click();
   await confirmation.getByLabel('رمز عبور فعلی برای تأیید').fill(f.password);
   await confirmation.getByRole('button', { name: 'تأیید و ادامه عملیات', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -147,9 +155,12 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
   await page.getByRole('button', { name: 'ذخیره اطلاعات سامانه', exact: true }).click();
   const settingsConfirmation = page
     .locator('form')
-    .getByRole('group', { name: 'تأیید رمز برای ادامه عملیات' });
+    .getByRole('group', { name: 'تأیید هویت برای ادامه عملیات' });
   await expect(settingsConfirmation).toBeVisible();
-  await settingsConfirmation.getByLabel('رمز عبور فعلی برای تأیید').fill(f.password);
+  await settingsConfirmation.getByRole('button', { name: 'دریافت کد تأیید', exact: true }).click();
+  await settingsConfirmation
+    .getByLabel('کد ۶ رقمی تأیید', { exact: true })
+    .fill(await readOtp(f.admin.phoneNumber!));
   await settingsConfirmation
     .getByRole('button', { name: 'تأیید و ادامه عملیات', exact: true })
     .click();
@@ -169,74 +180,88 @@ test('password changes revoke other sessions even when the client requests other
   for (const c of [a, b])
     expect(
       (
-        await c.request.post('/api/auth/sign-in/email', {
+        await c.request.post('/api/auth/sign-in/phone-number', {
           headers: { origin },
-          data: { email: f.student.email, password: f.password, rememberMe: false },
+          data: { phoneNumber: f.student.phoneNumber, password: f.password, rememberMe: false },
         })
       ).status(),
     ).toBe(200);
-  const response = await a.request.post('/api/auth/change-password', {
+  const response = await a.request.post('/api/v1/users/me/password', {
     headers: { origin },
     data: {
-      currentPassword: f.password,
       newPassword: randomBytes(24).toString('base64url'),
-      revokeOtherSessions: false,
     },
   });
   expect(response.status()).toBe(200);
   expect((await b.request.get('/api/v1/users/me')).status()).toBe(401);
   expect((await a.request.get('/api/v1/users/me')).status()).toBe(200);
   expect(
-    await db.auditLog.count({ where: { actorId: f.student.id, action: 'PASSWORD_CHANGED' } }),
+    await db.auditLog.count({ where: { actorId: f.student.id, action: 'PASSWORD_SET' } }),
   ).toBe(1);
   await a.close();
   await b.close();
   await db.$disconnect();
 });
 
-test('student verifies university email then logs in using either student number or email', async ({
+async function readOtp(phoneNumber: string) {
+  let code = '';
+  await expect
+    .poll(async () => {
+      const log = await readFile('.local/e2e-auth.log', 'utf8');
+      for (const line of log.split('\n').reverse()) {
+        try {
+          const row = JSON.parse(line);
+          if (row.event === 'sms.otp' && row.phoneNumber === phoneNumber) {
+            code = row.otpCode;
+            break;
+          }
+        } catch {
+          /* Other server output. */
+        }
+      }
+      return !!code;
+    })
+    .toBe(true);
+  return code;
+}
+
+test('a phone-only signup sets a password in the profile and returns through either login method', async ({
   page,
   context,
 }) => {
-  const email = `browser-${randomUUID().slice(0, 8)}@stu.nit.ac.ir`,
-    studentNumber = String(randomInt(100000000, 999999999)),
+  const phoneNumber = `+989${randomInt(100000000, 999999999)}`,
     password = randomBytes(20).toString('base64url');
   await page.goto('/register');
-  await page.getByLabel('نام و نام خانوادگی', { exact: true }).fill('دانشجوی آزمون ثبت‌نام');
-  await page.getByLabel('شماره دانشجویی', { exact: true }).fill(studentNumber);
-  await page.getByLabel('ایمیل دانشجویی', { exact: true }).fill(email);
-  await page.getByLabel('رمز عبور', { exact: true }).fill(password);
-  await page.getByLabel('تکرار رمز عبور', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'ثبت‌نام و ارسال پیوند تأیید' }).click();
-  await expect(page.getByRole('status')).toContainText('پیوند تأیید');
-  const unverified = await context.request.post('/api/auth/sign-in/username', {
-    headers: { origin },
-    data: { username: studentNumber, password },
-  });
-  expect(unverified.status()).toBe(403);
-  expect((await context.request.get('/api/v1/users/me')).status()).toBe(401);
-  let verification = '';
-  await expect
-    .poll(async () => {
-      const list = (await (await fetch('http://localhost:8025/api/v1/messages')).json()) as {
-        messages: { ID: string; To: { Address: string }[] }[];
-      };
-      const match = list.messages.find((m) => m.To.some((t) => t.Address === email));
-      if (!match) return false;
-      const mail = (await (
-        await fetch(`http://localhost:8025/api/v1/message/${match.ID}`)
-      ).json()) as { Text: string };
-      verification =
-        mail.Text.match(/http:\/\/localhost:3001\/api\/auth\/verify-email[^\s]+/)?.[0] ?? '';
-      return !!verification;
-    })
-    .toBe(true);
-  await page.goto(verification);
-  await expect(page).toHaveURL(/\/login\?verified=1/);
-  await login(page, studentNumber, password);
-  expect((await context.request.get('/api/v1/users/me')).status()).toBe(200);
+  await expect(page).toHaveURL(origin + '/login');
+  await expect(page.locator('input')).toHaveCount(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '.local/ui-preview/mobile-login-390.png', fullPage: true });
+  await page.getByLabel('شماره موبایل', { exact: true }).fill(phoneNumber.replace('+98', '0'));
+  await page.getByRole('button', { name: 'دریافت کد ورود', exact: true }).click();
+  const code = await readOtp(phoneNumber);
+  await page.screenshot({ path: '.local/ui-preview/mobile-otp-390.png', fullPage: true });
+  await page.getByLabel('کد ۶ رقمی', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'ورود', exact: true }).click();
+  await expect(page).toHaveURL(origin + '/');
+  const profile = await context.request.get('/api/v1/users/me');
+  expect((await profile.json()).data).toMatchObject({ phoneNumber, hasPassword: false });
+  expect(
+    (
+      await context.request.post('/api/auth/phone-number/verify', {
+        headers: { origin },
+        data: { phoneNumber, code },
+      })
+    ).ok(),
+  ).toBe(false);
+  await page.goto('/profile');
+  await page.getByLabel('رمز عبور جدید', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'ذخیره رمز عبور', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('رمز عبور تغییر کرد');
   await context.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
-  await login(page, email, password);
+  await login(page, phoneNumber, password);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/profile');
+  await page.screenshot({ path: '.local/ui-preview/mobile-profile-390.png', fullPage: true });
 });
 
 test('three roles complete a ticket with private history notes, file previews and real microphone voice', async ({
@@ -258,26 +283,23 @@ test('three roles complete a ticket with private history notes, file previews an
     u = await staff.newPage();
   const errors: string[] = [];
   for (const p of [a, s, u]) p.on('pageerror', (e) => errors.push(e.message));
-  await login(a, f.admin.email, f.password);
+  await login(a, f.admin.phoneNumber!, f.password);
   await expect(a.getByRole('heading', { name: 'نمای کلی سامانه' })).toBeVisible();
   await expect(a.getByRole('link', { name: 'درخواست جدید', exact: true })).toHaveCount(0);
   await expect(a.getByRole('link', { name: 'درخواست‌های من', exact: true })).toHaveCount(0);
   await a.goto('/admin/departments');
   await a.getByRole('button', { name: 'واحد جدید', exact: true }).click();
   const name = `واحد مرورگر ${Date.now()}`,
-    username = `officer-${randomUUID().slice(0, 8)}`;
+    officerPhone = `+989${randomInt(100000000, 999999999)}`;
   await a.getByLabel('نام واحد', { exact: true }).fill(name);
   await a.getByLabel('نام و نام خانوادگی مسئول', { exact: true }).fill('مسئول آزمون مرورگر');
-  await a.getByLabel('نام کاربری مسئول', { exact: true }).fill(username);
-  await a.getByLabel('ایمیل مسئول واحد', { exact: true }).fill(`${username}@stu.nit.ac.ir`);
-  await a.getByLabel('شماره همراه مسئول', { exact: true }).fill('09123456789');
-  await a.getByLabel('رمز عبور مسئول', { exact: true }).fill(f.password);
+  await a.getByLabel('شماره موبایل مسئول', { exact: true }).fill(officerPhone);
   await expect(a.getByRole('textbox', { name: /شناسه|آیدی|ایدی/ })).toHaveCount(0);
   await a.getByLabel('تصویر پروفایل مسئول (اختیاری)').setInputFiles('tests/fixtures/photo.png');
   await a.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }).click();
   await expect(a.getByRole('heading', { name, exact: true })).toBeVisible();
   const department = await db.department.findFirstOrThrow({ where: { name } }),
-    officer = await db.user.findUniqueOrThrow({ where: { username } });
+    officer = await db.user.findUniqueOrThrow({ where: { phoneNumber: officerPhone } });
   const avatar = await db.attachment.findFirstOrThrow({ where: { avatarOwnerId: officer.id } });
   const avatarEvent = await db.outboxEvent.findFirstOrThrow({
     where: { type: 'SCAN_ATTACHMENT', payload: { path: ['attachmentId'], equals: avatar.id } },
@@ -290,7 +312,7 @@ test('three roles complete a ticket with private history notes, file previews an
       .filter({ has: a.getByRole('heading', { name, exact: true }) })
       .getByAltText('تصویر مسئول آزمون مرورگر'),
   ).toBeVisible();
-  await login(s, f.student.studentNumber!, f.password);
+  await login(s, f.student.phoneNumber!, f.password);
   await expect(s.locator('html')).toHaveAttribute('dir', 'rtl');
   await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
   await s.getByRole('button', { name: `انتخاب ${name}`, exact: true }).click();
@@ -306,7 +328,12 @@ test('three roles complete a ticket with private history notes, file previews an
     where: { type: 'TICKET_NOTIFICATION', payload: { path: ['ticketId'], equals: id } },
   });
   await processNotification(creation.id, creation.payload);
-  await login(u, username, f.password);
+  await u.goto('/login');
+  await u.getByLabel('شماره موبایل', { exact: true }).fill(officerPhone);
+  await u.getByRole('button', { name: 'دریافت کد ورود', exact: true }).click();
+  await u.getByLabel('کد ۶ رقمی', { exact: true }).fill(await readOtp(officerPhone));
+  await u.getByRole('button', { name: 'ورود', exact: true }).click();
+  await expect(u).toHaveURL(origin + '/');
   await expect(u.getByRole('link', { name: 'درخواست جدید', exact: true })).toHaveCount(0);
   await u.goto('/notifications');
   await expect(u.getByText('درخواست جدید ثبت شد', { exact: true })).toBeVisible();
@@ -473,9 +500,9 @@ test('three roles complete a ticket with private history notes, file previews an
   const outsider = await browser.newContext();
   expect(
     (
-      await outsider.request.post('/api/auth/sign-in/email', {
+      await outsider.request.post('/api/auth/sign-in/phone-number', {
         headers: { origin },
-        data: { email: f.outsider.email, password: f.password },
+        data: { phoneNumber: f.outsider.phoneNumber, password: f.password },
       })
     ).status(),
   ).toBe(200);
@@ -500,11 +527,12 @@ test('three roles complete a ticket with private history notes, file previews an
   });
   await processScan(photoEvent.id, photoEvent.payload);
   await expect(u.getByText('تصویر پروفایل به‌روزرسانی شد.', { exact: true })).toBeVisible();
-  await u.getByLabel('شماره همراه', { exact: true }).fill('۰۹۱۲۳۴۵۶۷۸۹');
+  await expect(u.getByLabel('شماره موبایل', { exact: true })).toHaveAttribute('readonly', '');
+  await u.getByLabel('نام و نام خانوادگی', { exact: true }).fill('مسئول آزمون مرورگر ویرایش‌شده');
   await u.getByRole('button', { name: 'ذخیره اطلاعات', exact: true }).click();
   await expect(u.getByText('اطلاعات حساب شما ذخیره شد.', { exact: true })).toBeVisible();
-  expect((await db.user.findUniqueOrThrow({ where: { id: officer.id } })).phone).toBe(
-    '09123456789',
+  expect((await db.user.findUniqueOrThrow({ where: { id: officer.id } })).phoneNumber).toBe(
+    officerPhone,
   );
   const policy = (await (await admin.request.get('/api/v1/admin/settings')).json()).data;
   await a.goto('/admin/settings');

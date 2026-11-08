@@ -19,83 +19,35 @@ type Person = Department['memberships'][number]['user'];
 
 function ResponsibleFields({ person }: { person?: Person }) {
   return (
-    <>
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="responsible-name">نام و نام خانوادگی مسئول</label>
-          <input
-            id="responsible-name"
-            name="responsibleName"
-            required
-            minLength={2}
-            maxLength={100}
-            autoComplete="off"
-            defaultValue={person?.name}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="responsible-username">نام کاربری مسئول</label>
-          <input
-            id="responsible-username"
-            name="username"
-            dir="ltr"
-            required
-            minLength={3}
-            maxLength={40}
-            autoComplete="off"
-            defaultValue={person?.username ?? ''}
-          />
-        </div>
-      </div>
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="responsible-email">ایمیل مسئول واحد</label>
-          <input
-            id="responsible-email"
-            name="email"
-            type="email"
-            dir="ltr"
-            required
-            maxLength={254}
-            autoComplete="off"
-            defaultValue={person?.email}
-            placeholder="name@stu.nit.ac.ir"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="responsible-phone">شماره همراه مسئول</label>
-          <input
-            id="responsible-phone"
-            name="phone"
-            type="tel"
-            dir="ltr"
-            required
-            autoComplete="off"
-            defaultValue={person?.phone ?? ''}
-            placeholder="09123456789"
-          />
-        </div>
+    <div className="form-grid">
+      <div className="field">
+        <label htmlFor="responsible-name">نام و نام خانوادگی مسئول</label>
+        <input
+          id="responsible-name"
+          name="responsibleName"
+          required
+          minLength={2}
+          maxLength={100}
+          autoComplete="off"
+          defaultValue={person?.name}
+        />
       </div>
       <div className="field">
-        <label htmlFor="responsible-password">
-          {person ? 'رمز عبور جدید (اختیاری)' : 'رمز عبور مسئول'}
-        </label>
+        <label htmlFor="responsible-phone">شماره موبایل مسئول</label>
         <input
-          id="responsible-password"
-          name="password"
-          type="password"
+          id="responsible-phone"
+          name="phoneNumber"
+          type="tel"
           dir="ltr"
-          required={!person}
-          minLength={12}
-          maxLength={128}
-          autoComplete="new-password"
+          required
+          maxLength={40}
+          autoComplete="off"
+          defaultValue={person?.phoneNumber ?? ''}
+          placeholder="09123456789"
         />
-        <p className="field-hint">
-          حداقل ۱۲ نویسه؛ مسئول با نام کاربری یا ایمیل و این رمز وارد می‌شود.
-          {person ? ' برای حفظ رمز فعلی، این بخش را خالی بگذارید.' : ''}
-        </p>
+        <p className="field-hint">مسئول با کد یک‌بارمصرف وارد می‌شود.</p>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -202,8 +154,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                 <div>
                   <strong>{m.user.name}</strong>
                   <p>
-                    <bdi>{m.user.username || m.user.email}</bdi> ·{' '}
-                    <bdi>{m.user.phone || 'شماره همراه ثبت نشده'}</bdi>
+                    <bdi>{m.user.phoneNumber?.replace('+98', '0') || 'شماره موبایل ثبت نشده'}</bdi>
                   </p>
                 </div>
                 <Button
@@ -296,7 +247,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
           }
         }}
         title="ایجاد واحد و حساب مسئول"
-        description="اطلاعات مسئول را از مسیر امن در اختیار او بگذارید."
+        description="مسئول با شماره موبایل و کد ورود وارد می‌شود."
       >
         <form
           onSubmit={(e) => {
@@ -312,10 +263,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                     description: f.get('description'),
                     responsible: {
                       name: f.get('responsibleName'),
-                      username: f.get('username'),
-                      email: f.get('email'),
-                      phone: f.get('phone'),
-                      password: f.get('password'),
+                      phoneNumber: f.get('phoneNumber'),
                     },
                   }),
                 },
@@ -472,10 +420,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                     method: 'PATCH',
                     body: JSON.stringify({
                       name: f.get('responsibleName'),
-                      username: f.get('username'),
-                      email: f.get('email'),
-                      phone: f.get('phone'),
-                      ...(f.get('password') ? { password: f.get('password') } : {}),
+                      phoneNumber: f.get('phoneNumber'),
                     }),
                   });
                   setPerson(null);

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import { loadEnvFile } from 'node:process';
 import path from 'node:path';
+import { randomInt } from 'node:crypto';
 
 try {
   loadEnvFile('.env');
@@ -36,7 +37,11 @@ export default defineConfig({
           include: ['tests/integration/**/*.test.ts'],
           fileParallelism: false,
           testTimeout: 30000,
-          env: { DATABASE_URL: testUrl.toString(), QUEUE_NAME: 'niticket-test' },
+          env: {
+            DATABASE_URL: testUrl.toString(),
+            QUEUE_NAME: 'niticket-test',
+            ADMIN_PHONE: `+989${randomInt(100000000, 999999999)}`,
+          },
         },
       },
     ],

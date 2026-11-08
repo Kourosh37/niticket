@@ -36,9 +36,6 @@ export function AdminSettings({ policy }: { policy: Awaited<ReturnType<typeof se
                 body: JSON.stringify({
                   universityName: f.get('universityName'),
                   supportDescription: f.get('supportDescription'),
-                  studentEmailDomains: String(f.get('studentEmailDomains'))
-                    .split(/[,،\s]+/)
-                    .filter(Boolean),
                   reopenDays: Number(f.get('reopenDays')),
                   maxUploadBytes: Number(f.get('megabytes')) * 1048576,
                   maxVoiceSeconds: Number(f.get('maxVoiceSeconds')),
@@ -75,19 +72,6 @@ export function AdminSettings({ policy }: { policy: Awaited<ReturnType<typeof se
               defaultValue={policy.supportDescription}
               maxLength={1000}
             />
-          </div>
-          <div className="field">
-            <label htmlFor="studentEmailDomains">دامنه مجاز ایمیل دانشجویی</label>
-            <input
-              id="studentEmailDomains"
-              name="studentEmailDomains"
-              dir="ltr"
-              required
-              defaultValue={policy.studentEmailDomains.join(', ')}
-            />
-            <p className="field-hint">
-              دامنه تأییدشده: stu.nit.ac.ir. در صورت نیاز، چند دامنه را با ویرگول جدا کنید.
-            </p>
           </div>
           <div className="form-grid">
             <div className="field">

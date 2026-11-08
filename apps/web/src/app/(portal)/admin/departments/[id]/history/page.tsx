@@ -48,7 +48,7 @@ export default async function Page({
           <div>
             <strong>{m.user.name}</strong>
             <p>
-              مسئول واحد · <bdi>{m.user.email}</bdi> · <bdi>{m.user.phone}</bdi>
+              مسئول واحد · <bdi>{m.user.phoneNumber?.replace('+98', '0')}</bdi>
             </p>
           </div>
         </div>

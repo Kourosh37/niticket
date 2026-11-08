@@ -105,7 +105,7 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
       { status, headers: { 'x-request-id': requestId, 'cache-control': 'no-store' } },
     );
   } finally {
-    log.info(
+    log[request.method === 'GET' ? 'debug' : 'info'](
       {
         requestId,
         operation: request.method + ' ' + new URL(request.url).pathname,

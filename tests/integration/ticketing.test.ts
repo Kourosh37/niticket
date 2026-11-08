@@ -247,7 +247,7 @@ describe('PostgreSQL ticket use cases and authorization', () => {
       sessionCreatedAt: new Date(Date.now() - 3600000),
     };
     await expect(updateUser(staleAdmin, f.outsider.id, { active: true })).rejects.toThrow(
-      'دوباره رمز عبور',
+      'هویت خود را',
     );
   });
 });

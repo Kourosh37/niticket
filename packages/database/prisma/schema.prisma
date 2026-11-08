@@ -48,50 +48,54 @@ enum ScanStatus {
 }
 
 model User {
-  id                 String                 @id @default(uuid())
-  name               String
-  email              String                 @unique
-  emailVerified      Boolean                @default(false)
-  image              String?
-  active             Boolean                @default(true)
-  isAdmin            Boolean                @default(false)
-  role               UserRole               @default(STUDENT)
-  username           String?                @unique
-  displayUsername    String?
-  studentNumber      String?                @unique
-  avatarAttachmentId String?                @unique
-  avatarAttachment   Attachment?            @relation("UserAvatar", fields: [avatarAttachmentId], references: [id], onDelete: Restrict)
-  avatarUploads      Attachment[]           @relation("AvatarOwner")
-  universityId       String?                @unique
-  accountType        String                 @default("STUDENT")
-  phone              String?
-  emailNotifications Boolean                @default(true)
-  lastLoginAt        DateTime?
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  sessions           Session[]
-  accounts           Account[]
-  memberships        DepartmentMembership[]
-  tickets            Ticket[]               @relation("Creator")
-  assignedTickets    Ticket[]               @relation("Assignee")
-  messages           Message[]
-  attachments        Attachment[]
-  notifications      Notification[]
-  activityNotes      ActivityNote[]
+  id                  String                 @id @default(uuid())
+  name                String
+  email               String                 @unique
+  emailVerified       Boolean                @default(false)
+  image               String?
+  active              Boolean                @default(true)
+  isAdmin             Boolean                @default(false)
+  role                UserRole               @default(STUDENT)
+  username            String?                @unique
+  displayUsername     String?
+  studentNumber       String?                @unique
+  avatarAttachmentId  String?                @unique
+  avatarAttachment    Attachment?            @relation("UserAvatar", fields: [avatarAttachmentId], references: [id], onDelete: Restrict)
+  avatarUploads       Attachment[]           @relation("AvatarOwner")
+  universityId        String?                @unique
+  accountType         String                 @default("STUDENT")
+  phone               String?
+  phoneNumber         String?                @unique
+  phoneNumberVerified Boolean                @default(false)
+  emailNotifications  Boolean                @default(false)
+  lastLoginAt         DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  sessions            Session[]
+  accounts            Account[]
+  memberships         DepartmentMembership[]
+  tickets             Ticket[]               @relation("Creator")
+  assignedTickets     Ticket[]               @relation("Assignee")
+  messages            Message[]
+  attachments         Attachment[]
+  notifications       Notification[]
+  activityNotes       ActivityNote[]
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reauthentication Reauthentication?
+  id               String            @id @default(uuid())
+  expiresAt        DateTime
+  token            String            @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  ipAddress        String?
+  userAgent        String?
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
 }
 
 model Account {
@@ -123,6 +127,7 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+  @@index([expiresAt])
 }
 
 model Department {
@@ -348,4 +353,5 @@ model SystemSetting {
 model Reauthentication {
   sessionId  String   @id
   verifiedAt DateTime
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

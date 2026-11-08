@@ -13,7 +13,7 @@ export function NotificationBell() {
     const update = () => {
       if (document.visibilityState === 'hidden') return;
       const current = ++revision;
-      void request<{ unreadCount: number }>('/api/v1/notifications')
+      void request<{ unreadCount: number }>('/api/v1/notifications/count')
         .then((data) => {
           if (active && current === revision) setCount(data.unreadCount);
         })

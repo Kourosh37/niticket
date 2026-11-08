@@ -8,8 +8,6 @@ import {
   updateUser,
   listDepartments,
 } from '@niticket/core/application/administration';
-import { registerStudent } from '@niticket/core/application/registration';
-import { getAuth } from '@niticket/core/infrastructure/auth';
 import {
   createTicket,
   addMessage,
@@ -62,17 +60,11 @@ it('keeps every unit reachable through scoped search and deterministic paginatio
   expect(await listDepartments(await f.actor(f.agent.id), true, { q: name })).toEqual([]);
 });
 
-it('atomically provisions a verified unit officer and generates all identifiers', async () => {
-  const username = `officer-${randomUUID().slice(0, 8)}`;
+it('provisions officers by phone without a password and preserves existing account history', async () => {
+  const phoneNumber = `+989${randomInt(100000000, 999999999)}`;
   const input = {
     name: 'واحد تازه آزمایشی',
-    responsible: {
-      name: 'مسئول واحد تازه',
-      username,
-      email: `${username}@stu.nit.ac.ir`,
-      password: f.password,
-      phone: '۰۹۱۲۳۴۵۶۷۸۹',
-    },
+    responsible: { name: 'مسئول واحد تازه', phoneNumber },
   };
   const created = await provisionDepartment(await f.actor(f.admin.id), input);
   const department = await db.department.findUniqueOrThrow({
@@ -88,16 +80,21 @@ it('atomically provisions a verified unit officer and generates all identifiers'
   expect(person).toMatchObject({
     role: 'STAFF',
     isAdmin: false,
-    emailVerified: true,
-    username,
-    phone: '09123456789',
+    phoneNumber,
+    phoneNumberVerified: false,
   });
-  expect(person.accounts[0].password).not.toBe(f.password);
-  const before = await db.department.count();
-  await expect(provisionDepartment(await f.actor(f.admin.id), input)).rejects.toThrow();
-  expect(await db.department.count()).toBe(before);
+  expect(person.accounts).toHaveLength(0);
+  const second = await provisionDepartment(await f.actor(f.admin.id), {
+    ...input,
+    name: 'واحد دوم همین مسئول',
+  });
+  expect(second.responsibleUserId).toBe(person.id);
+  await expect(provisionDepartment(await f.actor(f.agent.id), input)).rejects.toThrow();
   await expect(
-    provisionDepartment(await f.actor(f.agent.id), { ...input, name: 'واحد غیرمجاز' }),
+    provisionDepartment(await f.actor(f.admin.id), {
+      ...input,
+      responsible: { ...input.responsible, isAdmin: true },
+    }),
   ).rejects.toThrow();
 });
 
@@ -210,32 +207,18 @@ it('scans and normalizes profile photos and restricts changes to the administrat
   }
 });
 
-it('accepts only the approved student email domain and blocks both login methods before verification', async () => {
-  const studentNumber = String(randomInt(100000000, 999999999));
-  const email = `registration-${randomUUID().slice(0, 8)}@stu.nit.ac.ir`;
-  const data = { name: 'دانشجوی ثبت‌نام آزمایشی', studentNumber, email, password: f.password };
-  for (const wrong of ['@gmail.com', '@stu.nit.ac.ir.example.com', '@nit.ac.ir'])
-    await expect(registerStudent({ ...data, email: 'student' + wrong })).rejects.toThrow(
-      'ثبت‌نام فقط',
-    );
-  await registerStudent(data);
-  const user = await db.user.findUniqueOrThrow({ where: { email } });
-  expect(user).toMatchObject({
-    role: 'STUDENT',
-    isAdmin: false,
-    username: studentNumber,
-    emailVerified: false,
+it('changing a mobile number revokes the old credential and requires OTP verification', async () => {
+  const newPhone = `+989${randomInt(100000000, 999999999)}`;
+  await updateUser(await f.actor(f.admin.id), f.student.id, { phoneNumber: newPhone });
+  expect(await db.user.findUniqueOrThrow({ where: { id: f.student.id } })).toMatchObject({
+    phoneNumber: newPhone,
+    phoneNumberVerified: false,
   });
-  await expect(
-    getAuth().api.signInEmail({ body: { email, password: f.password } }),
-  ).rejects.toThrow();
-  await expect(
-    getAuth().api.signInUsername({ body: { username: studentNumber, password: f.password } }),
-  ).rejects.toThrow();
-  expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
-  const newNumber = String(randomInt(100000000, 999999999));
-  await updateUser(await f.actor(f.admin.id), user.id, { studentNumber: newNumber });
-  expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).username).toBe(newNumber);
+  expect(
+    await db.account.count({ where: { userId: f.student.id, providerId: 'credential' } }),
+  ).toBe(0);
+  await expect(f.actor(f.student.id)).rejects.toThrow();
+  await db.user.update({ where: { id: f.student.id }, data: { phoneNumberVerified: true } });
 });
 
 it('notifies the unit about submissions and students about answers without notifying administrators', async () => {

@@ -555,6 +555,7 @@ export async function addActivityNote(
     const note = await tx.activityNote.create({
       data: { activityId, authorId: actor.id, body: data.body },
     });
+    await tx.ticket.update({ where: { id: ticketId }, data: { updatedAt: new Date() } });
     await tx.auditLog.create({
       data: {
         actorId: actor.id,
@@ -565,4 +566,28 @@ export async function addActivityNote(
     });
     return { id: note.id };
   });
+}
+
+// Authorization is checked on every poll; no cross-request actor cache is used.
+export async function syncTicket(actor: Actor, id: string, since?: string) {
+  uuid.parse(id);
+  const ticket = await db.ticket.findFirst({
+    where: { AND: [{ id }, ticketScope(actor)] },
+    select: { version: true, updatedAt: true },
+  });
+  if (!ticket) fail();
+  const revision = `${ticket.version}:${ticket.updatedAt.toISOString()}`;
+  if (since === revision) return { revision, detail: null };
+  const detail = await getTicket(actor, id);
+  // Use the detail's revision to avoid losing an update racing the first read.
+  return { revision: `${detail.ticket.version}:${detail.ticket.updatedAt.toISOString()}`, detail };
+}
+
+export async function inboxRevision(actor: Actor) {
+  const result = await db.ticket.aggregate({
+    where: ticketScope(actor),
+    _count: { id: true },
+    _max: { updatedAt: true },
+  });
+  return { revision: `${result._count.id}:${result._max.updatedAt?.toISOString() ?? ''}` };
 }

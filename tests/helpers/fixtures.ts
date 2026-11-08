@@ -31,7 +31,8 @@ export async function fixtures() {
         displayUsername: username,
         emailVerified: true,
         accountType: role === 'STUDENT' ? 'STUDENT' : 'STAFF',
-        phone: role === 'STAFF' ? '09123456789' : null,
+        phoneNumber: `+989${randomInt(100000000, 999999999)}`,
+        phoneNumberVerified: true,
         accounts: { create: { providerId: 'credential', accountId: id, password: hashed } },
       },
     });

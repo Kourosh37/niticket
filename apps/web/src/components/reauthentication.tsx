@@ -11,65 +11,119 @@ function PasswordConfirmation({
   onVerified: () => void;
   onCancel: () => void;
 }) {
-  const id = useId(),
-    input = useRef<HTMLInputElement>(null);
-  const [password, setPassword] = useState(''),
-    [error, setError] = useState(''),
+  const id = useId();
+  const [method, setMethod] = useState<'code' | 'password'>('code');
+  const [value, setValue] = useState(''),
+    [sent, setSent] = useState(false);
+  const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const [resendAt, setResendAt] = useState(0),
+    [remaining, setRemaining] = useState(0);
   useEffect(() => {
-    if (!busy) input.current?.focus();
-  }, [busy]);
+    const tick = () => setRemaining(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [resendAt]);
+
+  async function send() {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await request<{ resendAfter: number }>('/api/v1/reauthenticate/code', {
+        method: 'POST',
+        body: '{}',
+      });
+      setResendAt(Date.now() + result.resendAfter * 1000);
+      setSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ارسال انجام نشد.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function verify() {
-    if (busy || !password) return;
+    if (busy || !value) return;
     setBusy(true);
     setError('');
     try {
       await request('/api/v1/reauthenticate', {
         method: 'POST',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ [method]: value }),
       });
-      setPassword('');
+      setValue('');
       onVerified();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'تأیید رمز انجام نشد.');
-      input.current?.focus();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'تأیید انجام نشد.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <fieldset className="reauthentication-inline" aria-label="تأیید رمز برای ادامه عملیات">
-      <legend>تأیید رمز برای ادامه</legend>
-      <p>برای انجام همین عملیات، رمز عبور حساب خود را وارد کنید.</p>
-      <label htmlFor={id}>رمز عبور فعلی برای تأیید</label>
-      <input
-        ref={input}
-        id={id}
-        type="password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        autoComplete="current-password"
-        dir="ltr"
-        maxLength={128}
-        disabled={busy}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            event.stopPropagation();
-            void verify();
-          }
-        }}
-      />
+    <fieldset className="reauthentication-inline" aria-label="تأیید هویت برای ادامه عملیات">
+      <legend>تأیید هویت برای ادامه</legend>
+      <p>با کد موبایل یا رمز حساب، همین عملیات را تأیید کنید.</p>
+      {method === 'code' && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy || remaining > 0}
+          onClick={() => void send()}
+        >
+          {remaining > 0
+            ? `ارسال دوباره (${remaining})`
+            : sent
+              ? 'ارسال دوباره کد'
+              : 'دریافت کد تأیید'}
+        </Button>
+      )}
+      {(method === 'password' || sent) && (
+        <>
+          <label htmlFor={id}>
+            {method === 'code' ? 'کد ۶ رقمی تأیید' : 'رمز عبور فعلی برای تأیید'}
+          </label>
+          <input
+            id={id}
+            type={method === 'password' ? 'password' : 'text'}
+            inputMode={method === 'code' ? 'numeric' : undefined}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoComplete={method === 'code' ? 'one-time-code' : 'current-password'}
+            dir="ltr"
+            maxLength={method === 'code' ? 6 : 128}
+            disabled={busy}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                void verify();
+              }
+            }}
+          />
+        </>
+      )}
       {error && (
         <p role="alert" className="error-message">
           {error}
         </p>
       )}
       <div className="form-actions">
-        <Button type="button" disabled={busy || !password} onClick={() => void verify()}>
+        <Button type="button" disabled={busy || !value} onClick={() => void verify()}>
           {busy ? 'در حال تأیید…' : 'تأیید و ادامه عملیات'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => {
+            setMethod(method === 'code' ? 'password' : 'code');
+            setValue('');
+            setError('');
+          }}
+        >
+          {method === 'code' ? 'تأیید با رمز' : 'تأیید با کد موبایل'}
         </Button>
         <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
           انصراف

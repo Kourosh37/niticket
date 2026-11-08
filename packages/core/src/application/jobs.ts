@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { db } from '@niticket/database';
 import { config } from '../infrastructure/config';
-import { mailer } from '../infrastructure/mail';
 import { objectBytes, putObject, deleteObject } from '../infrastructure/storage';
 import { detectFile, scanBytes } from '../infrastructure/scanner';
 import { log } from '../infrastructure/log';
@@ -71,7 +70,7 @@ export async function processNotification(eventId: string, payload: unknown) {
               select: { createdAt: true },
             })
           : null;
-      const notification = await tx.notification.upsert({
+      await tx.notification.upsert({
         where: { eventId_userId: { eventId, userId } },
         create: {
           eventId,
@@ -80,11 +79,6 @@ export async function processNotification(eventId: string, payload: unknown) {
           title: titles[data.type] ?? 'درخواست شما به‌روزرسانی شد',
           readAt: handled?.createdAt ?? null,
         },
-        update: {},
-      });
-      await tx.notificationDelivery.upsert({
-        where: { notificationId: notification.id },
-        create: { notificationId: notification.id },
         update: {},
       });
     }
@@ -100,7 +94,10 @@ export async function processScan(eventId: string, payload: unknown) {
     return;
   }
   const policy = await settings();
-  const bytes = await objectBytes(attachment.objectKey, policy.maxUploadBytes);
+  const bytes = await objectBytes(
+    attachment.objectKey,
+    attachment.avatarOwnerId ? 2097152 : policy.maxUploadBytes,
+  );
   try {
     if (bytes.length !== attachment.expectedSize) throw new Error('File size mismatch');
     const detected = await detectFile(bytes, attachment.declaredMime);
@@ -161,7 +158,11 @@ export async function processScan(eventId: string, payload: unknown) {
           },
         });
       }
-      if (changed.count && attachment.ticketId)
+      if (changed.count && attachment.ticketId) {
+        await tx.ticket.update({
+          where: { id: attachment.ticketId },
+          data: { updatedAt: new Date() },
+        });
         await tx.activity.create({
           data: {
             ticketId: attachment.ticketId,
@@ -171,6 +172,7 @@ export async function processScan(eventId: string, payload: unknown) {
             metadata: { attachmentId },
           },
         });
+      }
       await tx.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
     });
     await deleteObject(attachment.objectKey);
@@ -191,6 +193,14 @@ export async function processScan(eventId: string, payload: unknown) {
           where: { id: attachmentId },
           data: { scanStatus: 'REJECTED', scanResult: message },
         }),
+        ...(attachment.ticketId
+          ? [
+              db.ticket.update({
+                where: { id: attachment.ticketId },
+                data: { updatedAt: new Date() },
+              }),
+            ]
+          : []),
         db.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } }),
       ]);
       await deleteObject(attachment.objectKey);
@@ -200,58 +210,24 @@ export async function processScan(eventId: string, payload: unknown) {
   }
 }
 
-export async function deliverEmails() {
-  const rows = await db.notificationDelivery.findMany({
-    where: { status: 'PENDING', attempts: { lt: 8 }, nextAttemptAt: { lte: new Date() } },
-    take: 25,
-    include: { notification: { include: { user: true } } },
-  });
-  for (const row of rows) {
-    const n = row.notification;
-    if (!n.user.active || !n.user.emailNotifications) {
-      await db.notificationDelivery.update({ where: { id: row.id }, data: { status: 'SKIPPED' } });
-      continue;
-    }
-    // Check current ticket visibility before email delivery, including after transfers.
-    if (n.ticketId) {
-      const t = await db.ticket.findUnique({ where: { id: n.ticketId } });
-      const member = t
-        ? await db.departmentMembership.findUnique({
-            where: { userId_departmentId: { userId: n.userId, departmentId: t.departmentId } },
-          })
-        : null;
-      if (!t || !(n.user.isAdmin || t.creatorId === n.userId || member?.active)) {
-        await db.notificationDelivery.update({
-          where: { id: row.id },
-          data: { status: 'SKIPPED' },
-        });
-        continue;
-      }
-    }
-    try {
-      await mailer().sendMail({
-        from: config().SMTP_FROM,
-        to: n.user.email,
-        subject: n.title,
-        text: `${n.title}\nبرای مشاهده جزئیات به سامانه وارد شوید:\n${config().APP_ORIGIN}/tickets/${n.ticketId ?? ''}`,
-        messageId: `<${row.id}@niticket.local>`,
-      });
-      await db.notificationDelivery.update({
-        where: { id: row.id },
-        data: { status: 'SENT', sentAt: new Date(), attempts: { increment: 1 } },
-      });
-    } catch {
-      await db.notificationDelivery.update({
-        where: { id: row.id },
-        data: {
-          attempts: { increment: 1 },
-          lastError: 'SMTP_DELIVERY_FAILED',
-          status: row.attempts + 1 >= 8 ? 'FAILED' : 'PENDING',
-          nextAttemptAt: new Date(Date.now() + Math.min(3600, 30 * 2 ** row.attempts) * 1000),
-        },
-      });
-    }
-  }
+export async function cleanupExpiredAuth() {
+  const now = new Date();
+  const [sessions, verifications] = await Promise.all([
+    db.session.findMany({ where: { expiresAt: { lt: now } }, select: { id: true }, take: 200 }),
+    db.verification.findMany({
+      where: { expiresAt: { lt: now } },
+      select: { id: true },
+      take: 200,
+    }),
+  ]);
+  if (sessions.length)
+    await db.session.deleteMany({
+      where: { id: { in: sessions.map((s) => s.id) }, expiresAt: { lt: now } },
+    });
+  if (verifications.length)
+    await db.verification.deleteMany({
+      where: { id: { in: verifications.map((v) => v.id) }, expiresAt: { lt: now } },
+    });
 }
 
 export function startJobs() {
@@ -275,6 +251,7 @@ export function startJobs() {
     ),
   );
   let dispatching = false;
+  let lastAuthCleanup = 0;
   const dispatch = async () => {
     if (dispatching) return;
     dispatching = true;
@@ -304,8 +281,11 @@ export function startJobs() {
           data: { dispatchedAt: new Date() },
         });
       }
-      await deliverEmails();
       await writeFile(path.join(tmpdir(), 'niticket-worker-heartbeat'), String(Date.now()));
+      if (Date.now() - lastAuthCleanup >= 60000) {
+        await cleanupExpiredAuth();
+        lastAuthCleanup = Date.now();
+      }
       const expired = await db.attachment.findMany({
         where: { scanStatus: 'PENDING', expiresAt: { lt: new Date() } },
         take: 25,
