@@ -218,14 +218,15 @@ model Message {
   body        String
   visibility  Visibility   @default(PUBLIC)
   createdAt   DateTime     @default(now())
+  readAt      DateTime?
   ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Restrict)
   sender      User         @relation(fields: [senderId], references: [id], onDelete: Restrict)
   attachments Attachment[]
+  // Expression GIN indexes and clean-file partial indexes live in the search SQL migration.
 
   @@index([ticketId, createdAt, id])
   @@index([createdAt, id])
   @@index([senderId, createdAt, id])
-  // Expression GIN indexes and clean-file partial indexes live in the search SQL migration.
 }
 
 model Activity {

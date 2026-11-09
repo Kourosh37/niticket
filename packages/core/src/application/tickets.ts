@@ -245,6 +245,7 @@ export const messageSelect = {
   body: true,
   visibility: true,
   createdAt: true,
+  readAt: true,
   sender: { select: { id: true, name: true, image: true } },
   attachments: {
     select: {

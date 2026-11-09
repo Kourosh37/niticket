@@ -13,6 +13,7 @@ import * as sessions from '../application/sessions';
 import { getAuth } from '../infrastructure/auth';
 import { searchMessages, searchSenders } from '../application/message-search';
 import { rateLimit } from '../infrastructure/redis';
+import { getMessageReceipts, markMessagesSeen } from '../application/message-receipts';
 
 export async function dispatch(
   request: Request,
@@ -43,6 +44,14 @@ export async function dispatch(
   if (resource === 'inbox' && id === 'revision' && method === 'GET')
     return tickets.inboxRevision(actor);
   if (resource === 'tickets') {
+    if (id && action === 'receipts' && method === 'GET')
+      return getMessageReceipts(
+        actor,
+        id,
+        typeof query.ids === 'string' && query.ids.length <= 1850 ? query.ids.split(',') : [],
+      );
+    if (id && action === 'read' && method === 'POST')
+      return markMessagesSeen(actor, id, await readJson(request));
     if (id && action === 'sync' && method === 'GET')
       return tickets.syncTicket(actor, id, query.since);
     if (!id && method === 'GET') return tickets.listTickets(actor, query);
