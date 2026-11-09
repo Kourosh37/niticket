@@ -11,6 +11,7 @@ import './messenger.css';
 import './search.css';
 import './downloads.css';
 import './theme.css';
+import './navigation.css';
 
 export const metadata: Metadata = {
   title: { default: 'نیتیکت | پشتیبانی دانشگاه', template: '%s | نیتیکت' },

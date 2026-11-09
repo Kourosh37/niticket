@@ -18,16 +18,15 @@ import {
   Settings,
   ChevronLeft,
   MessageCircle,
-  UserRound,
   Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
-import { NotificationBell } from './notification-bell';
 import { Avatar } from './avatar';
 import { SessionGuard } from './session-guard';
 import { DownloadScope } from './downloads';
 import { ThemeToggle } from './theme-toggle';
+import { NotificationStatus, ConversationNavigation } from './notification-status';
 import dynamic from 'next/dynamic';
 
 const MessageSearch = dynamic(() =>
@@ -157,6 +156,7 @@ export function Shell({
         active:
           path === '/' ||
           path === '/tickets' ||
+          path === '/notifications' ||
           path.startsWith('/workspace') ||
           (path.startsWith('/tickets/') && path !== '/tickets/new'),
       },
@@ -170,64 +170,46 @@ export function Shell({
             },
           ]
         : []),
-      { href: '/notifications', label: 'اعلان‌ها', icon: Bell, active: path === '/notifications' },
-      { href: '/profile', label: 'حساب من', icon: UserRound, active: path === '/profile' },
+      {
+        href: '/settings',
+        label: 'تنظیمات',
+        icon: Settings,
+        active: path === '/settings' || path === '/profile',
+      },
     ];
     return (
-      <div className={cn('easy-app', chatPage && 'messenger-app')}>
-        <SessionGuard />
-        <DownloadScope key={user.id} />
-        {!chatPage && (
-          <header className="easy-header">
-            <div className="easy-header-inner">
-              <Link href="/" className="easy-brand" aria-label="نیتیکت، گفتگوها">
-                <span>
-                  <MessageCircle size={25} />
-                </span>
-                <div>
-                  <strong>نیتیکت</strong>
-                  <small>{universityName}</small>
-                </div>
-              </Link>
-              <div className="easy-header-actions">
-                <ThemeToggle />
-                <button
-                  type="button"
-                  onClick={openSearch}
-                  className="icon-link"
-                  aria-label="جستجو در همه پیام‌ها"
-                >
-                  <Search size={21} />
-                </button>
-                <NotificationBell />
-                <Link href="/profile" className="easy-account" aria-label="حساب من">
-                  <Avatar name={user.name} image={user.image} small />
-                  <span>{user.name}</span>
-                </Link>
-              </div>
-            </div>
-          </header>
-        )}
-        <main id="main-content" className={cn('easy-main', chatPage && 'messenger-main')}>
-          {search}
-          {children}
-        </main>
-        {!chatPage && (
-          <nav className="easy-navigation" aria-label="ناوبری اصلی">
+      <NotificationStatus key={user.id}>
+        <div className={cn('easy-app', chatPage && 'messenger-app')}>
+          <SessionGuard />
+          <DownloadScope key={user.id} />
+          <main id="main-content" className={cn('easy-main', chatPage && 'messenger-main')}>
+            {search}
+            {children}
+          </main>
+          <nav
+            className={cn('easy-navigation', chatPage && 'navigation-chat')}
+            aria-label="ناوبری اصلی"
+          >
             {navigation.map(({ href, label, icon: Icon, active }) => (
               <Link href={href} key={href} aria-current={active ? 'page' : undefined}>
-                <Icon size={23} />
-                <span>{label}</span>
+                {href === '/' ? (
+                  <ConversationNavigation />
+                ) : (
+                  <>
+                    <Icon size={23} />
+                    <span>{label}</span>
+                  </>
+                )}
               </Link>
             ))}
           </nav>
-        )}
-        {error && (
-          <p role="alert" className="easy-shell-error">
-            {error}
-          </p>
-        )}
-      </div>
+          {error && (
+            <p role="alert" className="easy-shell-error">
+              {error}
+            </p>
+          )}
+        </div>
+      </NotificationStatus>
     );
   }
 
@@ -340,7 +322,6 @@ export function Shell({
               }).format(new Date())}
             </span>
             <span className="topbar-divider" />
-            {!user.isAdmin && <NotificationBell />}
             <Avatar name={user.name} image={user.image} small />
           </div>
         </header>

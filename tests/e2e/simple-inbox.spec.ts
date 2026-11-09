@@ -38,7 +38,7 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   const s = await student.newPage(),
     o = await officer.newPage();
   await login(s, f.student.phoneNumber!, f.password);
-  await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
+  await s.getByRole('link', { name: 'پیام جدید', exact: true }).click();
   await expect(s.getByRole('heading', { name: 'به کدام واحد پیام می‌دهید؟' })).toBeVisible();
   if (await s.getByLabel('جستجوی واحد', { exact: true }).count())
     await s.getByLabel('جستجوی واحد', { exact: true }).fill(f.department.name);
@@ -66,7 +66,7 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   });
   await processScan(event.id, event.payload);
   await s.getByRole('link', { name: 'بازگشت به گفتگوها', exact: true }).click();
-  await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
+  await s.getByRole('link', { name: 'پیام جدید', exact: true }).click();
   await expect(s.getByRole('heading', { name: 'به کدام واحد پیام می‌دهید؟' })).toBeVisible();
   if (await s.getByLabel('جستجوی واحد', { exact: true }).count())
     await s.getByLabel('جستجوی واحد', { exact: true }).fill(f.department.name);
@@ -106,7 +106,8 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   await o.setViewportSize({ width: 390, height: 844 });
   await o.screenshot({ path: '.local/ui-preview/officer-inbox-390.png', fullPage: true });
   await o.locator('.inbox-thread').click();
-  await expect(o.locator('.messenger-header')).toBeVisible();
+  await expect(o.locator('.messenger-header')).toHaveCount(0);
+  await expect(o.locator('.messenger-footer-controls')).toBeVisible();
   await expect(o.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
   await o.screenshot({ path: '.local/ui-preview/officer-chat-390.png' });
   await student.close();
@@ -240,7 +241,8 @@ test('long chats use a single message scroller, preserve older-message position 
     [1440, 900],
   ]) {
     await s.setViewportSize({ width, height });
-    await expect(s.locator('.messenger-header')).toBeInViewport();
+    await expect(s.locator('.messenger-header')).toHaveCount(0);
+    await expect(s.locator('.messenger-footer-controls')).toBeInViewport();
     await expect(s.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
     expect(
       await s.evaluate(

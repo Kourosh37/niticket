@@ -1228,9 +1228,6 @@
   }
 }
 @media (max-width: 640px) {
-  .easy-app:has(.easy-new-ticket) .easy-navigation {
-    display: none;
-  }
   .new-ticket-card form {
     padding-bottom: 65px;
   }
@@ -1251,9 +1248,6 @@
   }
   .new-submit-bar .error-message {
     margin: 0 0 8px;
-  }
-  .easy-app:has(#reply:focus) .easy-navigation {
-    display: none;
   }
   .easy-chat:has(#reply:focus) .chat-composer {
     bottom: env(safe-area-inset-bottom, 0px);
@@ -1663,4 +1657,10 @@
   justify-content: center;
   gap: 12px;
   margin-top: 22px;
+}
+
+@media (pointer: coarse) and (max-width: 640px) {
+  .easy-app.messenger-app:has(#reply:focus) .easy-navigation {
+    display: none;
+  }
 }

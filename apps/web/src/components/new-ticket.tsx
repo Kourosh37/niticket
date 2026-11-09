@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowRight, Building2, ChevronLeft, LoaderCircle, Search } from 'lucide-react';
+import { Building2, ChevronLeft, LoaderCircle, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { request } from '@/lib/utils';
 
@@ -85,10 +84,6 @@ export function NewTicket({
   }, [search, cursor, composing]);
   return (
     <div className="easy-new-ticket messenger-picker">
-      <Link href="/" className="easy-back">
-        <ArrowRight size={20} />
-        گفتگوها
-      </Link>
       <div className="new-ticket-heading">
         <h1>به کدام واحد پیام می‌دهید؟</h1>
         <p>واحد را انتخاب کنید و همان‌جا پیام بفرستید.</p>

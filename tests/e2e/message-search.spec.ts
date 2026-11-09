@@ -70,7 +70,6 @@ test('searches every chat, paginates results and opens an old matching message w
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await login(page, f.student.phoneNumber!, f.password);
-  await page.getByRole('button', { name: 'جستجو در همه پیام‌ها', exact: true }).click();
   await page.getByRole('searchbox', { name: 'جستجو در همه پیام‌ها', exact: true }).fill(tag);
   const results = page.locator('[data-search-result]');
   await expect(results).toHaveCount(20);

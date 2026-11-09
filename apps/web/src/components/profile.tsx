@@ -8,10 +8,13 @@ import { AvatarUpload } from './avatar-upload';
 import { useReauthentication } from './reauthentication';
 import { LogOut } from 'lucide-react';
 import { AccountSessions } from './account-sessions';
+import { SettingsPreferences } from './settings-preferences';
 
 export function Profile({
   profile,
+  settings,
 }: {
+  settings?: { universityName: string; supportDescription: string };
   profile: {
     name: string;
     phoneNumber: string | null;
@@ -29,10 +32,11 @@ export function Profile({
     <div className="easy-profile">
       <div className="page-heading">
         <div>
-          <h1>حساب کاربری</h1>
+          <h1>{settings ? 'تنظیمات' : 'حساب کاربری'}</h1>
           <p>اطلاعات شخصی و تنظیمات امنیت حساب شما</p>
         </div>
       </div>
+      {settings && <SettingsPreferences {...settings} />}
       <form
         className="surface form-surface"
         onSubmit={async (e) => {

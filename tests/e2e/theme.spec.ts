@@ -123,21 +123,23 @@ test('uses only the requested palettes across requester, officer, admin, chat an
   await login(page, f.student.phoneNumber!, f.password);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('switch', { name: 'حالت تاریک' })).toBeInViewport();
+    await expect(page.getByRole('link', { name: 'تنظیمات', exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
   }
   await palette(page, false);
+  await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await palette(page, true);
+  await page.goto('/');
   await page.screenshot({ path: '.local/ui-preview/theme-inbox-dark.png' });
   await page.goto(`/tickets/${ticket.id}`);
   await expect(page.locator('.messenger-bubble')).toHaveCount(2);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('switch', { name: 'حالت تاریک' })).toHaveCount(1);
-    await expect(page.getByRole('switch', { name: 'حالت تاریک' })).toBeInViewport();
+    await expect(page.getByRole('switch', { name: 'حالت تاریک' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'تنظیمات', exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -149,16 +151,21 @@ test('uses only the requested palettes across requester, officer, admin, chat an
   await expect(page.getByRole('dialog')).toBeVisible();
   await palette(page, true);
   await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
+  await page.goto(`/tickets/${ticket.id}`);
   await palette(page, false);
   await page.screenshot({ path: '.local/ui-preview/theme-chat-light.png' });
   await page.keyboard.press('Control+f');
   await page.getByRole('searchbox').fill('پالت');
   await expect(page.locator('[data-search-result]')).toHaveCount(2);
   await palette(page, false);
+  await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await palette(page, true);
   await page.goto('/profile');
+  await expect(page).toHaveURL('http://localhost:3001/settings');
+  await expect(page.getByRole('heading', { name: 'تنظیمات', exact: true })).toBeVisible();
   await palette(page, true);
   await page.request.post('/api/auth/sign-out', {
     headers: { origin: 'http://localhost:3001' },

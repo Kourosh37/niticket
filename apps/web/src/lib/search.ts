@@ -32,7 +32,7 @@ export function searchReturnPath(value?: string) {
   try {
     const url = new URL(value, 'https://niticket.invalid');
     if (url.origin !== 'https://niticket.invalid') return undefined;
-    return /^(?:\/(?:search|tickets|workspace|profile|notifications)?|\/admin\/(?:users|departments(?:\/[a-f0-9-]{36}\/history)?))$/.test(
+    return /^(?:\/(?:search|tickets|workspace|profile|settings|notifications)?|\/admin\/(?:users|departments(?:\/[a-f0-9-]{36}\/history)?))$/.test(
       url.pathname,
     )
       ? `${url.pathname}${url.search}`

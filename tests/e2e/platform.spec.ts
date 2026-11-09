@@ -259,7 +259,7 @@ test('a phone-only signup sets a password in the profile and returns through eit
   await page.goto('/profile');
   await page.getByLabel('رمز عبور جدید', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ذخیره رمز عبور', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('رمز عبور تغییر کرد');
+  await expect(page.getByRole('status').filter({ hasText: 'رمز عبور تغییر کرد' })).toBeVisible();
   await context.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
   await login(page, phoneNumber, password);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -320,7 +320,7 @@ test('three roles complete a ticket with private history notes, file previews an
   ).toBeVisible();
   await login(s, f.student.phoneNumber!, f.password);
   await expect(s.locator('html')).toHaveAttribute('dir', 'rtl');
-  await s.getByRole('link', { name: 'گفتگوی جدید', exact: true }).click();
+  await s.getByRole('link', { name: 'پیام جدید', exact: true }).click();
   await expect(s.getByRole('heading', { name: 'به کدام واحد پیام می‌دهید؟' })).toBeVisible();
   if (await s.getByLabel('جستجوی واحد', { exact: true }).count())
     await s.getByLabel('جستجوی واحد', { exact: true }).fill(name);

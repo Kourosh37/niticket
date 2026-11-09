@@ -82,7 +82,7 @@ test('uses a bottom desktop dock and fills the available workspace with responsi
   const f = await fixtures();
   await page.setViewportSize({ width: 1920, height: 1080 });
   await login(page, f.student.phoneNumber!, f.password);
-  await expect(page.getByRole('heading', { name: 'گفتگوهای من', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'فهرست گفتگوها', exact: true })).toBeVisible();
   const dock = page.getByRole('navigation', { name: 'ناوبری اصلی' });
   const dockBox = (await dock.boundingBox())!,
     mainBox = (await page.locator('main').boundingBox())!;

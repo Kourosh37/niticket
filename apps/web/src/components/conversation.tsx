@@ -489,58 +489,54 @@ export function Conversation({
   );
   const counterpart =
     permissions.staff || permissions.readOnly ? ticket.creator.name : ticket.department.name;
-  return (
-    <div className="messenger-chat">
-      <header className="messenger-header">
-        <Link
-          href={
-            returnTo ??
-            (permissions.readOnly ? `/admin/departments/${ticket.departmentId}/history` : '/')
-          }
-          aria-label={returnTo ? 'بازگشت به نتایج جستجو' : 'بازگشت به گفتگوها'}
-          className="messenger-back"
-        >
-          <ArrowRight size={24} />
-        </Link>
-        <Avatar
-          name={counterpart}
-          image={permissions.staff || permissions.readOnly ? ticket.creator.image : null}
-        />
-        <div className="messenger-contact">
-          <h1>{counterpart}</h1>
-          <p>
-            {permissions.staff || permissions.readOnly
-              ? ticket.department.name
-              : 'گفتگو با واحد دانشگاه'}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="messenger-info-button"
-          aria-label="جستجو در این گفتگو"
-          disabled={busy || recording || loadingOlder || finding}
-          aria-expanded={searchOpen}
-          aria-controls="chat-message-search"
-          onClick={() => setSearchOpen((open) => !open)}
-        >
-          <Search size={22} />
-        </button>
-        <button
-          type="button"
-          className="messenger-info-button"
-          aria-label="اطلاعات گفتگو"
-          onClick={() => setInfo(true)}
-        >
-          <Info size={23} />
-        </button>
-        <ThemeToggle />
-      </header>
-      {permissions.readOnly && (
-        <p className="messenger-readonly">
-          <Lock size={14} />
-          مشاهده گفتگو توسط مدیر
+  const conversationControls = (
+    <>
+      <Link
+        href={
+          returnTo ??
+          (permissions.readOnly ? `/admin/departments/${ticket.departmentId}/history` : '/')
+        }
+        aria-label={returnTo ? 'بازگشت به نتایج جستجو' : 'بازگشت به گفتگوها'}
+        className="messenger-back"
+      >
+        <ArrowRight size={24} />
+      </Link>
+      <Avatar
+        name={counterpart}
+        image={permissions.staff || permissions.readOnly ? ticket.creator.image : null}
+      />
+      <div className="messenger-contact">
+        <h1>{counterpart}</h1>
+        <p className={permissions.staff ? 'officer-unit' : undefined}>
+          {permissions.staff || permissions.readOnly
+            ? ticket.department.name
+            : 'گفتگو با واحد دانشگاه'}
         </p>
-      )}
+      </div>
+      <button
+        type="button"
+        className="messenger-info-button"
+        aria-label="جستجو در این گفتگو"
+        disabled={busy || recording || loadingOlder || finding}
+        aria-expanded={searchOpen}
+        aria-controls="chat-message-search"
+        onClick={() => setSearchOpen((open) => !open)}
+      >
+        <Search size={22} />
+      </button>
+      <button
+        type="button"
+        className="messenger-info-button"
+        aria-label="اطلاعات گفتگو"
+        onClick={() => setInfo(true)}
+      >
+        <Info size={23} />
+      </button>
+      {permissions.readOnly && <ThemeToggle />}
+    </>
+  );
+  const conversationState = (
+    <>
       <ActiveAudio />
       {!searchOpen && (focusId || finding) && (
         <div className="messenger-search-context" aria-label="پیام پیدا‌شده">
@@ -607,6 +603,18 @@ export function Conversation({
           {error}
         </p>
       )}
+    </>
+  );
+  return (
+    <div className="messenger-chat">
+      {permissions.readOnly && <header className="messenger-header">{conversationControls}</header>}
+      {permissions.readOnly && (
+        <p className="messenger-readonly">
+          <Lock size={14} />
+          مشاهده گفتگو توسط مدیر
+        </p>
+      )}
+      {permissions.readOnly && conversationState}
       <div className="messenger-message-area">
         {searchOpen && (
           <section
@@ -669,6 +677,12 @@ export function Conversation({
           </Button>
         )}
       </div>
+      {!permissions.readOnly && !searchOpen && (
+        <div className="messenger-footer-controls" aria-label="ابزارهای گفتگو">
+          {conversationControls}
+        </div>
+      )}
+      {!permissions.readOnly && conversationState}
       {permissions.reply && (
         <form
           className={`messenger-composer ${visibility === 'INTERNAL' ? 'messenger-composer-private' : ''}`}

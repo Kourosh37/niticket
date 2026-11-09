@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Building2, ChevronLeft, MessageCircle, Plus } from 'lucide-react';
+import { Building2, ChevronLeft, MessageCircle } from 'lucide-react';
 import type { Actor } from '@niticket/core/domain/authorization';
 import { userRole } from '@niticket/core/domain/authorization';
 import { listTickets } from '@niticket/core/application/tickets';
@@ -7,6 +7,7 @@ import { departmentChoices } from '@niticket/core/application/administration';
 import { Avatar } from './avatar';
 import { Button } from './ui/button';
 import { InboxRefresh } from './inbox-refresh';
+import { UnreadInboxNotice } from './notification-status';
 import { MessageSearch } from './message-search';
 import { LiveSearchForm } from './live-search-form';
 import { messageSearchSchema } from '@niticket/core/application/message-search';
@@ -68,21 +69,8 @@ export async function Inbox({
   return (
     <div className="easy-inbox">
       <InboxRefresh />
-      <div className="inbox-heading">
-        <div>
-          <h1>{staff ? 'گفتگوهای واحد' : 'گفتگوهای من'}</h1>
-          <p>
-            {staff ? 'یک گفتگو را باز کنید و پاسخ بدهید.' : 'پیام‌ها و پاسخ‌های دانشگاه، همین‌جا.'}
-          </p>
-        </div>
-        {!staff && (
-          <Button asChild className="inbox-create">
-            <Link href="/tickets/new">
-              <Plus size={21} /> گفتگوی جدید
-            </Link>
-          </Button>
-        )}
-      </div>
+      <h1 className="sr-only">{staff ? 'گفتگوهای واحد' : 'گفتگوهای من'}</h1>
+      <UnreadInboxNotice />
       <section className="inbox-panel" aria-label="فهرست گفتگوها">
         <nav className="inbox-tabs" aria-label="نمایش گفتگوها">
           {(staff

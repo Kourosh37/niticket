@@ -1,0 +1,155 @@
+.dock-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+}
+.dock-unread-count {
+  position: absolute;
+  top: -7px;
+  inset-inline-end: -10px;
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 4px;
+  border: 2px solid var(--surface);
+  border-radius: 20px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.easy-navigation a[aria-current] .dock-unread-count {
+  background: var(--on-primary);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.inbox-unread-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 14px;
+}
+.inbox-unread-notice > span:last-child {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.settings-preferences {
+  grid-column: 1 / -1;
+  padding: 0;
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+.settings-preference-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border);
+}
+a.settings-preference-row:hover {
+  background: var(--surface-alt);
+}
+.settings-preference-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.settings-preference-row h2,
+.settings-preference-row strong {
+  font-size: 16px;
+}
+.settings-preference-row p {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.settings-application-info {
+  display: grid;
+  gap: 4px;
+  padding: 18px 22px;
+  font-size: 13px;
+}
+.easy-app.messenger-app {
+  display: flex;
+  flex-direction: column;
+}
+.easy-app.messenger-app .messenger-main {
+  flex: 1;
+  height: auto;
+  width: 100%;
+  min-height: 0;
+}
+.messenger-app .navigation-chat {
+  position: static;
+  transform: none;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 5px 8px max(5px, env(safe-area-inset-bottom));
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.navigation-chat a {
+  max-width: 220px;
+  min-height: 52px;
+}
+.messenger-footer-controls {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px max(12px, calc((100% - 1124px) / 2));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.messenger-footer-controls .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+.messenger-footer-controls .messenger-contact h1 {
+  font-size: 14px;
+  line-height: 1.35;
+}
+.messenger-footer-controls .messenger-contact p {
+  display: none;
+}
+.messenger-footer-controls .messenger-contact .officer-unit {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.easy-app .skeleton {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.messenger-footer-controls .messenger-back,
+.messenger-footer-controls .messenger-info-button {
+  min-width: 36px;
+  min-height: 36px;
+}
+@media (max-width: 640px) {
+  .settings-preference-row {
+    padding-inline: 16px;
+  }
+  .messenger-footer-controls .avatar {
+    display: none;
+  }
+}

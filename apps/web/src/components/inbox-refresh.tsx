@@ -25,6 +25,7 @@ export function InboxRefresh() {
           signal: abort.signal,
         });
         if (active && revision !== result.revision) {
+          if (revision !== undefined) window.dispatchEvent(new Event('notifications:changed'));
           revision = result.revision;
           router.refresh();
         }
