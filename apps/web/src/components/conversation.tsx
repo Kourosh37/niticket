@@ -765,32 +765,9 @@ export function Conversation({
                 }
               }}
             />
-            <Button
-              type="submit"
-              className="messenger-send"
-              aria-label={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام'}
-              title={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام (Enter)'}
-              aria-busy={busy}
-              disabled={
-                busy ||
-                finding ||
-                recording ||
-                (!pendingMessage && !body.trim() && !files.length && !voice)
-              }
-            >
-              {busy ? (
-                <LoaderCircle size={22} className="download-spinner" />
-              ) : pendingMessage ? (
-                <RotateCcw size={22} />
-              ) : (
-                <Send size={22} />
-              )}
-            </Button>
-          </div>
-          <div className="messenger-tools">
-            <label className="messenger-attach">
+            <label className="messenger-attach" title="عکس یا فایل">
               <Paperclip size={21} />
-              عکس یا فایل
+              <span className="sr-only">عکس یا فایل</span>
               <input
                 id="attachment"
                 type="file"
@@ -817,6 +794,7 @@ export function Conversation({
             </label>
             <fieldset className="messenger-voice" disabled={busy}>
               <VoiceRecorder
+                compact
                 key={recorderKey}
                 onFile={setVoice}
                 onRecordingChange={setRecording}
@@ -824,6 +802,27 @@ export function Conversation({
                 maxBytes={maxBytes}
               />
             </fieldset>
+            <Button
+              type="submit"
+              className="messenger-send"
+              aria-label={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام'}
+              title={pendingMessage ? 'تلاش دوباره برای ارسال' : 'ارسال پیام (Enter)'}
+              aria-busy={busy}
+              disabled={
+                busy ||
+                finding ||
+                recording ||
+                (!pendingMessage && !body.trim() && !files.length && !voice)
+              }
+            >
+              {busy ? (
+                <LoaderCircle size={22} className="download-spinner" />
+              ) : pendingMessage ? (
+                <RotateCcw size={22} />
+              ) : (
+                <Send size={22} />
+              )}
+            </Button>
           </div>
           {progress !== null && <UploadProgress filename={filename} percent={progress} />}
           {error && (

@@ -11,11 +11,13 @@ export function VoiceRecorder({
   maxSeconds,
   maxBytes,
   onRecordingChange,
+  compact = false,
 }: {
   onFile: (file: File | null) => void;
   maxSeconds: number;
   maxBytes: number;
   onRecordingChange?: (recording: boolean) => void;
+  compact?: boolean;
 }) {
   const [state, setState] = useState<'idle' | 'starting' | 'recording' | 'paused' | 'ready'>(
     'idle',
@@ -187,12 +189,19 @@ export function VoiceRecorder({
   }
 
   return (
-    <div className="voice-controls">
+    <div className={`voice-controls${compact ? ' voice-compact' : ''}`} data-state={state}>
       <div className="voice-row">
         {state === 'starting' && <span role="status">در حال اتصال به میکروفون…</span>}
         {state === 'idle' && (
-          <Button type="button" variant="ghost" size="sm" onClick={start}>
-            <Mic size={17} /> ضبط پیام صوتی
+          <Button
+            type="button"
+            variant="ghost"
+            size={compact ? 'icon' : 'sm'}
+            aria-label="ضبط پیام صوتی"
+            title="ضبط پیام صوتی"
+            onClick={start}
+          >
+            <Mic size={compact ? 21 : 17} /> {!compact && 'ضبط پیام صوتی'}
           </Button>
         )}
         {(state === 'recording' || state === 'paused') && (
@@ -253,7 +262,7 @@ export function VoiceRecorder({
             </Button>
           </>
         )}
-        {state === 'idle' && <small>حداکثر {digits(maxSeconds)} ثانیه</small>}
+        {state === 'idle' && !compact && <small>حداکثر {digits(maxSeconds)} ثانیه</small>}
       </div>
       {error && (
         <p className="error-message" role="alert">
