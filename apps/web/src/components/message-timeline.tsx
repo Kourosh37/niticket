@@ -6,11 +6,13 @@ import {
   useState,
   useRef,
   useLayoutEffect,
+  useEffect,
   useImperativeHandle,
   type RefObject,
 } from 'react';
 import { Virtuoso, type VirtuosoHandle, type Components } from 'react-virtuoso';
-import { Check, LoaderCircle, Lock, MessageCircle } from 'lucide-react';
+import { Check, CheckCheck, LoaderCircle, Lock, MessageCircle } from 'lucide-react';
+import { observeVisibleMessages } from '@/lib/message-visibility';
 import type { getTicket } from '@niticket/core/application/tickets';
 import { AttachmentPreview } from './attachment-preview';
 import { Button } from './ui/button';
@@ -43,12 +45,14 @@ const MessageRow = memo(function MessageRow({
   day,
   focused,
   terms,
+  seen,
 }: {
   message: Message;
   actorId: string;
   day: string | null;
   focused: boolean;
   terms: string[];
+  seen: boolean;
 }) {
   const own = message.sender.id === actorId;
   return (
@@ -60,6 +64,7 @@ const MessageRow = memo(function MessageRow({
       )}
       <article
         data-message-id={message.id}
+        data-read={own ? String(seen) : undefined}
         data-search-focused={focused || undefined}
         className={`messenger-bubble ${own ? 'bubble-own' : ''} ${message.visibility === 'INTERNAL' ? 'bubble-private' : ''}`}
       >
@@ -80,7 +85,12 @@ const MessageRow = memo(function MessageRow({
         </div>
         <time dateTime={new Date(message.createdAt).toISOString()}>
           {timeFormat.format(new Date(message.createdAt))}
-          {own && <Check size={14} aria-label="ارسال شده" />}
+          {own &&
+            (seen ? (
+              <CheckCheck size={16} className="message-read-receipt" aria-label="دیده شد" />
+            ) : (
+              <Check size={14} aria-label="ارسال شده" />
+            ))}
         </time>
       </article>
     </div>
@@ -153,6 +163,8 @@ export const MessageTimeline = memo(function MessageTimeline({
   highlightTerms,
   newer,
   loadNewer,
+  seenIds,
+  onVisibleMessages,
 }: {
   messages: Message[];
   actorId: string;
@@ -168,10 +180,16 @@ export const MessageTimeline = memo(function MessageTimeline({
   highlightTerms: string[];
   newer: boolean;
   loadNewer: () => void;
+  seenIds: ReadonlySet<string>;
+  onVisibleMessages?: (ids: string[]) => void;
 }) {
   const virtual = useRef<VirtuosoHandle>(null),
     scroller = useRef<HTMLElement | null>(null);
   const anchor = useRef<{ id: string; offset: number } | null>(null);
+  useEffect(() => {
+    if (scroller.current && onVisibleMessages)
+      return observeVisibleMessages(scroller.current, onVisibleMessages);
+  }, [onVisibleMessages]);
   useImperativeHandle(
     apiRef,
     () => ({
@@ -271,6 +289,7 @@ export const MessageTimeline = memo(function MessageTimeline({
             actorId={actorId}
             day={(!local ? !older : date(messages[local - 1].createdAt) !== day) ? day : null}
             focused={message.id === focusId}
+            seen={!!message.readAt || seenIds.has(message.id)}
             terms={highlightTerms}
           />
         );

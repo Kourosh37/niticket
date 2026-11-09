@@ -639,3 +639,7 @@
 .messenger-input-row .voice-compact .voice-row {
   flex-wrap: wrap;
 }
+
+.message-read-receipt {
+  color: var(--primary);
+}

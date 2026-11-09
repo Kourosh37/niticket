@@ -1,0 +1,111 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { request } from './utils';
+
+function remember(set: Set<string>, ids: string[]) {
+  for (const id of ids) set.add(id);
+  while (set.size > 500) set.delete(set.values().next().value!);
+}
+
+/** Only visible incoming messages are acknowledged; receipt polling never reloads chat history. */
+export function useMessageReceipts(
+  ticketId: string,
+  incoming: string[],
+  outgoing: string[],
+  enabled: boolean,
+) {
+  const acknowledged = useRef(new Set<string>()),
+    known = useRef(new Set<string>());
+  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
+  const incomingKey = incoming.join(','),
+    outgoingKey = outgoing.join(',');
+  useEffect(() => {
+    if (!enabled || !incomingKey) return;
+    const ids = incomingKey.split(','),
+      abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined,
+      inFlight = false;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (document.visibilityState !== 'visible' || !document.hasFocus() || inFlight) return;
+      const pending = ids.filter((id) => !acknowledged.current.has(id));
+      if (!pending.length) return;
+      timer = setTimeout(() => {
+        if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+        inFlight = true;
+        void request(`/api/v1/tickets/${ticketId}/read`, {
+          method: 'POST',
+          signal: abort.signal,
+          body: JSON.stringify({ messageIds: pending }),
+        })
+          .then(() => {
+            if (!abort.signal.aborted) remember(acknowledged.current, pending);
+          })
+          .catch(() => {
+            if (!abort.signal.aborted) timer = setTimeout(schedule, 4000);
+          })
+          .finally(() => {
+            inFlight = false;
+          });
+      }, 450);
+    };
+    schedule();
+    window.addEventListener('focus', schedule);
+    window.addEventListener('online', schedule);
+    document.addEventListener('visibilitychange', schedule);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+      window.removeEventListener('focus', schedule);
+      window.removeEventListener('online', schedule);
+      document.removeEventListener('visibilitychange', schedule);
+    };
+  }, [ticketId, incomingKey, enabled]);
+
+  useEffect(() => {
+    if (!enabled || !outgoingKey) return;
+    const ids = outgoingKey.split(','),
+      abort = new AbortController();
+    let inFlight = false;
+    const update = () => {
+      if (inFlight || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      const pending = ids.filter((id) => !known.current.has(id));
+      if (!pending.length) return;
+      inFlight = true;
+      const params = new URLSearchParams({ ids: pending.join(',') });
+      void request<{ items: { id: string; readAt: string | null }[] }>(
+        `/api/v1/tickets/${ticketId}/receipts?${params}`,
+        { signal: abort.signal },
+      )
+        .then(({ items }) => {
+          if (abort.signal.aborted) return;
+          const fresh = items
+            .filter((item) => item.readAt && !known.current.has(item.id))
+            .map((item) => item.id);
+          if (fresh.length) {
+            remember(known.current, fresh);
+            setSeen(new Set(known.current));
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+    const initial = setTimeout(update, 250);
+    const timer = setInterval(update, 5000);
+    window.addEventListener('focus', update);
+    window.addEventListener('online', update);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(timer);
+      abort.abort();
+      window.removeEventListener('focus', update);
+      window.removeEventListener('online', update);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, [ticketId, outgoingKey, enabled]);
+  return seen;
+}

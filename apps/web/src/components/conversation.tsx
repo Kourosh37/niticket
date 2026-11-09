@@ -32,6 +32,7 @@ import { UploadProgress } from './upload-progress';
 import { VoiceRecorder } from './voice-recorder';
 import { date, dateTime, digits, request, RequestError } from '@/lib/utils';
 import { uploadFile } from '@/lib/upload';
+import { useMessageReceipts } from '@/lib/use-message-receipts';
 
 const MessageTimeline = dynamic(
   () => import('./message-timeline').then((module) => module.MessageTimeline),
@@ -62,6 +63,7 @@ function mergeMessages(previous: ChatMessage[], incoming: ChatMessage[]) {
       !previous ||
       previous.body !== message.body ||
       previous.visibility !== message.visibility ||
+      String(previous.readAt) !== String(message.readAt) ||
       previous.sender.name !== message.sender.name ||
       previous.sender.image !== message.sender.image ||
       JSON.stringify(previous.attachments) !== JSON.stringify(message.attachments)
@@ -152,6 +154,35 @@ export function Conversation({
       stopAudio();
     };
   }, []);
+
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
+  const onVisibleMessages = useCallback((ids: string[]) => {
+    if (mounted.current)
+      setVisibleIds((previous) => (previous.join(',') === ids.join(',') ? previous : ids));
+  }, []);
+  const visible = useMemo(() => {
+    const ids = new Set(visibleIds);
+    return messages.filter((message) => ids.has(message.id));
+  }, [messages, visibleIds]);
+  const incoming = visible
+    .filter(
+      (message) =>
+        message.sender.id !== actorId &&
+        !message.readAt &&
+        (!permissions.staff
+          ? message.visibility === 'PUBLIC'
+          : message.visibility === 'INTERNAL' || message.sender.id === ticket.creatorId),
+    )
+    .map((message) => message.id);
+  const outgoing = visible
+    .filter((message) => message.sender.id === actorId && !message.readAt)
+    .map((message) => message.id);
+  const seenIds = useMessageReceipts(
+    id,
+    incoming,
+    outgoing,
+    !permissions.readOnly && !searchOpen && !finding && !info,
+  );
 
   const refresh = useCallback(() => {
     if (fetching.current) return fetching.current;
@@ -651,6 +682,8 @@ export function Conversation({
           <MessageTimeline
             key={windowKey}
             messages={messages}
+            seenIds={seenIds}
+            onVisibleMessages={permissions.readOnly ? undefined : onVisibleMessages}
             actorId={actorId}
             older={!!olderCursor}
             loading={loadingOlder || finding}
