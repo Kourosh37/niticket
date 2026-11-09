@@ -25,6 +25,7 @@ async function palette(page: Page, dark: boolean) {
       'primary-hover',
       'on-primary',
       'accent',
+      'accent-foreground',
       'accent-strong',
       'border',
       'border-strong',

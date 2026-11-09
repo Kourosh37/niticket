@@ -13,6 +13,7 @@
   --primary-hover: #113264;
   --on-primary: #ffffff;
   --accent: #e6f4fe;
+  --accent-foreground: #113264;
   --accent-strong: #0d74ce;
   --border: #d9d9e0;
   --border-strong: #80838d;
@@ -41,6 +42,7 @@
   --primary-hover: #c2e6ff;
   --on-primary: #0d1520;
   --accent: #0d2847;
+  --accent-foreground: #c2e6ff;
   --accent-strong: #70b8ff;
   --border: #363a3f;
   --border-strong: #777b84;
@@ -133,8 +135,8 @@ button {
 }
 
 .theme-toggle:hover {
-  background: var(--bubble-own);
-  border-color: var(--bubble-border);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
 .auth-theme-control {
@@ -184,8 +186,8 @@ button {
 }
 
 .messenger-bubble.bubble-own {
-  background: var(--surface-alt);
-  border-color: var(--border-strong);
+  background: var(--bubble-own);
+  border-color: var(--bubble-border);
 }
 
 .messenger-bubble.bubble-private {
@@ -268,7 +270,7 @@ button {
 .easy-navigation a[aria-current],
 .search-kind-tabs button[aria-pressed='true'] {
   background: var(--accent);
-  color: var(--primary);
+  color: var(--accent-foreground);
   border-color: var(--bubble-border);
 }
 .easy-navigation a[aria-current] .dock-unread-count {

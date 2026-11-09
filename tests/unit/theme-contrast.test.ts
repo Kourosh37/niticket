@@ -22,6 +22,7 @@ it('keeps semantic text and button pairings above WCAG AA contrast in both theme
       ['muted', 'bubble-own'],
       ['on-primary', 'primary'],
       ['on-primary', 'primary-hover'],
+      ['accent-foreground', 'accent'],
       ['danger', 'danger-surface'],
       ['success', 'success-surface'],
       ['warning', 'warning-surface'],
