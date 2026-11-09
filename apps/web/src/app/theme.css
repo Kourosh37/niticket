@@ -82,8 +82,7 @@ input:autofill {
 }
 
 .upload-progress-track > span,
-.report-bar > span,
-.notification-count {
+.report-bar > span {
   background: var(--primary);
 }
 

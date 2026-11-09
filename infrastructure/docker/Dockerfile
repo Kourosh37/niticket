@@ -14,7 +14,9 @@ RUN --mount=type=cache,id=niticket-bun-cache,target=/root/.bun/install/cache \
 FROM dependencies AS tools
 COPY . .
 RUN bun run db:generate
-RUN mkdir -p apps/web/.next && chown -R bun:bun apps/web
+RUN mkdir -p apps/web/.next node_modules/.vite-temp node_modules/.vite \
+    && chown -R bun:bun apps/web \
+    && chown bun:bun node_modules/.vite-temp node_modules/.vite
 USER bun
 
 FROM tools AS build

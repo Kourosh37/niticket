@@ -33,24 +33,6 @@
   flex-shrink: 0;
   overflow: hidden;
 }
-.notification-bell {
-  position: relative;
-}
-.notification-count {
-  position: absolute;
-  top: -4px;
-  right: -5px;
-  min-width: 19px;
-  height: 19px;
-  padding: 0 4px;
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  background: var(--accent-strong);
-  color: var(--on-primary);
-  font-size: 10px;
-  line-height: 16px;
-  text-align: center;
-}
 .unit-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));

@@ -34,7 +34,8 @@ services:
     volumes: ['minio_data:/data']
     restart: unless-stopped
   storage-init:
-    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
+    image: niticket-tools
+    build: &tools-build { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
     depends_on: [minio]
     env_file: .env
     environment:
@@ -53,7 +54,8 @@ services:
     volumes: ['clamav_data:/var/lib/clamav']
     restart: unless-stopped
   migrate:
-    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
+    image: niticket-tools
+    build: *tools-build
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -112,6 +114,16 @@ services:
       interval: 30s
       start_period: 45s
       retries: 3
+  tools:
+    image: niticket-tools
+    build: *tools-build
+    profiles: [tools]
+    env_file: .env
+    environment:
+      <<: *app-env
+      SYNC_ROOT_ADMIN_ON_STARTUP: 'false'
+      S3_PUBLIC_ENDPOINT: http://minio:9000
+    command: [bun, --help]
 volumes:
   postgres_data:
   redis_data:

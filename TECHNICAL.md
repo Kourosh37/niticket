@@ -13,7 +13,7 @@
 | اجرا و مدیریت بسته | Bun 1.4.4 و فضای کاری چندبسته‌ای                          |
 | رابط و سرور وب     | Next.js 16، React، TypeScript و App Router                |
 | طراحی رابط         | Tailwind CSS، Radix UI، Lucide و فونت محلی وزیرمتن        |
-| فرم و اعتبارسنجی   | React Hook Form و Zod                                     |
+| فرم و اعتبارسنجی   | فرم‌های React و Zod                                       |
 | احراز هویت         | Better Auth، Argon2id و نشست‌های پایگاه داده              |
 | داده‌ها            | PostgreSQL 17 و Prisma 6                                  |
 | کارهای پس‌زمینه    | Redis و BullMQ                                            |
@@ -118,7 +118,7 @@ flowchart LR
 | مسیر                                               | کاربرد                                             |
 | -------------------------------------------------- | -------------------------------------------------- |
 | `/api/register`                                    | مسیر قدیمی؛ پاسخ ۴۱۰ و هدایت به ورود موبایلی       |
-| `/api/auth/*`                                      | مسیرهای مجاز ورود، خروج، تأیید ایمیل و رمز عبور    |
+| `/api/auth/*`                                      | مسیرهای مجاز ورود موبایلی، OTP، خروج و رمز عبور    |
 | `/api/v1/tickets`                                  | فهرست و ثبت درخواست دانشجو                         |
 | `/api/v1/conversations`                            | بازکردن مستقیم یا ادامه گفتگوی واحد بدون فرم عنوان |
 | `/api/v1/tickets/:id`                              | گفتگو و تاریخچه طبق نقش                            |
@@ -133,20 +133,19 @@ Outbox در PostgreSQL منبع پایدار کارهای پس‌زمینه اس
 ## توسعه، قالب‌بندی و آزمون
 
 ```sh
-bun run format
-bun run format:check
-bun run typecheck
-bun run lint
-bun run test
-bun run test:integration
-bun run build
-bun run test:e2e
-bun audit --prod --audit-level=high
+docker compose build tools
+docker compose run --rm tools bun run format:check
+docker compose run --rm tools bun run typecheck
+docker compose run --rm tools bun run lint
+docker compose run --rm tools bun run test
+docker compose run --rm tools bun run test:integration
+docker compose build web worker
+docker compose run --rm tools bun audit --prod --audit-level=high
 ```
 
 Prettier قالب فایل‌های TypeScript، React، CSS، JSON، YAML و مستندات را یکسان می‌کند. ESLint فاصلهٔ بخش‌های import، توابع و exportها را کنترل می‌کند. `bun run format` مدل Prisma را هم مرتب می‌کند. فایل‌های SQL مهاجرت اجراشده بازنویسی نمی‌شوند تا checksum و تاریخچهٔ استقرار تغییر نکند. فایل‌های تولیدشده و وابستگی‌ها وارد قالب‌بندی نمی‌شوند.
 
-آزمون یکپارچه به PostgreSQL، Redis، MinIO، ClamAV و Mailpit واقعی نیاز دارد. پایگاه آزمون باید نامی با پایان `_test` داشته باشد. آزمون مرورگر روی درگاه ۳۰۰۱ اجرا می‌شود و برای بررسی صوت از worker واقعی Docker استفاده می‌کند. دستورهای آماده‌سازی در [راهنمای استقرار](DEPLOYMENT.md) آمده‌اند.
+آزمون یکپارچه به PostgreSQL، Redis، MinIO و ClamAV واقعی نیاز دارد. پایگاه آزمون باید نامی با پایان `_test` داشته باشد. سرویس `tools` از پروفایل اختیاری استفاده می‌کند و وابستگی‌ها و خروجی بررسی‌ها را داخل کانتینر نگه می‌دارد؛ کد تست‌ها در مخزن حفظ می‌شود. آزمون‌های مرورگر در CI با Playwright روی درگاه ۳۰۰۱ اجرا می‌شوند و برای بررسی صوت از worker واقعی Docker استفاده می‌کنند. دستورهای آماده‌سازی در [راهنمای استقرار](DEPLOYMENT.md) آمده‌اند.
 
 آزمون‌ها دسترسی نقش‌ها، ورود موبایلی و OTP، تراکنش‌ها، نسخهٔ هم‌زمان، فایل خصوصی، اسکن، وویس مرورگر، پیش‌نمایش، پروفایل، تنظیمات و نمایش موبایل را پوشش می‌دهند. بررسی روی میکروفون و دستگاه‌های فیزیکی و آزمون بار گسترده همچنان باید در محیط مقصد انجام شود. SSO، MFA، تقویم SLA، نگهداری خودکار داده و استقرار با دسترس‌پذیری بالا در نسخهٔ فعلی پیاده‌سازی نشده‌اند.
 

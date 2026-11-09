@@ -8,16 +8,21 @@
 
 ## ۱. اجرای محلی با Docker
 
-به Bun 1.4.4، Docker Desktop یا Docker Engine همراه Compose نیاز دارید. Node و pnpm پیش‌نیاز نیستند. نسخهٔ محلی را با `bun --version` و فایل `.bun-version` تطبیق دهید. ساخت اولیه به اینترنت و حافظهٔ کافی برای بیلد و ClamAV نیاز دارد؛ حدود ۸ گیگابایت حافظهٔ آزاد مناسب است.
+فقط به Docker Desktop یا Docker Engine همراه Compose نیاز دارید. Bun 1.4.4، وابستگی‌ها، Prisma و ابزارهای صوت داخل ایمیج‌ها نصب می‌شوند. نصب Bun، Node یا بسته‌های پروژه روی میزبان لازم نیست. ساخت اولیه به اینترنت و حافظهٔ کافی برای بیلد و ClamAV نیاز دارد؛ حدود ۸ گیگابایت حافظهٔ آزاد مناسب است.
 
 در ریشهٔ پروژه اجرا کنید:
 
-پس از ساخت `.env` و پیش از اجرای Compose، مقدار `ADMIN_PHONE` را با شمارهٔ مدیر پر کنید؛ این مقدار برای شروع سرویس الزامی است.
+برای ساخت `.env` با رمزهای تصادفی، فرمان زیر را در PowerShell یا شل لینوکس اجرا کنید:
 
 ```sh
-bun scripts/init-env.mjs
-bun install --frozen-lockfile
-bun run db:generate
+docker run --rm --mount "type=bind,source=${PWD},target=/app" --workdir /app oven/bun:1.4.4-alpine bun scripts/init-env.mjs
+```
+
+در لینوکس گزینهٔ `--user "$(id -u):$(id -g)"` را به `docker run` اضافه کنید تا فایل با مالکیت کاربر میزبان ساخته شود.
+
+سپس مقدار `ADMIN_PHONE` را در `.env` با شمارهٔ مدیر پر کنید؛ این مقدار برای شروع سرویس الزامی است:
+
+```sh
 docker compose up -d --build
 docker compose ps
 ```
@@ -44,28 +49,27 @@ docker compose logs -f web
 
 کد با رویداد `sms.otp` ثبت می‌شود. پنل پیامکی در `packages/core/src/infrastructure/sms.ts` هنوز پیاده‌سازی نشده است؛ قبل از ارسال واقعی، تابع اتصال را تکمیل و `SMS_PROVIDER=panel` را فعال کنید. دسترسی به لاگ‌های حاوی کد باید به تیم توسعه محدود باشد.
 
-## ۲. اجرای وب خارج از Docker
+## ۲. اجرای ابزارها داخل Docker
+
+سرویس اختیاری `tools` از همان ایمیج مشترک migration و آماده‌سازی مخزن استفاده می‌کند. کد و وابستگی‌ها داخل ایمیج قرار دارند و پوشهٔ پروژه به آن bind نمی‌شود؛ فایل‌های تولیدشده با حذف کانتینر موقت پاک می‌شوند. پس از تغییر کد، ایمیج را دوباره بسازید:
 
 ```sh
-docker compose stop web worker
-docker compose up -d postgres redis minio clamav
-bun run db:generate
-bun run db:migrate
-bun --env-file=.env scripts/init-storage.ts
-bun run dev
+docker compose build tools
+docker compose run --rm tools bun run typecheck
+docker compose run --rm tools bun run lint
+docker compose run --rm tools bun run format:check
 ```
 
-برای پردازش فایل و اعلان‌ها، worker را در ترمینال دیگر اجرا کنید:
+برای همگام‌سازی دستی مدیر، بدون نصب ابزار محلی:
 
 ```sh
-bun run worker
+docker compose run --rm tools bun run admin:bootstrap
 ```
 
-این روش به `ffmpeg` و `ffprobe` در PATH سیستم نیاز دارد. جایگزین آن، worker داکری است که هر دو ابزار را دارد:
+برای اعمال تغییرات برنامه:
 
 ```sh
-docker compose build worker
-docker compose up -d --no-deps worker
+docker compose up -d --build
 ```
 
 ## ۳. متغیرهای محیطی
@@ -157,17 +161,13 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f web
 
 ```sh
 docker compose exec -T postgres createdb -U niticket niticket_test
-bun --env-file=.env scripts/test-database.mjs
-docker compose build worker
-docker compose up -d --no-deps --wait --wait-timeout 120 worker
-bun run test
-bun run test:integration
-bun run build
-bun --bun playwright install --with-deps chromium
-bun run test:e2e
+docker compose build tools
+docker compose run --rm tools bun scripts/test-database.mjs
+docker compose run --rm tools bun run test
+docker compose run --rm tools bun run test:integration
 ```
 
-روی ویندوز، در صورت وجود، Playwright از Edge نصب‌شده استفاده می‌کند. در محیط دیگر Chromium را با دستور بالا نصب کنید. نام کاربر پایگاه در دستور نمونه `niticket` است؛ اگر آن را تغییر داده‌اید، دستور را هماهنگ کنید. `TEST_DATABASE_URL` برای پایگاه آزمون دیگر قابل تنظیم است و نام آن باید به `_test` ختم شود.
+نام کاربر پایگاه در دستور نمونه `niticket` است؛ اگر آن را تغییر داده‌اید، دستور را هماهنگ کنید. `TEST_DATABASE_URL` برای پایگاه آزمون دیگر قابل تنظیم است و نام آن باید به `_test` ختم شود. اجرای کامل آزمون‌های مرورگری و نگهداری گزارش شکست بر عهدهٔ workflow کیفیت در CI است؛ برای اجرای معمول برنامه هیچ مرورگر یا ابزار تستی روی میزبان نصب نمی‌شود.
 
 ```sh
 docker compose ps
@@ -221,7 +221,7 @@ docker compose cp postgres:/tmp/niticket.dump ./niticket.dump
 
 ```sh
 docker compose stop web worker
-bun --env-file=.env scripts/reset-data.ts --database niticket --confirm-reset
+docker compose run --rm tools bun scripts/reset-data.ts --database niticket --confirm-reset
 docker compose exec -T redis redis-cli FLUSHDB ASYNC
 docker compose up -d --no-deps web worker
 ```
