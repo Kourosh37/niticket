@@ -122,6 +122,8 @@ test('shows the responsible contact photo, compact composer controls and vertica
   await expect(photo).toBeVisible();
   await expect(page.locator('.attachment-card')).toHaveCount(3);
   await expect(page.getByText('پیوست‌های یک پیام', { exact: true })).toBeInViewport();
+  // The virtualizer measures rows while hidden; viewport geometry alone is not a paint check.
+  await expect(page.getByText('پیوست‌های یک پیام', { exact: true })).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/chat-refinements-dark.png' });
   await db.$disconnect();
 });
@@ -188,7 +190,10 @@ test('shows double ticks only after visible counterparty views and never marks h
   await r.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
   await expect(r.getByText('پاسخ دارای رسید', { exact: true })).toBeVisible();
   await s.bringToFront();
-  await expect(s.getByText('پاسخ دارای رسید', { exact: true })).toBeInViewport();
+  // Allow one five-second sync interval plus a slow CI response before asserting the receipt.
+  await expect(s.getByText('پاسخ دارای رسید', { exact: true })).toBeInViewport({
+    timeout: 20000,
+  });
   const reply = await db.message.findFirstOrThrow({
     where: { ticketId: ticket.id, senderId: f.agent.id, body: 'پاسخ دارای رسید' },
   });

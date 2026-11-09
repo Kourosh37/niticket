@@ -345,7 +345,7 @@ test('three roles complete a ticket with private history notes, file previews an
   await expect(u).toHaveURL(origin + '/');
   await expect(u.getByRole('link', { name: 'درخواست جدید', exact: true })).toHaveCount(0);
   await u.goto('/notifications');
-  await expect(u.getByText('درخواست جدید ثبت شد', { exact: true })).toBeVisible();
+  await expect(u.getByRole('main').getByText('درخواست جدید ثبت شد', { exact: true })).toBeVisible();
   await u.goto(ticketUrl);
   await expect(u.locator('.messenger-contact h1')).toHaveText(f.student.name);
   await u.getByLabel('پاسخ شما', { exact: true }).fill('پاسخ مسئول واحد به دانشجو');
@@ -380,7 +380,9 @@ test('three roles complete a ticket with private history notes, file previews an
   });
   await processNotification(replyEvent.id, replyEvent.payload);
   await s.goto('/notifications');
-  await expect(s.getByText('پاسخ جدیدی برای درخواست ثبت شد', { exact: true })).toBeVisible();
+  await expect(
+    s.getByRole('main').getByText('پاسخ جدیدی برای درخواست ثبت شد', { exact: true }),
+  ).toBeVisible();
   await s.goto(ticketUrl);
   // All common document types are processed locally after authorized download.
   await s.getByLabel('پاسخ شما', { exact: true }).fill('مدارک دانشجو برای بررسی');

@@ -126,7 +126,7 @@ test('applies the system theme before paint, persists choices with CSP and synch
   expect(errors).toEqual([]);
 });
 
-test('uses only the requested palettes across requester, officer, admin, chat and modal screens', async ({
+test('uses semantic palettes across requester, officer, admin, chat and modal screens', async ({
   page,
 }) => {
   test.setTimeout(90000);

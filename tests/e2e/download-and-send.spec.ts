@@ -106,9 +106,9 @@ test('shows inline transfer progress and retains downloads across virtualized me
     node.scrollTop = 0;
   });
   await expect(page.locator(`[data-message-id="${ids[99]}"]`)).toHaveCount(0);
-  await page.locator('.messenger-scroll').evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
-  });
+  // Exercise a real keyboard scroll after the older rows have been measured.
+  await expect(page.getByText('پیام دانلود 50', { exact: true })).toBeVisible();
+  await page.locator('.messenger-scroll').press('End');
   await expect(row).toBeVisible();
   await card.getByRole('button', { name: `لغو دریافت ${filename}`, exact: true }).click();
   await expect(row.getByRole('status')).toHaveText('دریافت لغو شد');
