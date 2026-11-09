@@ -225,6 +225,7 @@
   gap: 10px;
 }
 .messenger-chat .messenger-input-row textarea {
+  scrollbar-width: none;
   flex: 1;
   width: 0;
   min-width: 0;
@@ -238,6 +239,9 @@
   resize: none;
   font-size: 16px;
   line-height: 1.6;
+}
+.messenger-chat .messenger-input-row textarea::-webkit-scrollbar {
+  display: none;
 }
 .messenger-chat .messenger-send {
   display: grid;
