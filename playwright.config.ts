@@ -27,7 +27,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'node --env-file=.env scripts/test-web.mjs',
+    command: 'bun --env-file=.env scripts/test-web.mjs',
     url: 'http://localhost:3001/login',
     reuseExistingServer: false,
     timeout: 120000,

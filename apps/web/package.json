@@ -3,10 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "node ../../scripts/prepare-assets.mjs && next dev --hostname 0.0.0.0",
-    "build": "node ../../scripts/prepare-assets.mjs && next build",
-    "start": "next start --hostname 0.0.0.0",
-    "typecheck": "tsc --noEmit"
+    "dev": "bun ../../scripts/prepare-assets.mjs && bun --bun next dev --hostname 0.0.0.0",
+    "build": "bun ../../scripts/prepare-assets.mjs && bun --bun next build",
+    "start": "bun --bun next start --hostname 0.0.0.0",
+    "typecheck": "bun --bun tsc --noEmit"
   },
   "dependencies": {
     "@niticket/core": "workspace:*",

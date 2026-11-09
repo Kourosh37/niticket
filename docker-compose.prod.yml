@@ -30,7 +30,7 @@ services:
     build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
     env_file: .env.production
     environment: { DATABASE_URL: '${MIGRATION_DATABASE_URL:?required}' }
-    command: [pnpm, db:migrate]
+    command: [bun, run, db:migrate]
     networks: [data]
     depends_on: { postgres: { condition: service_healthy } }
     restart: 'no'
@@ -61,7 +61,7 @@ services:
         test:
           [
             CMD,
-            node,
+            bun,
             -e,
             "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
           ],
@@ -90,7 +90,7 @@ services:
       test:
         [
           CMD,
-          node,
+          bun,
           -e,
           "const fs=require('fs');const path=require('path');process.exit(Date.now()-Number(fs.readFileSync(path.join(require('os').tmpdir(),'niticket-worker-heartbeat'),'utf8'))<120000?0:1)",
         ]

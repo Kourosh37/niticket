@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bootstrap.ts'], {
+const result = spawnSync(process.execPath, ['scripts/bootstrap.ts'], {
   env: process.env,
   stdio: 'inherit',
 });

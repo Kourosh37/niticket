@@ -1,0 +1,7 @@
+[run]
+# Respect the selected runtime even when a dependency CLI has a node shebang.
+bun = true
+
+[install]
+# Next's standalone output and shared root dependencies use the same layout on every platform.
+linker = "hoisted"

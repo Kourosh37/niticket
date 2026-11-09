@@ -8,16 +8,16 @@
 
 ## ۱. اجرای محلی با Docker
 
-به Node.js 24، pnpm 11.5.1، Docker Desktop یا Docker Engine همراه Compose نیاز دارید. ساخت اولیه به اینترنت و حافظهٔ کافی برای بیلد و ClamAV نیاز دارد؛ حدود ۸ گیگابایت حافظهٔ آزاد مناسب است.
+به Bun 1.4.4، Docker Desktop یا Docker Engine همراه Compose نیاز دارید. Node و pnpm پیش‌نیاز نیستند. نسخهٔ محلی را با `bun --version` و فایل `.bun-version` تطبیق دهید. ساخت اولیه به اینترنت و حافظهٔ کافی برای بیلد و ClamAV نیاز دارد؛ حدود ۸ گیگابایت حافظهٔ آزاد مناسب است.
 
 در ریشهٔ پروژه اجرا کنید:
 
 پس از ساخت `.env` و پیش از اجرای Compose، مقدار `ADMIN_PHONE` را با شمارهٔ مدیر پر کنید؛ این مقدار برای شروع سرویس الزامی است.
 
 ```sh
-node scripts/init-env.mjs
-pnpm install --frozen-lockfile
-pnpm db:generate
+bun scripts/init-env.mjs
+bun install --frozen-lockfile
+bun run db:generate
 docker compose up -d --build
 docker compose ps
 ```
@@ -49,16 +49,16 @@ docker compose logs -f web
 ```sh
 docker compose stop web worker
 docker compose up -d postgres redis minio clamav
-pnpm db:generate
-pnpm db:migrate
-pnpm exec tsx --env-file=.env scripts/init-storage.ts
-pnpm dev
+bun run db:generate
+bun run db:migrate
+bun --env-file=.env scripts/init-storage.ts
+bun run dev
 ```
 
 برای پردازش فایل و اعلان‌ها، worker را در ترمینال دیگر اجرا کنید:
 
 ```sh
-pnpm worker
+bun run worker
 ```
 
 این روش به `ffmpeg` و `ffprobe` در PATH سیستم نیاز دارد. جایگزین آن، worker داکری است که هر دو ابزار را دارد:
@@ -157,14 +157,14 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f web
 
 ```sh
 docker compose exec -T postgres createdb -U niticket niticket_test
-node --env-file=.env scripts/test-database.mjs
+bun --env-file=.env scripts/test-database.mjs
 docker compose build worker
 docker compose up -d --no-deps --wait --wait-timeout 120 worker
-pnpm test
-pnpm test:integration
-pnpm build
-pnpm exec playwright install --with-deps chromium
-pnpm test:e2e
+bun run test
+bun run test:integration
+bun run build
+bun --bun playwright install --with-deps chromium
+bun run test:e2e
 ```
 
 روی ویندوز، در صورت وجود، Playwright از Edge نصب‌شده استفاده می‌کند. در محیط دیگر Chromium را با دستور بالا نصب کنید. نام کاربر پایگاه در دستور نمونه `niticket` است؛ اگر آن را تغییر داده‌اید، دستور را هماهنگ کنید. `TEST_DATABASE_URL` برای پایگاه آزمون دیگر قابل تنظیم است و نام آن باید به `_test` ختم شود.
@@ -221,7 +221,7 @@ docker compose cp postgres:/tmp/niticket.dump ./niticket.dump
 
 ```sh
 docker compose stop web worker
-node --env-file=.env --import tsx scripts/reset-data.ts --database niticket --confirm-reset
+bun --env-file=.env scripts/reset-data.ts --database niticket --confirm-reset
 docker compose exec -T redis redis-cli FLUSHDB ASYNC
 docker compose up -d --no-deps web worker
 ```

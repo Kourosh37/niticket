@@ -25,6 +25,9 @@ if (!testUrl.pathname.endsWith('_test'))
 export default defineConfig({
   resolve: { alias },
   test: {
+    // Bun 1.4.4's ESM namespace interop drops Zod's named export when externalized.
+    // Transform it with Vite until https://github.com/oven-sh/bun/issues/39866 is fixed.
+    server: { deps: { inline: ['zod'] } },
     maxWorkers: 2,
     projects: [
       {

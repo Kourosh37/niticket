@@ -10,7 +10,7 @@
 
 | بخش                | فناوری                                                    |
 | ------------------ | --------------------------------------------------------- |
-| اجرا و مدیریت بسته | Node.js 24، pnpm 11.5.1 و فضای کاری چندبسته‌ای            |
+| اجرا و مدیریت بسته | Bun 1.4.4 و فضای کاری چندبسته‌ای                          |
 | رابط و سرور وب     | Next.js 16، React، TypeScript و App Router                |
 | طراحی رابط         | Tailwind CSS، Radix UI، Lucide و فونت محلی وزیرمتن        |
 | فرم و اعتبارسنجی   | React Hook Form و Zod                                     |
@@ -21,7 +21,9 @@
 | پیش‌نمایش سند      | PDF.js، Mammoth و read-excel-file؛ بدون سرویس نمایش خارجی |
 | آزمون و کیفیت      | Vitest، Testing Library، Playwright، ESLint و Prettier    |
 
-نسخهٔ دقیق وابستگی‌ها در `pnpm-lock.yaml` ثبت شده است.
+نسخهٔ دقیق وابستگی‌ها در `bun.lock` ثبت شده است. نسخهٔ Bun در `.bun-version`، `packageManager` و تصویر Docker یکسان و ثابت است. نصب CI و Docker با `--frozen-lockfile` انجام می‌شود؛ ساختار workspaceها و override امنیتی `deepmerge-ts` در `package.json` قرار دارند. فقط وابستگی‌های مشخص‌شده در `trustedDependencies` اجازهٔ اجرای اسکریپت نصب دارند.
+
+وب Next.js، worker، ابزارهای Prisma و TypeScript و آزمون‌ها با runtime خود Bun اجرا می‌شوند. تنظیم `run.bun` و فرمان‌های `bun --bun` از برگشت ناخواستهٔ CLIها به Node جلوگیری می‌کنند. importهای استاندارد `node:*` و `@types/node` برای APIهای سازگار باقی مانده‌اند؛ نصب Node یا pnpm لازم نیست. در Vitest، Zod به‌صورت inline پردازش می‌شود تا مشکل شناخته‌شدهٔ interop در Bun 1.4.4 روی اعتبارسنجی‌ها اثر نگذارد؛ کد اعتبارسنجی production تغییری نکرده است.
 
 ## نمای معماری
 
@@ -131,18 +133,18 @@ Outbox در PostgreSQL منبع پایدار کارهای پس‌زمینه اس
 ## توسعه، قالب‌بندی و آزمون
 
 ```sh
-pnpm format
-pnpm format:check
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm test:integration
-pnpm build
-pnpm test:e2e
-pnpm audit --prod --audit-level=high
+bun run format
+bun run format:check
+bun run typecheck
+bun run lint
+bun run test
+bun run test:integration
+bun run build
+bun run test:e2e
+bun audit --prod --audit-level=high
 ```
 
-Prettier قالب فایل‌های TypeScript، React، CSS، JSON، YAML و مستندات را یکسان می‌کند. ESLint فاصلهٔ بخش‌های import، توابع و exportها را کنترل می‌کند. `pnpm format` مدل Prisma را هم مرتب می‌کند. فایل‌های SQL مهاجرت اجراشده بازنویسی نمی‌شوند تا checksum و تاریخچهٔ استقرار تغییر نکند. فایل‌های تولیدشده و وابستگی‌ها وارد قالب‌بندی نمی‌شوند.
+Prettier قالب فایل‌های TypeScript، React، CSS، JSON، YAML و مستندات را یکسان می‌کند. ESLint فاصلهٔ بخش‌های import، توابع و exportها را کنترل می‌کند. `bun run format` مدل Prisma را هم مرتب می‌کند. فایل‌های SQL مهاجرت اجراشده بازنویسی نمی‌شوند تا checksum و تاریخچهٔ استقرار تغییر نکند. فایل‌های تولیدشده و وابستگی‌ها وارد قالب‌بندی نمی‌شوند.
 
 آزمون یکپارچه به PostgreSQL، Redis، MinIO، ClamAV و Mailpit واقعی نیاز دارد. پایگاه آزمون باید نامی با پایان `_test` داشته باشد. آزمون مرورگر روی درگاه ۳۰۰۱ اجرا می‌شود و برای بررسی صوت از worker واقعی Docker استفاده می‌کند. دستورهای آماده‌سازی در [راهنمای استقرار](DEPLOYMENT.md) آمده‌اند.
 

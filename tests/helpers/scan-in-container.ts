@@ -10,20 +10,7 @@ export async function scanInContainer(eventId: string) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       'docker',
-      [
-        'compose',
-        'exec',
-        '-T',
-        '-e',
-        'DATABASE_URL',
-        'worker',
-        'node',
-        '--import',
-        'tsx',
-        '--input-type=module',
-        '-e',
-        code,
-      ],
+      ['compose', 'exec', '-T', '-e', 'DATABASE_URL', 'worker', 'bun', '-e', code],
       {
         env: { ...process.env, DATABASE_URL: internal.toString() },
         stdio: ['pipe', 'ignore', 'inherit'],
