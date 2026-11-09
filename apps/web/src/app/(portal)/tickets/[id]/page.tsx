@@ -4,6 +4,7 @@ import { getTicket } from '@niticket/core/application/tickets';
 import { AppError } from '@niticket/core/domain/errors';
 import { currentPolicy } from '@/lib/policy';
 import { Conversation } from '@/components/conversation';
+import { searchReturnPath } from '@/lib/search';
 import { uuid } from '@niticket/core/validation';
 import { searchTerms } from '@niticket/core/domain/search-text';
 
@@ -37,11 +38,7 @@ export default async function Page({
       maxBytes={policy.maxUploadBytes}
       initialContext={detail.messageFocus ?? undefined}
       initialTerms={searchTerms((query.q ?? '').slice(0, 200), 'all').include.slice(0, 8)}
-      returnTo={
-        query.returnTo?.startsWith('/search?') && query.returnTo.length <= 2200
-          ? query.returnTo
-          : undefined
-      }
+      returnTo={searchReturnPath(query.returnTo)}
     />
   );
 }

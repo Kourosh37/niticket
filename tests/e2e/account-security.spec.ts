@@ -125,9 +125,9 @@ test('shows mobile numbers and navigates bounded user pages in both directions',
   await page.getByRole('link', { name: 'صفحه قبل', exact: true }).click();
   await expect(page.getByRole('heading', { name: `${name}-0`, exact: true })).toBeVisible();
   await page
-    .getByRole('textbox', { name: 'جستجوی کاربران', exact: true })
+    .getByRole('searchbox', { name: 'جستجوی کاربران', exact: true })
     .fill(`+98 ${number.slice(3)}`);
-  await page.getByRole('button', { name: 'جستجو', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'جستجو', exact: true })).toHaveCount(0);
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText(number.replace('+98', '0'));
   await db.$disconnect();

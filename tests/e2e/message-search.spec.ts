@@ -70,10 +70,12 @@ test('searches every chat, paginates results and opens an old matching message w
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await login(page, f.student.phoneNumber!, f.password);
-  await page.getByRole('link', { name: 'جستجو در همه پیام‌ها', exact: true }).click();
+  await page.getByRole('button', { name: 'جستجو در همه پیام‌ها', exact: true }).click();
   await page.getByRole('searchbox', { name: 'جستجو در همه پیام‌ها', exact: true }).fill(tag);
   const results = page.locator('[data-search-result]');
   await expect(results).toHaveCount(20);
+  expect(new URL(page.url()).pathname).toBe('/');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator(`[data-search-result="${ids[44]}"]`)).toBeVisible();
   await expect(page.getByText('PRIVATE_SEARCH_SECRET', { exact: false })).toHaveCount(0);
   await expect(page.getByText('FOREIGN_SEARCH_SECRET', { exact: false })).toHaveCount(0);
@@ -91,6 +93,24 @@ test('searches every chat, paginates results and opens an old matching message w
   await expect(
     page.getByRole('searchbox', { name: 'جستجو در همه پیام‌ها', exact: true }),
   ).toBeInViewport();
+  await page.getByRole('searchbox').focus();
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const geometry = await page.locator('.message-search-input').evaluate((box) => {
+      const input = box.querySelector('input')!;
+      const outer = box.getBoundingClientRect(),
+        inner = input.getBoundingClientRect();
+      return {
+        contained: inner.left >= outer.left && inner.right <= outer.right,
+        outline: getComputedStyle(input).outlineStyle,
+      };
+    });
+    expect(geometry.contained).toBe(true);
+    expect(geometry.outline).toBe('none');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
   await page.screenshot({ path: '.local/ui-preview/search-desktop.png' });
   await page.locator(`[data-search-result="${ids[44]}"] .search-result-main`).click();
   await expect(page).toHaveURL(new RegExp(`/tickets/${ticket.id}\\?message=${ids[44]}`));
@@ -146,7 +166,8 @@ test('searches inside a chat, navigates matches across result pages and preserve
   await expect(page.getByText('متن پیام 499', { exact: true })).toBeInViewport();
   await page.getByLabel('پاسخ شما', { exact: true }).fill('پیش‌نویس هنگام جستجو باقی بماند');
   await page.keyboard.press('Control+f');
-  const dialog = page.getByRole('dialog', { name: 'جستجو در این گفتگو', exact: true });
+  const dialog = page.getByRole('region', { name: 'جستجو در این گفتگو', exact: true });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(dialog).toBeVisible();
   await dialog
     .getByRole('searchbox', { name: 'جستجو در پیام‌های این گفتگو', exact: true })
@@ -186,7 +207,7 @@ test('searches inside a chat, navigates matches across result pages and preserve
       true,
     );
   }
-  await dialog.getByRole('button', { name: 'بستن', exact: true }).click();
+  await dialog.getByRole('button', { name: 'بستن جستجو', exact: true }).click();
   await page.getByRole('button', { name: 'آخرین پیام‌ها', exact: true }).click();
   await expect(page.getByText('متن پیام 499', { exact: true })).toBeInViewport();
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveValue(
@@ -281,5 +302,49 @@ test('filters file names and audio without downloading attachments and chooses o
   ).toBeVisible();
   await expect(page.getByLabel('نمایش پیام‌ها', { exact: true })).toHaveCount(0);
   expect(downloads).toBe(0);
+  await db.$disconnect();
+});
+
+test('filters administrative lists live and searches messages in place without a dialog', async ({
+  page,
+}) => {
+  const { fixtures } = await import('../helpers/fixtures');
+  const { db } = await import('@niticket/database');
+  const f = await fixtures(),
+    tag = `live${randomUUID().slice(0, 8)}`;
+  const ticket = await db.ticket.create({
+    data: {
+      creatorId: f.student.id,
+      departmentId: f.department.id,
+      subject: `${tag} subject`,
+      messages: { create: { senderId: f.student.id, body: `${tag} message` } },
+    },
+  });
+  await db.ticket.create({
+    data: {
+      creatorId: f.outsider.id,
+      departmentId: f.department.id,
+      subject: 'Other history record',
+    },
+  });
+  await login(page, f.admin.phoneNumber!, f.password);
+  await page.goto('/admin/departments');
+  await page.getByRole('searchbox', { name: 'جستجوی واحدها', exact: true }).fill(f.department.name);
+  await expect(page.locator('.admin-card h2')).toHaveCount(1);
+  await expect(page.locator('.admin-card h2')).toHaveText(f.department.name);
+  await expect(page).toHaveURL(/\/admin\/departments\?q=/);
+  await page.goto(`/admin/departments/${f.department.id}/history`);
+  await expect(page.locator('.ticket-row')).toHaveCount(2);
+  await page.getByRole('searchbox', { name: 'جستجو در تاریخچه واحد', exact: true }).fill(tag);
+  await expect(page.locator('.ticket-row')).toHaveCount(1);
+  await expect(page.locator('.ticket-row')).toHaveAttribute('href', `/tickets/${ticket.id}`);
+  const path = new URL(page.url()).pathname;
+  await page.getByRole('button', { name: 'جستجو در همه پیام‌ها', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'جستجو در همه پیام‌ها', exact: true }).fill(tag);
+  await expect(page.locator('[data-search-result]')).toHaveCount(1);
+  expect(new URL(page.url()).pathname).toBe(path);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'بستن جستجو', exact: true }).click();
+  await expect(page.locator('[data-search-result]')).toHaveCount(0);
   await db.$disconnect();
 });

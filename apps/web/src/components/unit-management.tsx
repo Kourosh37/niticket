@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Building2, Pencil, History, UserRound, Camera } from 'lucide-react';
 import { Button } from './ui/button';
+import { LiveSearchForm } from './live-search-form';
 import { Modal } from './ui/dialog';
 import { Avatar } from './avatar';
 import { AvatarUpload } from './avatar-upload';
@@ -98,7 +99,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
         </Button>
       </div>
       {!create && !editing && !person && reauthentication.confirmation}
-      <form className="surface filters" action="/admin/departments" style={{ marginBottom: 20 }}>
+      <LiveSearchForm className="surface filters live-search-spacing" action="/admin/departments">
         <input
           type="search"
           name="q"
@@ -107,13 +108,12 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
           defaultValue={q}
           maxLength={100}
         />
-        <Button variant="outline">جستجو</Button>
         {q && (
           <Link className="text-link" href="/admin/departments">
             همه واحدها
           </Link>
         )}
-      </form>
+      </LiveSearchForm>
       {error && !create && !person && !editing && (
         <p className="error-message" role="alert">
           {error}

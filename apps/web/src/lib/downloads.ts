@@ -17,9 +17,7 @@ const states = new Map<string, DownloadState>(),
   jobs = new Map<string, Job>();
 const listeners = new Set<() => void>(),
   urls = new Map<string, ReturnType<typeof setTimeout>>();
-const EMPTY: readonly DownloadState[] = [];
-let snapshot: readonly DownloadState[] = EMPTY,
-  queue: Job[] = [],
+let queue: Job[] = [],
   running = 0;
 const decimal = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
@@ -34,10 +32,6 @@ export const subscribeDownloads = (listener: () => void) => {
   };
 };
 
-export const getDownloads = () => snapshot;
-
-export const getEmptyDownloads = () => EMPTY;
-
 export const downloadFor = (id: string) => states.get(id) ?? null;
 
 export const downloadPercent = (state: DownloadState) =>
@@ -47,27 +41,28 @@ export const downloadPercent = (state: DownloadState) =>
       ? Math.min(99, Math.floor((state.received / state.total) * 100))
       : null;
 
-export function downloadSize(state: DownloadState) {
-  const size = state.total || state.received;
+export function formatFileSize(bytes: number, reference = bytes) {
   const [unit, divisor] =
-    size >= 1024 ** 3
+    reference >= 1024 ** 3
       ? (['GB', 1024 ** 3] as const)
-      : size >= 1024 ** 2
+      : reference >= 1024 ** 2
         ? (['MB', 1024 ** 2] as const)
-        : size >= 1024
+        : reference >= 1024
           ? (['KB', 1024] as const)
           : (['B', 1] as const);
-  const format = (bytes: number) =>
-    `${divisor === 1 ? Math.floor(bytes) : decimal.format(bytes / divisor)} ${unit}`;
+  return `${divisor === 1 ? Math.floor(bytes) : decimal.format(bytes / divisor)} ${unit}`;
+}
+
+export function downloadSize(state: DownloadState) {
+  const reference = state.total || state.received;
   return state.total
-    ? `${format(state.received)} / ${format(state.total)}`
-    : format(state.received);
+    ? `${formatFileSize(state.received, reference)} / ${formatFileSize(state.total, reference)}`
+    : formatFileSize(state.received);
 }
 
 function publish() {
   const inactive = [...states.values()].filter((state) => !jobs.has(state.id));
   for (const state of inactive.slice(0, Math.max(0, inactive.length - 8))) states.delete(state.id);
-  snapshot = states.size ? [...states.values()] : EMPTY;
   for (const listener of listeners) listener();
 }
 
@@ -198,17 +193,11 @@ export function cancelDownload(id: string) {
   if (!job) return;
   jobs.delete(id);
   job.controller.abort();
+  queue = queue.filter((pending) => pending !== job);
   const state = states.get(id);
   if (state) states.set(id, { ...state, status: 'cancelled', error: undefined });
   publish();
   pump();
-}
-
-export function dismissDownload(id: string) {
-  if (!jobs.has(id)) {
-    states.delete(id);
-    publish();
-  }
 }
 
 export function clearDownloads() {

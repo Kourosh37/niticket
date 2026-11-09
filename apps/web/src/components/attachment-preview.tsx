@@ -8,6 +8,7 @@ import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
 import { AudioPlayer } from './audio-player';
 import { DownloadButton } from './downloads';
+import { formatFileSize } from '@/lib/downloads';
 import { digits, checkSession } from '@/lib/utils';
 
 export type AttachmentInfo = {
@@ -286,7 +287,7 @@ export function AttachmentPreview({ file }: { file: AttachmentInfo }) {
           {image ? <ImageIcon size={20} /> : <FileText size={20} />}
           <div>
             <bdi>{file.filename}</bdi>
-            {file.size && <small>{digits(Math.ceil(file.size / 1024))} کیلوبایت</small>}
+            {file.size && <small dir="ltr">{formatFileSize(file.size)}</small>}
           </div>
           <button
             type="button"

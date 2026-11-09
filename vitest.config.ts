@@ -9,6 +9,7 @@ try {
   /* CI injects environment directly. */
 }
 const alias = {
+  '@': path.resolve('apps/web/src'),
   '@niticket/database': path.resolve('packages/database/src/index.ts'),
   '@niticket/core': path.resolve('packages/core/src'),
 };

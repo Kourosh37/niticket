@@ -1,128 +1,62 @@
-.download-tray {
-  position: fixed;
-  inset-inline-end: 18px;
-  bottom: 112px;
-  width: min(350px, calc(100vw - 24px));
-  z-index: 80;
-  border: 1px solid #d9e5dd;
-  border-radius: 17px;
-  background: #fff;
-  color: #2d4f3d;
-  box-shadow: 0 10px 35px #213d3520;
-  font-size: 12px;
-  overflow: hidden;
-}
-.messenger-app .download-tray {
-  top: 82px;
-  bottom: auto;
-}
-.download-tray-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 14px;
-  background: #f2f7f3;
-  border-bottom: 1px solid #e4ece6;
-}
-.download-tray-heading strong {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-.download-tray-heading > button,
-.download-item-heading > button {
+.attachment-card-meta {
   display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  border: 0;
-  background: transparent;
-  min-height: 34px;
-  min-width: 34px;
-  border-radius: 8px;
-  color: #5e7c68;
+  grid-template-columns: 20px minmax(0, 1fr) 30px 30px;
 }
-.download-tray-items {
-  max-height: min(44dvh, 360px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-}
-.download-item {
-  padding: 10px 14px;
-  border-bottom: 1px solid #edf1ee;
-}
-.download-item:last-child {
-  border-bottom: 0;
-}
-.download-item-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  justify-content: space-between;
-}
-.download-item-heading bdi {
-  font-weight: 600;
+.download-inline {
+  grid-column: 1 / -1;
   min-width: 0;
-  overflow-wrap: anywhere;
-  padding-top: 6px;
+  width: 100%;
+  padding-top: 4px;
 }
-.download-item-status {
+.download-inline-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  color: #718477;
+  gap: 4px 8px;
+  color: var(--foreground);
   font-size: 11px;
 }
-.download-item-status strong {
+.download-inline-heading > [role='status'] {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #397553;
 }
 .download-size {
-  font-size: 12px;
-  margin-top: 5px;
+  font-size: 11px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .download-progress-track {
-  height: 5px;
-  background: #edf2ed;
+  height: 4px;
+  background: var(--surface-alt);
   border-radius: 5px;
   overflow: hidden;
-  margin-top: 8px;
+  margin-top: 7px;
+  direction: ltr;
 }
 .download-progress-track > span {
   display: block;
   height: 100%;
-  background: #3c8b63;
+  background: var(--primary);
   border-radius: inherit;
   transition: width 100ms linear;
 }
 .download-error {
-  color: #a6423c;
+  color: var(--foreground);
   margin-top: 6px;
   font-size: 11px;
+  overflow-wrap: anywhere;
 }
-.download-full {
-  width: min(100%, 420px);
+.download-full-button {
+  width: fit-content;
 }
-.download-inline {
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid #e0e8e1;
-  border-radius: 10px;
+.preview-footer {
+  flex-wrap: wrap;
 }
-.download-inline > small {
-  color: #51755d;
-}
-.download-item > .button {
-  min-height: 32px;
-  padding: 4px 0;
-  font-size: 11px;
+.preview-footer > .download-inline {
+  flex-basis: 100%;
 }
 .download-spinner {
   animation: download-spin 900ms linear infinite;
@@ -132,38 +66,34 @@
     transform: rotate(360deg);
   }
 }
+.download-indeterminate > span {
+  animation: download-pending 1s ease-in-out infinite alternate;
+}
+@keyframes download-pending {
+  to {
+    transform: translateX(230%);
+  }
+}
 .audio-attachment {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 .audio-attachment > .audio-player {
-  flex: 1;
   min-width: 0;
 }
-.audio-attachment > .attachment-action {
-  flex-shrink: 0;
-}
-@media (max-width: 640px) {
-  .download-tray {
-    inset-inline-end: 12px;
-    width: min(350px, calc(100vw - 24px));
-  }
-}
-@media (max-height: 600px) {
-  .messenger-app .download-tray {
-    top: 70px;
-  }
-  .download-tray-items {
-    max-height: 30dvh;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .download-spinner {
+  .download-spinner,
+  .download-indeterminate > span {
     animation: none;
   }
   .download-progress-track > span {
     transition: none;
   }
+}
+
+.attachment-card-meta:has(> .download-inline) > div:not(.download-inline) > small {
+  display: none;
 }

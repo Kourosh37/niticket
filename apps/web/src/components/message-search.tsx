@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   X,
@@ -10,6 +11,7 @@ import {
   Lock,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
   UserRound,
 } from 'lucide-react';
 import type {
@@ -60,8 +62,10 @@ function SenderPicker({
     [cursor, setCursor] = useState<string | undefined>(),
     [data, setData] = useState<Awaited<ReturnType<typeof searchSenders>> | null>(null),
     [loading, setLoading] = useState(true),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [composing, setComposing] = useState(false);
   useEffect(() => {
+    if (composing) return;
     const abort = new AbortController();
     const timer = setTimeout(() => {
       const params = searchParameters({ q: query, ticketId, cursor });
@@ -86,10 +90,14 @@ function SenderPicker({
       clearTimeout(timer);
       abort.abort();
     };
-  }, [ticketId, query, cursor]);
+  }, [ticketId, query, cursor, composing]);
   return (
     <div className="search-sender-picker" aria-busy={loading}>
       <input
+        type="search"
+        enterKeyHint="search"
+        onCompositionStart={() => setComposing(true)}
+        onCompositionEnd={() => setComposing(false)}
         aria-label="پیدا کردن فرستنده"
         placeholder="نام فرستنده…"
         maxLength={100}
@@ -153,13 +161,28 @@ export function MessageSearch({
   initial = {},
   restore,
   onSelect,
+  inline = false,
+  autoFocus = true,
+  syncUrl = true,
+  returnPath = '/search',
+  onClose,
+  children,
 }: {
+  inline?: boolean;
+  autoFocus?: boolean;
+  syncUrl?: boolean;
+  returnPath?: string;
+  onClose?: () => void;
+  children?: React.ReactNode;
   actorId: string;
   privateAllowed: boolean;
   initial?: Partial<SearchFilters>;
   restore?: SearchSelection | null;
   onSelect?: (result: SearchResult, selection: SearchSelection) => void;
 }) {
+  const router = useRouter();
+  const pending = useRef<AbortController | null>(null);
+  const [composing, setComposing] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
       ...emptySearch,
       ...initial,
@@ -172,6 +195,7 @@ export function MessageSearch({
     [error, setError] = useState(''),
     [revision, setRevision] = useState(0),
     [active, setActive] = useState(restore?.index ?? 0),
+    [filtersOpen, setFiltersOpen] = useState(false),
     [senderOpen, setSenderOpen] = useState(false),
     [senderName, setSenderName] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
@@ -179,14 +203,27 @@ export function MessageSearch({
     scrollPage = useRef(false),
     restoreResult = useRef(restore?.data.items[restore.index]?.id);
   useEffect(() => {
-    searchInput.current?.focus({ preventScroll: true });
-  }, []);
+    if (autoFocus) searchInput.current?.focus({ preventScroll: true });
+  }, [autoFocus]);
   const enabled = ready(filters),
-    scoped = !!onSelect;
+    scoped = !!onSelect,
+    resultsShown = !children || !!filters.q.trim() || enabled;
+  const address = useCallback(
+    (value: SearchFilters) => {
+      const [path, query] = returnPath.split('?');
+      const params = new URLSearchParams(query);
+      params.delete('cursor');
+      searchParameters(value).forEach((value, key) => params.set(key, value));
+      return `${path}?${params}`;
+    },
+    [returnPath],
+  );
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || composing) return;
     const abort = new AbortController();
+    pending.current = abort;
     const timer = setTimeout(() => {
+      if (!scoped && syncUrl) window.history.replaceState(null, '', address(filters));
       void request<SearchData>(`/api/v1/search?${searchParameters({ ...filters, cursor })}`, {
         signal: abort.signal,
       })
@@ -230,9 +267,10 @@ export function MessageSearch({
       clearTimeout(timer);
       abort.abort();
     };
-  }, [filters, cursor, enabled, revision, scoped]);
+  }, [filters, cursor, enabled, revision, scoped, composing, syncUrl, address]);
 
   function change(patch: Partial<SearchFilters>) {
+    pending.current?.abort();
     const next = { ...filters, ...patch };
     setFilters(next);
     restoreResult.current = undefined;
@@ -241,26 +279,27 @@ export function MessageSearch({
     setActive(0);
     setLoading(ready(next));
     setError('');
-    if (!ready(next)) setData(null);
-    if (!onSelect) window.history.replaceState(null, '', `/search?${searchParameters(next)}`);
+    setData(null);
+    if (!ready(next) && !onSelect && syncUrl) window.history.replaceState(null, '', address(next));
   }
 
   const resultUrl = (result: SearchResult) =>
     `/tickets/${result.ticketId}?${new URLSearchParams({
       message: result.id,
       q: filters.q,
-      returnTo: `/search?${searchParameters(filters)}`,
+      returnTo: syncUrl ? address(filters) : returnPath,
     })}`;
 
   function select(index: number) {
     const result = data?.items[index];
     if (!result || loading) return;
     if (onSelect) onSelect(result, { filters, data: data!, index, cursor, previous });
-    else window.location.assign(resultUrl(result));
+    else router.push(resultUrl(result));
   }
 
   function page(next: boolean) {
     if (loading || !data) return;
+    pending.current?.abort();
     setLoading(true);
     scrollPage.current = true;
     restoreResult.current = undefined;
@@ -283,7 +322,11 @@ export function MessageSearch({
     ['links', 'لینک‌ها'],
   ];
   return (
-    <div className="message-search-panel" ref={panel}>
+    <div
+      className={`message-search-panel${inline ? ' message-search-inline' : ''}`}
+      ref={panel}
+      data-search-active={enabled || !!filters.q.trim() ? 'true' : undefined}
+    >
       <div className="message-search-controls">
         <div className="message-search-input">
           <Search size={20} aria-hidden="true" />
@@ -292,19 +335,28 @@ export function MessageSearch({
             ref={searchInput}
             aria-label={filters.ticketId ? 'جستجو در پیام‌های این گفتگو' : 'جستجو در همه پیام‌ها'}
             autoComplete="off"
+            enterKeyHint="search"
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={() => setComposing(false)}
             placeholder="چه پیامی را پیدا کنیم؟"
             maxLength={200}
             value={filters.q}
             onChange={(e) => change({ q: e.target.value })}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
+              if (e.key === 'Escape' && onClose) {
+                e.preventDefault();
+                onClose();
+              }
               if (e.key === 'Enter') {
                 e.preventDefault();
                 select(active);
               }
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setActive((value) => Math.min((data?.items.length ?? 1) - 1, value + 1));
+                setActive((value) =>
+                  Math.max(0, Math.min((data?.items.length ?? 1) - 1, value + 1)),
+                );
                 const index = Math.max(0, Math.min((data?.items.length ?? 1) - 1, active + 1));
                 searchInput.current
                   ?.closest('.message-search-panel')
@@ -322,240 +374,267 @@ export function MessageSearch({
               }
             }}
           />
+          {onClose && (
+            <button type="button" aria-label="بستن جستجو" onClick={onClose}>
+              <ArrowRight size={18} />
+            </button>
+          )}
           {!!filters.q && (
             <button type="button" aria-label="پاک کردن جستجو" onClick={() => change({ q: '' })}>
               <X size={18} />
             </button>
           )}
         </div>
-        <div className="search-kind-tabs" role="group" aria-label="نوع پیام">
-          {kinds.map(([kind, name]) => (
-            <button
-              key={kind}
-              type="button"
-              aria-pressed={filters.kind === kind}
-              onClick={() => change({ kind })}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-        <details className="message-search-filters">
-          <summary>
-            <SlidersHorizontal size={16} /> فیلترهای بیشتر
-          </summary>
-          <div className="search-filter-fields">
-            <label>
-              روش جستجو
-              <select
-                aria-label="روش جستجو"
-                value={filters.mode}
-                onChange={(e) => change({ mode: e.target.value as SearchFilters['mode'] })}
-              >
-                <option value="all">همه واژه‌ها</option>
-                <option value="phrase">عبارت دقیق</option>
-                <option value="any">یکی از واژه‌ها</option>
-              </select>
-            </label>
-            <label>
-              ترتیب نتایج
-              <select
-                aria-label="ترتیب نتایج"
-                value={filters.sort}
-                onChange={(e) => change({ sort: e.target.value as SearchFilters['sort'] })}
-              >
-                <option value="newest">جدیدترین پیام‌ها</option>
-                <option value="oldest">قدیمی‌ترین پیام‌ها</option>
-              </select>
-            </label>
-            <label>
-              از تاریخ (میلادی)
-              <input
-                type="date"
-                aria-label="از تاریخ"
-                value={filters.from ?? ''}
-                onChange={(e) => change({ from: e.target.value || undefined })}
-              />
-            </label>
-            <label>
-              تا تاریخ (میلادی)
-              <input
-                type="date"
-                aria-label="تا تاریخ"
-                value={filters.to ?? ''}
-                onChange={(e) => change({ to: e.target.value || undefined })}
-              />
-            </label>
-            {privateAllowed && (
-              <label>
-                نمایش پیام‌ها
-                <select
-                  aria-label="نمایش پیام‌ها"
-                  value={filters.visibility}
-                  onChange={(e) =>
-                    change({ visibility: e.target.value as SearchFilters['visibility'] })
-                  }
+        {children && !resultsShown && (
+          <button
+            type="button"
+            className="search-filter-toggle"
+            aria-label="فیلترهای جستجو"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            <SlidersHorizontal size={16} /> فیلتر
+          </button>
+        )}
+        {(resultsShown || filtersOpen) && (
+          <>
+            <div className="search-kind-tabs" role="group" aria-label="نوع پیام">
+              {kinds.map(([kind, name]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={filters.kind === kind}
+                  onClick={() => change({ kind })}
                 >
-                  <option value="all">عمومی و خصوصی</option>
-                  <option value="public">فقط عمومی</option>
-                  <option value="internal">فقط خصوصی واحد</option>
-                </select>
-              </label>
-            )}
-            <div className="search-from-buttons">
+                  {name}
+                </button>
+              ))}
+            </div>
+            <details className="message-search-filters">
+              <summary>
+                <SlidersHorizontal size={16} /> فیلترهای بیشتر
+              </summary>
+              <div className="search-filter-fields">
+                <label>
+                  روش جستجو
+                  <select
+                    aria-label="روش جستجو"
+                    value={filters.mode}
+                    onChange={(e) => change({ mode: e.target.value as SearchFilters['mode'] })}
+                  >
+                    <option value="all">همه واژه‌ها</option>
+                    <option value="phrase">عبارت دقیق</option>
+                    <option value="any">یکی از واژه‌ها</option>
+                  </select>
+                </label>
+                <label>
+                  ترتیب نتایج
+                  <select
+                    aria-label="ترتیب نتایج"
+                    value={filters.sort}
+                    onChange={(e) => change({ sort: e.target.value as SearchFilters['sort'] })}
+                  >
+                    <option value="newest">جدیدترین پیام‌ها</option>
+                    <option value="oldest">قدیمی‌ترین پیام‌ها</option>
+                  </select>
+                </label>
+                <label>
+                  از تاریخ (میلادی)
+                  <input
+                    type="date"
+                    aria-label="از تاریخ"
+                    value={filters.from ?? ''}
+                    onChange={(e) => change({ from: e.target.value || undefined })}
+                  />
+                </label>
+                <label>
+                  تا تاریخ (میلادی)
+                  <input
+                    type="date"
+                    aria-label="تا تاریخ"
+                    value={filters.to ?? ''}
+                    onChange={(e) => change({ to: e.target.value || undefined })}
+                  />
+                </label>
+                {privateAllowed && (
+                  <label>
+                    نمایش پیام‌ها
+                    <select
+                      aria-label="نمایش پیام‌ها"
+                      value={filters.visibility}
+                      onChange={(e) =>
+                        change({ visibility: e.target.value as SearchFilters['visibility'] })
+                      }
+                    >
+                      <option value="all">عمومی و خصوصی</option>
+                      <option value="public">فقط عمومی</option>
+                      <option value="internal">فقط خصوصی واحد</option>
+                    </select>
+                  </label>
+                )}
+                <div className="search-from-buttons">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      change({ senderId: filters.senderId === actorId ? undefined : actorId });
+                      setSenderName('پیام‌های من');
+                    }}
+                    aria-pressed={filters.senderId === actorId}
+                  >
+                    <UserRound size={15} /> پیام‌های من
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSenderOpen((value) => !value)}
+                    aria-expanded={senderOpen}
+                  >
+                    انتخاب فرستنده
+                  </Button>
+                </div>
+                {senderOpen && (
+                  <SenderPicker
+                    ticketId={filters.ticketId}
+                    choose={(id, name) => {
+                      change({ senderId: id });
+                      setSenderName(name);
+                      setSenderOpen(false);
+                    }}
+                  />
+                )}
+                <p className="search-syntax-hint">
+                  برای عبارت دقیق از <bdi>&quot;ثبت نام&quot;</bdi> و برای حذف یک واژه از{' '}
+                  <bdi>-لغو</bdi> استفاده کنید.
+                </p>
+              </div>
+            </details>
+            <div className="search-active-filters">
+              {filters.ticketId && !onSelect && (
+                <button type="button" onClick={() => change({ ticketId: undefined })}>
+                  فقط این گفتگو <X size={14} />
+                </button>
+              )}
+              {filters.departmentId && (
+                <button type="button" onClick={() => change({ departmentId: undefined })}>
+                  واحد انتخاب‌شده <X size={14} />
+                </button>
+              )}
+              {filters.senderId && (
+                <button type="button" onClick={() => change({ senderId: undefined })}>
+                  {senderName || 'فرستنده انتخاب‌شده'} <X size={14} />
+                </button>
+              )}
+              {(filters.from || filters.to) && (
+                <button type="button" onClick={() => change({ from: undefined, to: undefined })}>
+                  بازهٔ تاریخ <X size={14} />
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      {resultsShown && (
+        <div
+          className="message-search-results"
+          aria-label="نتایج جستجوی پیام‌ها"
+          aria-busy={loading}
+        >
+          {loading && (
+            <p role="status" className="search-status">
+              در حال جستجو در پیام‌ها…
+            </p>
+          )}
+          {error && (
+            <div role="alert" className="error-message">
+              {error}
               <Button
                 type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  change({ senderId: filters.senderId === actorId ? undefined : actorId });
-                  setSenderName('پیام‌های من');
-                }}
-                aria-pressed={filters.senderId === actorId}
-              >
-                <UserRound size={15} /> پیام‌های من
-              </Button>
-              <Button
-                type="button"
-                size="sm"
                 variant="ghost"
-                onClick={() => setSenderOpen((value) => !value)}
-                aria-expanded={senderOpen}
+                onClick={() => {
+                  setLoading(true);
+                  setCursor(undefined);
+                  setPrevious([]);
+                  setRevision((value) => value + 1);
+                }}
               >
-                انتخاب فرستنده
+                تلاش دوباره
               </Button>
             </div>
-            {senderOpen && (
-              <SenderPicker
-                ticketId={filters.ticketId}
-                choose={(id, name) => {
-                  change({ senderId: id });
-                  setSenderName(name);
-                  setSenderOpen(false);
-                }}
-              />
-            )}
-            <p className="search-syntax-hint">
-              برای عبارت دقیق از <bdi>&quot;ثبت نام&quot;</bdi> و برای حذف یک واژه از{' '}
-              <bdi>-لغو</bdi> استفاده کنید.
+          )}
+          {!enabled && (
+            <div className="search-empty">
+              <Search size={32} />
+              <p>
+                {filters.q.trim()
+                  ? 'حداقل دو حرف بنویسید.'
+                  : 'در تمام پیام‌ها جستجو کنید یا نوع پیام را انتخاب کنید.'}
+              </p>
+            </div>
+          )}
+          {enabled && !loading && data && !data.items.length && (
+            <p role="status" className="search-empty">
+              پیامی پیدا نشد. عبارت یا فیلترها را تغییر دهید.
             </p>
-          </div>
-        </details>
-        <div className="search-active-filters">
-          {filters.ticketId && !onSelect && (
-            <button type="button" onClick={() => change({ ticketId: undefined })}>
-              فقط این گفتگو <X size={14} />
-            </button>
           )}
-          {filters.departmentId && (
-            <button type="button" onClick={() => change({ departmentId: undefined })}>
-              واحد انتخاب‌شده <X size={14} />
-            </button>
-          )}
-          {filters.senderId && (
-            <button type="button" onClick={() => change({ senderId: undefined })}>
-              {senderName || 'فرستنده انتخاب‌شده'} <X size={14} />
-            </button>
-          )}
-          {(filters.from || filters.to) && (
-            <button type="button" onClick={() => change({ from: undefined, to: undefined })}>
-              بازهٔ تاریخ <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="message-search-results" aria-label="نتایج جستجوی پیام‌ها" aria-busy={loading}>
-        {loading && (
-          <p role="status" className="search-status">
-            در حال جستجو در پیام‌ها…
-          </p>
-        )}
-        {error && (
-          <div role="alert" className="error-message">
-            {error}
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setLoading(true);
-                setCursor(undefined);
-                setPrevious([]);
-                setRevision((value) => value + 1);
-              }}
-            >
-              تلاش دوباره
-            </Button>
-          </div>
-        )}
-        {!enabled && (
-          <div className="search-empty">
-            <Search size={32} />
-            <p>
-              {filters.q.trim()
-                ? 'حداقل دو حرف بنویسید.'
-                : 'در تمام پیام‌ها جستجو کنید یا نوع پیام را انتخاب کنید.'}
-            </p>
-          </div>
-        )}
-        {enabled && !loading && data && !data.items.length && (
-          <p role="status" className="search-empty">
-            پیامی پیدا نشد. عبارت یا فیلترها را تغییر دهید.
-          </p>
-        )}
-        {enabled &&
-          data?.items.map((result, index) => (
-            <article
-              key={result.id}
-              className={`search-result ${active === index ? 'search-result-active' : ''}`}
-              data-search-result={result.id}
-            >
-              {onSelect ? (
-                <button
-                  className="search-result-main"
-                  type="button"
-                  disabled={loading}
-                  onClick={() => select(index)}
-                >
-                  <ResultContent result={result} terms={data.terms} showChat={!onSelect} />
-                </button>
-              ) : (
-                <Link
-                  prefetch={false}
-                  className="search-result-main"
-                  aria-disabled={loading}
-                  tabIndex={loading ? -1 : undefined}
-                  href={resultUrl(result)}
-                  onClick={(event) => {
-                    if (loading) event.preventDefault();
-                  }}
-                >
-                  <ResultContent result={result} terms={data.terms} showChat={!onSelect} />
-                </Link>
-              )}
-              <div className="search-result-actions">
-                {!onSelect && (
+          {enabled &&
+            data?.items.map((result, index) => (
+              <article
+                key={result.id}
+                className={`search-result ${active === index ? 'search-result-active' : ''}`}
+                data-search-result={result.id}
+              >
+                {onSelect ? (
+                  <button
+                    className="search-result-main"
+                    type="button"
+                    disabled={loading}
+                    onClick={() => select(index)}
+                  >
+                    <ResultContent result={result} terms={data.terms} showChat={!onSelect} />
+                  </button>
+                ) : (
+                  <Link
+                    prefetch={false}
+                    className="search-result-main"
+                    aria-disabled={loading}
+                    tabIndex={loading ? -1 : undefined}
+                    href={resultUrl(result)}
+                    onClick={(event) => {
+                      if (loading) event.preventDefault();
+                    }}
+                  >
+                    <ResultContent result={result} terms={data.terms} showChat={!onSelect} />
+                  </Link>
+                )}
+                <div className="search-result-actions">
+                  {!onSelect && (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => change({ ticketId: result.ticketId })}
+                    >
+                      فقط این گفتگو
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={loading}
-                    onClick={() => change({ ticketId: result.ticketId })}
+                    onClick={() => {
+                      change({ senderId: result.senderId });
+                      setSenderName(result.senderName);
+                    }}
                   >
-                    فقط این گفتگو
+                    پیام‌های این فرستنده
                   </button>
-                )}
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => {
-                    change({ senderId: result.senderId });
-                    setSenderName(result.senderName);
-                  }}
-                >
-                  پیام‌های این فرستنده
-                </button>
-              </div>
-            </article>
-          ))}
-      </div>
+                </div>
+              </article>
+            ))}
+        </div>
+      )}
+      {!resultsShown && children}
       {data && enabled && (
         <div className="message-search-footer">
           <span>

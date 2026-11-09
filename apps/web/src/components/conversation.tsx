@@ -21,6 +21,7 @@ import { searchParameters } from '@/lib/search';
 import { ActiveAudio } from './audio-player';
 import { stopAudio } from '@/lib/audio-playback';
 import { Avatar } from './avatar';
+import { ThemeToggle } from './theme-toggle';
 import { HistoryNote } from './history-note';
 import { AttachmentPreview } from './attachment-preview';
 import { Button } from './ui/button';
@@ -348,6 +349,7 @@ export function Conversation({
         event.preventDefault();
         setSearchOpen(true);
       }
+      if (event.key === 'Escape') setSearchOpen(false);
     };
     document.addEventListener('keydown', keydown);
     return () => document.removeEventListener('keydown', keydown);
@@ -517,7 +519,9 @@ export function Conversation({
           className="messenger-info-button"
           aria-label="جستجو در این گفتگو"
           disabled={busy || recording || loadingOlder || finding}
-          onClick={() => setSearchOpen(true)}
+          aria-expanded={searchOpen}
+          aria-controls="chat-message-search"
+          onClick={() => setSearchOpen((open) => !open)}
         >
           <Search size={22} />
         </button>
@@ -529,6 +533,7 @@ export function Conversation({
         >
           <Info size={23} />
         </button>
+        <ThemeToggle />
       </header>
       {permissions.readOnly && (
         <p className="messenger-readonly">
@@ -537,7 +542,7 @@ export function Conversation({
         </p>
       )}
       <ActiveAudio />
-      {(focusId || finding) && (
+      {!searchOpen && (focusId || finding) && (
         <div className="messenger-search-context" aria-label="پیام پیدا‌شده">
           <div>
             <strong>
@@ -603,24 +608,49 @@ export function Conversation({
         </p>
       )}
       <div className="messenger-message-area">
-        <MessageTimeline
-          key={windowKey}
-          messages={messages}
-          actorId={actorId}
-          older={!!olderCursor}
-          loading={loadingOlder || finding}
-          load={loadOlder}
-          attachments={focusId ? [] : data.attachments}
-          unit={ticket.department.name}
-          apiRef={timeline}
-          onBottomChange={onBottomChange}
-          jumpRequest={jumpRequest}
-          focusId={focusId}
-          highlightTerms={highlightTerms}
-          newer={!!newerCursor}
-          loadNewer={loadNewer}
-        />
-        {newMessages && (
+        {searchOpen && (
+          <section
+            id="chat-message-search"
+            className="messenger-inline-search"
+            aria-label="جستجو در این گفتگو"
+          >
+            <MessageSearch
+              actorId={actorId}
+              privateAllowed={permissions.staff || permissions.readOnly}
+              inline
+              syncUrl={false}
+              initial={{ ticketId: id }}
+              restore={searchSelection}
+              onClose={() => setSearchOpen(false)}
+              onSelect={(result, selected) => void showResult(result, selected)}
+            />
+          </section>
+        )}
+        <div
+          className="messenger-timeline-content"
+          style={searchOpen ? { visibility: 'hidden' } : undefined}
+          inert={searchOpen}
+          aria-hidden={searchOpen}
+        >
+          <MessageTimeline
+            key={windowKey}
+            messages={messages}
+            actorId={actorId}
+            older={!!olderCursor}
+            loading={loadingOlder || finding}
+            load={loadOlder}
+            attachments={focusId ? [] : data.attachments}
+            unit={ticket.department.name}
+            apiRef={timeline}
+            onBottomChange={onBottomChange}
+            jumpRequest={jumpRequest}
+            focusId={focusId}
+            highlightTerms={highlightTerms}
+            newer={!!newerCursor}
+            loadNewer={loadNewer}
+          />
+        </div>
+        {!searchOpen && newMessages && (
           <Button
             type="button"
             className="messenger-jump"
@@ -789,21 +819,6 @@ export function Conversation({
           )}
         </form>
       )}
-      <Modal
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
-        title="جستجو در این گفتگو"
-        description={counterpart}
-        wide
-      >
-        <MessageSearch
-          actorId={actorId}
-          privateAllowed={permissions.staff || permissions.readOnly}
-          initial={{ ticketId: id }}
-          restore={searchSelection}
-          onSelect={(result, selected) => void showResult(result, selected)}
-        />
-      </Modal>
       <Modal
         open={info}
         onOpenChange={(value) => {

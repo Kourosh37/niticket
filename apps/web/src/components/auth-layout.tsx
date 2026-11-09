@@ -1,9 +1,13 @@
 import { GraduationCap } from 'lucide-react';
 import Link from 'next/link';
+import { ThemeToggle } from './theme-toggle';
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="auth-page auth-simple" id="main-content">
+      <div className="auth-theme-control">
+        <ThemeToggle />
+      </div>
       <section className="auth-story">
         <Link href="/login" className="brand">
           <span className="brand-mark">

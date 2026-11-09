@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Pencil } from 'lucide-react';
 import { Button } from './ui/button';
+import { LiveSearchForm } from './live-search-form';
 import { Modal } from './ui/dialog';
 import { Avatar } from './avatar';
 import { useReauthentication } from './reauthentication';
@@ -77,10 +78,12 @@ export function AdminUsers({
         </p>
       )}
       <section className="surface">
-        <form className="filters">
+        <LiveSearchForm className="filters" action="/admin/users">
           <div className="search-field">
             <Search size={17} />
             <input
+              type="search"
+              enterKeyHint="search"
               name="q"
               aria-label="جستجوی کاربران"
               placeholder="نام یا شماره موبایل…"
@@ -88,8 +91,7 @@ export function AdminUsers({
               defaultValue={q}
             />
           </div>
-          <Button variant="outline">جستجو</Button>
-        </form>
+        </LiveSearchForm>
         {data.items.map((user) => (
           <article key={user.id} className="admin-card user-management-row">
             <div className="admin-card-header">

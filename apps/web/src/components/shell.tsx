@@ -26,7 +26,13 @@ import { Button } from './ui/button';
 import { NotificationBell } from './notification-bell';
 import { Avatar } from './avatar';
 import { SessionGuard } from './session-guard';
-import { DownloadTray } from './downloads';
+import { DownloadScope } from './downloads';
+import { ThemeToggle } from './theme-toggle';
+import dynamic from 'next/dynamic';
+
+const MessageSearch = dynamic(() =>
+  import('./message-search').then((module) => module.MessageSearch),
+);
 
 type Props = {
   user: { id: string; name: string; isAdmin: boolean; staff: boolean; image?: string | null };
@@ -44,6 +50,35 @@ export function Shell({
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState(false);
+  const inboxRoute = !user.isAdmin && ['/', '/tickets', '/workspace'].includes(path);
+
+  function openSearch() {
+    const field = document.querySelector<HTMLInputElement>(
+      '#main-content .message-search-input input',
+    );
+    if (field) {
+      field.focus();
+      field.scrollIntoView({ block: 'nearest' });
+    } else if (inboxRoute) {
+      const params = new URLSearchParams(window.location.search);
+      params.set('search', '1');
+      router.replace(`${path}?${params}`, { scroll: false });
+    } else setGlobalSearch((value) => !value);
+  }
+
+  const search = globalSearch && !inboxRoute && !/^\/tickets\/(?!new$)[^/]+$/.test(path) && (
+    <section className="shell-inline-search" aria-label="جستجو در همه پیام‌ها">
+      <MessageSearch
+        actorId={user.id}
+        privateAllowed={user.staff || user.isAdmin}
+        inline
+        syncUrl={false}
+        returnPath={path}
+        onClose={() => setGlobalSearch(false)}
+      />
+    </section>
+  );
   const [error, setError] = useState('');
   const sidebar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -141,7 +176,7 @@ export function Shell({
     return (
       <div className={cn('easy-app', chatPage && 'messenger-app')}>
         <SessionGuard />
-        <DownloadTray key={user.id} />
+        <DownloadScope key={user.id} />
         {!chatPage && (
           <header className="easy-header">
             <div className="easy-header-inner">
@@ -155,9 +190,15 @@ export function Shell({
                 </div>
               </Link>
               <div className="easy-header-actions">
-                <Link href="/search" className="icon-link" aria-label="جستجو در همه پیام‌ها">
+                <ThemeToggle />
+                <button
+                  type="button"
+                  onClick={openSearch}
+                  className="icon-link"
+                  aria-label="جستجو در همه پیام‌ها"
+                >
                   <Search size={21} />
-                </Link>
+                </button>
                 <NotificationBell />
                 <Link href="/profile" className="easy-account" aria-label="حساب من">
                   <Avatar name={user.name} image={user.image} small />
@@ -168,6 +209,7 @@ export function Shell({
           </header>
         )}
         <main id="main-content" className={cn('easy-main', chatPage && 'messenger-main')}>
+          {search}
           {children}
         </main>
         {!chatPage && (
@@ -192,7 +234,7 @@ export function Shell({
   return (
     <div className="app-frame">
       <SessionGuard />
-      <DownloadTray key={user.id} />
+      <DownloadScope key={user.id} />
       {open && (
         <button className="drawer-backdrop" aria-label="بستن منو" onClick={() => setOpen(false)} />
       )}
@@ -282,9 +324,15 @@ export function Shell({
             <span title={supportDescription}>{supportDescription}</span>
           </div>
           <div className="topbar-actions">
-            <Link href="/search" className="icon-link" aria-label="جستجو در همه پیام‌ها">
+            {!/^\/tickets\/(?!new$)[^/]+$/.test(path) && <ThemeToggle />}
+            <button
+              type="button"
+              onClick={openSearch}
+              className="icon-link"
+              aria-label="جستجو در همه پیام‌ها"
+            >
               <Search size={21} />
-            </Link>
+            </button>
             <span className="today">
               {new Intl.DateTimeFormat('fa-IR', {
                 dateStyle: 'long',
@@ -297,6 +345,7 @@ export function Shell({
           </div>
         </header>
         <main id="main-content" className="page-content">
+          {search}
           {children}
         </main>
         <footer className="app-footer">

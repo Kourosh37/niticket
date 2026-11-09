@@ -24,7 +24,7 @@ async function login(page: Page, phoneNumber: string, password: string) {
   await expect(page).toHaveURL(origin + '/');
 }
 
-test('shows real transferred bytes, cancels and retries downloads after their message is virtualized away', async ({
+test('shows inline transfer progress and retains downloads across virtualized message rows', async ({
   page,
   context,
 }) => {
@@ -81,12 +81,14 @@ test('shows real transferred bytes, cancels and retries downloads after their me
   await network.send('Network.emulateNetworkConditions', {
     offline: false,
     latency: 20,
-    downloadThroughput: 128 * 1024,
+    // Keep the transfer pending through screenshots and virtualized scrolling on slower CI runners.
+    downloadThroughput: 32 * 1024,
     uploadThroughput: -1,
   });
   await page.getByRole('button', { name: `دریافت ${filename}`, exact: true }).click();
-  const tray = page.getByRole('complementary', { name: 'دریافت فایل‌ها', exact: true }),
-    row = tray.locator(`[data-download-id="${file.id}"]`);
+  const card = page.locator(`[data-message-id="${ids[99]}"] .attachment-card`),
+    row = card.locator(`[data-download-id="${file.id}"]`);
+  await expect(page.locator('.download-tray')).toHaveCount(0);
   const progress = row.getByRole('progressbar', { name: `دریافت ${filename}`, exact: true });
   await expect(progress).toBeVisible();
   await expect
@@ -97,14 +99,18 @@ test('shows real transferred bytes, cancels and retries downloads after their me
   await expect(row.locator('.download-size')).toHaveAttribute('dir', 'ltr');
   await expect(row.locator('.download-kilobytes')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await tray.screenshot({ path: '.local/ui-preview/download-progress-390.png' });
+  await card.screenshot({ path: '.local/ui-preview/download-progress-390.png' });
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('.messenger-scroll').evaluate((node) => {
     node.scrollTop = 0;
   });
   await expect(page.locator(`[data-message-id="${ids[99]}"]`)).toHaveCount(0);
-  await row.getByRole('button', { name: `لغو دریافت ${filename}`, exact: true }).click();
+  await page.locator('.messenger-scroll').evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await expect(row).toBeVisible();
+  await card.getByRole('button', { name: `لغو دریافت ${filename}`, exact: true }).click();
   await expect(row.getByRole('status')).toHaveText('دریافت لغو شد');
   await expect(progress).toHaveCount(0);
   await network.send('Network.emulateNetworkConditions', {
@@ -114,7 +120,7 @@ test('shows real transferred bytes, cancels and retries downloads after their me
     uploadThroughput: -1,
   });
   const complete = page.waitForEvent('download');
-  await row.getByRole('button', { name: `تلاش دوباره برای ${filename}`, exact: true }).click();
+  await card.getByRole('button', { name: `تلاش دوباره برای ${filename}`, exact: true }).click();
   const download = await complete;
   expect(download.suggestedFilename()).toBe(filename);
   expect(await download.failure()).toBeNull();

@@ -15,6 +15,7 @@ export function InboxRefresh() {
       if (
         checking ||
         document.visibilityState !== 'visible' ||
+        document.querySelector('[data-search-active="true"]') ||
         document.activeElement?.matches('input, select, textarea')
       )
         return;

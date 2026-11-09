@@ -6,6 +6,7 @@ import { listTickets } from '@niticket/core/application/tickets';
 import { TicketList } from '@/components/ticket-list';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/avatar';
+import { LiveSearchForm } from '@/components/live-search-form';
 
 export default async function Page({
   params,
@@ -54,16 +55,17 @@ export default async function Page({
         </div>
       ))}
       <section className="surface">
-        <form className="filters">
+        <LiveSearchForm className="filters">
           <input
+            type="search"
+            enterKeyHint="search"
             name="q"
             aria-label="جستجو در تاریخچه واحد"
             defaultValue={query.q}
             placeholder="جستجوی موضوع درخواست…"
             maxLength={100}
           />
-          <Button variant="outline">جستجو</Button>
-        </form>
+        </LiveSearchForm>
         <TicketList
           tickets={tickets.items}
           canCreate={false}

@@ -24,6 +24,7 @@ export function NewTicket({
     [previous, setPrevious] = useState<(string | undefined)[]>([]),
     [loading, setLoading] = useState(false);
   const first = useRef(true);
+  const [composing, setComposing] = useState(false);
   const [search, setSearch] = useState(''),
     [openingId, setOpeningId] = useState<string | null>(null),
     [error, setError] = useState('');
@@ -58,6 +59,7 @@ export function NewTicket({
       first.current = false;
       return;
     }
+    if (composing) return;
     const abort = new AbortController();
     const timer = setTimeout(() => {
       const query = new URLSearchParams({ q: search.trim(), ...(cursor ? { cursor } : {}) });
@@ -80,7 +82,7 @@ export function NewTicket({
       clearTimeout(timer);
       abort.abort();
     };
-  }, [search, cursor]);
+  }, [search, cursor, composing]);
   return (
     <div className="easy-new-ticket messenger-picker">
       <Link href="/" className="easy-back">
@@ -96,6 +98,10 @@ export function NewTicket({
           <div className="unit-search">
             <Search size={20} />
             <input
+              type="search"
+              enterKeyHint="search"
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={() => setComposing(false)}
               aria-label="جستجوی واحد"
               placeholder="نام واحد را بنویسید…"
               value={search}

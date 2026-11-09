@@ -1,0 +1,243 @@
+/* Every UI color resolves to one of the four colors in its active palette. */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --palette-1: rgb(244, 190, 56);
+  --palette-2: rgb(237, 218, 94);
+  --palette-3: rgb(113, 149, 30);
+  --palette-4: rgb(88, 117, 41);
+  --background: var(--palette-1);
+  --surface: var(--palette-2);
+  --surface-alt: var(--palette-1);
+  --foreground: var(--palette-4);
+  --muted: var(--foreground);
+  --primary: var(--palette-4);
+  --on-primary: var(--palette-2);
+  --accent: var(--palette-1);
+  --accent-strong: var(--palette-3);
+  --border: var(--palette-3);
+  --border-strong: var(--palette-4);
+  --focus: var(--palette-4);
+  --overlay: var(--palette-4);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --palette-1: rgb(9, 35, 40);
+  --palette-2: rgb(18, 84, 79);
+  --palette-3: rgb(42, 131, 95);
+  --palette-4: rgb(139, 187, 146);
+  --background: var(--palette-1);
+  --surface: var(--palette-1);
+  --surface-alt: var(--palette-2);
+  --foreground: var(--palette-4);
+  --primary: var(--palette-4);
+  --on-primary: var(--palette-1);
+  --accent: var(--palette-4);
+  --accent-strong: var(--palette-3);
+  --border: var(--palette-2);
+  --border-strong: var(--palette-3);
+  --focus: var(--palette-4);
+  --overlay: var(--palette-2);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.easy-app,
+.auth-page.auth-simple,
+.app-frame {
+  background: var(--background);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+input:autofill {
+  -webkit-text-fill-color: var(--foreground);
+  box-shadow: 0 0 0 1000px var(--surface) inset;
+}
+
+.upload-progress-track > span,
+.report-bar > span,
+.notification-count {
+  background: var(--primary);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--focus);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+
+.message-search-panel mark,
+.messenger-bubble mark {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  accent-color: var(--primary);
+  caret-color: var(--foreground);
+}
+
+button {
+  color: inherit;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--foreground);
+  outline-offset: 2px;
+  touch-action: manipulation;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+
+.auth-theme-control {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  inset-inline-end: max(16px, env(safe-area-inset-left));
+}
+
+.auth-page.auth-simple {
+  position: relative;
+  padding-top: 76px;
+}
+
+.button-primary:hover,
+.button-danger {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--on-primary);
+}
+
+.button-danger {
+  border-style: double;
+  border-width: 3px;
+}
+
+.easy-navigation a[aria-current],
+.sidebar-nav a.active,
+.search-kind-tabs button[aria-pressed='true'],
+.auth-mode-tabs button[aria-selected='true'] {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+.avatar,
+.empty-icon {
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+
+.messenger-bubble,
+.messenger-bubble.bubble-own,
+.messenger-bubble.bubble-private {
+  color: var(--foreground);
+}
+
+.messenger-bubble.bubble-own {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+
+.messenger-bubble.bubble-private {
+  background: var(--surface);
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+.error-message,
+.download-error {
+  color: var(--foreground);
+}
+
+.error-message {
+  background: var(--surface);
+  border-inline-start: 4px solid var(--border-strong);
+}
+
+.success-message {
+  background: var(--surface-alt);
+  color: var(--foreground);
+  border-inline-start: 4px double var(--border-strong);
+}
+
+.theme-toggle svg {
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .easy-header-inner {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .easy-header-actions {
+    gap: 8px;
+  }
+  .easy-brand > div {
+    min-width: 0;
+  }
+  .easy-brand small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+  }
+  .messenger-header {
+    gap: 7px;
+    padding-inline: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .easy-brand small {
+    display: none;
+  }
+  .easy-brand {
+    gap: 7px;
+  }
+  .easy-brand > span {
+    width: 36px;
+    height: 40px;
+  }
+  .easy-brand strong {
+    font-size: 18px;
+  }
+  .easy-header-actions {
+    gap: 5px;
+  }
+  .messenger-header .avatar {
+    display: none;
+  }
+}

@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { currentActor } from '@/lib/session';
 import { MessageSearch } from '@/components/message-search';
 import { messageSearchSchema } from '@niticket/core/application/message-search';
+import { searchFilterFields } from '@/lib/search';
 import { userRole } from '@niticket/core/domain/authorization';
 
 export default async function Page({
@@ -12,21 +13,9 @@ export default async function Page({
 }) {
   const actor = await currentActor(),
     query = await searchParams;
-  const fields = [
-    'q',
-    'ticketId',
-    'departmentId',
-    'senderId',
-    'from',
-    'to',
-    'kind',
-    'mode',
-    'sort',
-    'visibility',
-  ];
   const parsed = messageSearchSchema.safeParse(
     Object.fromEntries(
-      fields
+      searchFilterFields
         .filter((key) => typeof query[key] === 'string' && query[key] !== '')
         .map((key) => [key, query[key]]),
     ),

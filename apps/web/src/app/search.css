@@ -15,7 +15,7 @@
   flex-direction: column;
   min-height: 0;
   height: min(690px, 70dvh);
-  color: #284a3c;
+  color: var(--foreground);
 }
 .search-page .message-search-panel {
   height: auto;
@@ -27,14 +27,14 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #f4f7f4;
-  border: 1px solid #dce6df;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 0 12px;
   min-height: 50px;
 }
 .message-search-input:focus-within {
-  outline: 2px solid #34745b;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .message-search-input > svg {
@@ -81,20 +81,20 @@
 .search-kind-tabs button {
   border: 1px solid transparent;
   border-radius: 10px;
-  background: #f2f5f2;
-  color: #516b5c;
+  background: var(--surface);
+  color: var(--foreground);
   min-height: 40px;
   padding: 7px 13px;
   font-size: 13px;
 }
 .search-kind-tabs button[aria-pressed='true'] {
-  background: #e2efe7;
-  border-color: #93b8a1;
-  color: #205b43;
+  background: var(--surface-alt);
+  border-color: var(--border);
+  color: var(--foreground);
   font-weight: 600;
 }
 .message-search-filters {
-  border-bottom: 1px solid #e3eae5;
+  border-bottom: 1px solid var(--border);
   padding: 12px 0;
 }
 .message-search-filters summary {
@@ -131,9 +131,9 @@
   min-height: 42px;
   font-size: 14px;
   padding: 8px;
-  border: 1px solid #d9e3dc;
+  border: 1px solid var(--border);
   border-radius: 9px;
-  background: white;
+  background: var(--surface);
 }
 .search-from-buttons,
 .search-syntax-hint,
@@ -147,12 +147,12 @@
 }
 .search-syntax-hint {
   font-size: 12px;
-  color: #728276;
+  color: var(--foreground);
 }
 .search-sender-picker {
   padding: 10px;
   border-radius: 10px;
-  border: 1px solid #dce6df;
+  border: 1px solid var(--border);
 }
 .search-sender-options {
   display: flex;
@@ -161,8 +161,8 @@
   margin-top: 8px;
 }
 .search-sender-options > button {
-  border: 1px solid #dce6df;
-  background: #f7faf7;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 8px;
   padding: 7px 10px;
   min-height: 38px;
@@ -183,7 +183,7 @@
   gap: 7px;
   border: 0;
   border-radius: 8px;
-  background: #e8f0e9;
+  background: var(--surface-alt);
   padding: 7px 10px;
   margin-top: 10px;
   font-size: 12px;
@@ -202,7 +202,7 @@
 }
 .search-status {
   padding: 12px;
-  color: #647d6c;
+  color: var(--foreground);
   font-size: 13px;
 }
 .search-empty {
@@ -211,17 +211,17 @@
   gap: 14px;
   text-align: center;
   padding: 48px 16px;
-  color: #7a8c7e;
+  color: var(--foreground);
   font-size: 14px;
 }
 .search-result {
-  border-bottom: 1px solid #e7ece8;
+  border-bottom: 1px solid var(--border);
   padding: 5px;
   border-radius: 12px;
   min-width: 0;
 }
 .search-result-active {
-  background: #f1f7f2;
+  background: var(--surface);
 }
 .search-result-main {
   display: flex;
@@ -239,7 +239,7 @@
 }
 .search-result-main:hover,
 .search-result-main:focus-visible {
-  background: #eaf2eb;
+  background: var(--surface-alt);
 }
 .search-result-main[aria-disabled='true'] {
   opacity: 0.6;
@@ -259,11 +259,11 @@
 }
 .search-result-heading time {
   font-size: 11px;
-  color: #7b8a7c;
+  color: var(--foreground);
 }
 .search-result-sender {
   font-size: 12px;
-  color: #6a8270;
+  color: var(--foreground);
 }
 .search-result-excerpt {
   font-size: 14px;
@@ -274,8 +274,8 @@
 }
 .message-search-panel mark,
 .messenger-bubble mark {
-  background: #ffe6a0;
-  color: #4a3b15;
+  background: var(--surface-alt);
+  color: var(--foreground);
   border-radius: 3px;
 }
 .search-result-file {
@@ -283,7 +283,7 @@
   align-items: flex-start;
   gap: 7px;
   font-size: 12px;
-  color: #576e60;
+  color: var(--foreground);
   margin-top: 7px;
 }
 .search-result-file svg {
@@ -299,11 +299,11 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #987238;
+  color: var(--foreground);
 }
 .search-open-message {
   font-size: 11px;
-  color: #367257;
+  color: var(--foreground);
   margin-top: 7px;
 }
 .search-result-actions {
@@ -315,7 +315,7 @@
 .search-result-actions button {
   min-height: 30px;
   font-size: 11px;
-  color: #688774;
+  color: var(--foreground);
   border: 0;
   background: transparent;
   padding: 3px 0;
@@ -329,25 +329,12 @@
   padding-top: 12px;
   flex-shrink: 0;
   font-size: 12px;
-  color: #6a7d6d;
+  color: var(--foreground);
 }
 .message-search-footer nav {
   display: flex;
   gap: 7px;
   flex-wrap: wrap;
-}
-.modal-content:has(.message-search-panel) {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: 92dvh;
-}
-.modal-content:has(.message-search-panel) > .modal-title,
-.modal-content:has(.message-search-panel) > .muted {
-  flex-shrink: 0;
-}
-.modal-content:has(.message-search-panel) > .muted {
-  margin-bottom: 14px;
 }
 .messenger-search-context {
   display: flex;
@@ -357,8 +344,8 @@
   gap: 8px;
   flex-shrink: 0;
   padding: 8px max(14px, calc((100% - 1040px) / 2));
-  background: #fff7df;
-  border-bottom: 1px solid #e8ddb7;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
 .messenger-search-context > div {
@@ -372,14 +359,14 @@
 .messenger-search-context > div > button:not(.button) {
   border: 0;
   background: transparent;
-  color: #6d774c;
+  color: var(--foreground);
   min-height: 36px;
 }
 .messenger-match-navigation {
   gap: 3px !important;
 }
 .messenger-bubble[data-search-focused='true'] {
-  outline: 2px solid #cdab4f;
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 .messenger-search-feedback {
@@ -423,52 +410,169 @@
     width: 34px;
   }
 }
-@media (max-height: 600px) {
-  .modal-content:has(.message-search-panel) {
-    height: calc(100dvh - 16px);
-    max-height: calc(100dvh - 16px);
-    padding: 14px;
-  }
-  .modal-content:has(.message-search-panel) > .muted {
-    display: none;
-  }
-  .modal-content:has(.message-search-panel) > .modal-title {
-    margin-bottom: 8px;
-    font-size: 17px;
-  }
-  .modal-content .message-search-panel {
-    height: auto;
-    flex: 1;
-  }
-  .modal-content .search-kind-tabs {
+
+.message-search-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+.message-search-input {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.message-search-input:focus-within {
+  outline: none;
+  border-color: var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+.message-search-input input {
+  flex: 1;
+  width: 0;
+}
+.message-search-input input:focus-visible,
+.message-search-input input:focus {
+  outline: none;
+  box-shadow: none;
+  border: 0;
+}
+.message-search-input > button {
+  border-radius: 9px;
+  outline-offset: -3px;
+  min-width: 32px;
+}
+.message-search-inline {
+  height: auto;
+}
+.message-search-inline .search-filter-fields {
+  max-height: none;
+  overflow: visible;
+}
+.message-search-inline .message-search-results {
+  overflow: visible;
+}
+.inbox-panel > .message-search-inline > .message-search-controls {
+  padding: 14px 20px 0;
+}
+.inbox-panel > .message-search-inline > .message-search-results,
+.inbox-panel > .message-search-inline > .message-search-footer {
+  padding: 12px 20px;
+}
+.inbox-department-filter {
+  padding: 12px 20px 0;
+}
+.inbox-department-filter select {
+  max-width: 420px;
+}
+.shell-inline-search {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.live-search-spacing {
+  margin-bottom: 20px;
+}
+.messenger-timeline-content {
+  position: absolute;
+  inset: 0;
+}
+.messenger-inline-search {
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  padding: 12px max(12px, calc((100% - 920px) / 2));
+}
+.messenger-inline-search .message-search-panel {
+  height: 100%;
+}
+.messenger-inline-search .message-search-results {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.messenger-inline-search .search-filter-fields {
+  max-height: 22dvh;
+  overflow-y: auto;
+}
+.messenger-inline-search .message-search-input {
+  min-height: 44px;
+}
+.messenger-inline-search .search-kind-tabs {
+  margin-top: 8px;
+}
+.messenger-inline-search .message-search-filters {
+  padding-block: 5px;
+}
+.messenger-inline-search .message-search-footer {
+  padding-top: 6px;
+}
+.messenger-inline-search .message-search-footer .button {
+  min-height: 34px;
+}
+.messenger-inline-search .search-empty {
+  padding: 20px 8px;
+}
+.search-field,
+.unit-search {
+  min-width: 0;
+}
+.search-field input,
+.unit-search input {
+  min-width: 0;
+}
+@media (max-width: 400px) {
+  .messenger-inline-search .search-kind-tabs {
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    margin-top: 6px;
+    gap: 2px;
   }
-  .modal-content .search-kind-tabs button {
-    padding-inline: 3px;
+  .messenger-inline-search .search-kind-tabs button {
+    padding-inline: 1px;
     font-size: 11px;
     min-height: 34px;
   }
-  .modal-content .message-search-input {
-    min-height: 42px;
+  .inbox-panel > .message-search-inline > .message-search-controls {
+    padding-inline: 12px;
   }
-  .modal-content .message-search-input input {
-    padding-block: 8px;
+  .inbox-panel > .message-search-inline > .message-search-results,
+  .inbox-panel > .message-search-inline > .message-search-footer {
+    padding-inline: 12px;
   }
-  .modal-content .message-search-filters {
+}
+
+.search-filter-toggle {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+@media (max-height: 600px) {
+  .messenger-inline-search {
+    padding-block: 6px;
+  }
+  .messenger-inline-search .message-search-input input {
+    min-height: 40px;
+    padding-block: 7px;
+  }
+  .messenger-inline-search .search-kind-tabs button {
+    min-height: 30px;
     padding-block: 4px;
   }
-  .modal-content .search-filter-fields {
-    max-height: 24dvh;
+  .messenger-inline-search .message-search-filters summary {
+    min-height: 26px;
   }
-  .modal-content .message-search-footer {
-    padding-top: 6px;
-  }
-  .modal-content .message-search-footer .button {
-    min-height: 32px;
+  .messenger-inline-search .message-search-footer {
+    gap: 4px;
     font-size: 11px;
   }
-  .modal-content .search-empty {
-    padding-block: 16px;
+  .messenger-inline-search .message-search-footer .button {
+    min-height: 30px;
+    padding: 3px 7px;
+    font-size: 11px;
   }
 }

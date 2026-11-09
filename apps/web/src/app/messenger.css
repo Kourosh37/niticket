@@ -16,8 +16,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #233e32;
-  background: #f2f6f0;
+  color: var(--foreground);
+  background: var(--surface);
   font-size: 15px;
 }
 .messenger-header {
@@ -26,8 +26,8 @@
   align-items: center;
   gap: 13px;
   padding: 14px 24px;
-  background: white;
-  border-bottom: 1px solid #e1e8df;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   z-index: 3;
 }
 .messenger-back,
@@ -39,11 +39,11 @@
   border: 0;
   border-radius: 13px;
   background: transparent;
-  color: #4c6a55;
+  color: var(--foreground);
 }
 .messenger-back:hover,
 .messenger-info-button:hover {
-  background: #eef4ec;
+  background: var(--surface);
 }
 .messenger-contact {
   flex: 1;
@@ -58,7 +58,7 @@
   white-space: nowrap;
 }
 .messenger-contact p {
-  color: #778573;
+  color: var(--foreground);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -75,9 +75,9 @@
   justify-content: center;
   gap: 6px;
   padding: 7px 15px;
-  background: #e9f1e5;
+  background: var(--surface-alt);
   font-size: 12px;
-  color: #687e60;
+  color: var(--foreground);
 }
 .messenger-message-area {
   flex: 1;
@@ -91,7 +91,7 @@
   overscroll-behavior-y: contain;
   overflow-anchor: none;
   scrollbar-width: thin;
-  scrollbar-color: #bdcdb8 transparent;
+  scrollbar-color: var(--border-strong) transparent;
   outline-offset: -3px;
 }
 .messenger-stream {
@@ -103,7 +103,7 @@
 .messenger-load-older {
   display: flex !important;
   margin: 0 auto 20px;
-  background: white;
+  background: var(--surface);
 }
 .messenger-empty {
   min-height: 250px;
@@ -112,7 +112,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  color: #6b8062;
+  color: var(--foreground);
   padding: 35px 16px;
 }
 .messenger-empty > span {
@@ -121,12 +121,12 @@
   display: grid;
   place-items: center;
   border-radius: 25px;
-  background: #e4eddf;
+  background: var(--surface-alt);
   margin-bottom: 18px;
 }
 .messenger-empty h2 {
   font-size: 18px;
-  color: #36573c;
+  color: var(--foreground);
   margin-bottom: 6px;
 }
 .messenger-empty p {
@@ -141,35 +141,35 @@
 .messenger-day > span {
   border-radius: 8px;
   padding: 3px 12px;
-  background: #e6eddf;
-  color: #79876e;
+  background: var(--surface-alt);
+  color: var(--foreground);
   font-size: 11px;
 }
 .messenger-bubble {
   max-width: min(78%, 580px);
   min-width: 120px;
   width: fit-content;
-  background: white;
-  border: 1px solid #e2e9dc;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px 18px 18px 5px;
   padding: 11px 16px 7px;
   margin: 0 auto 14px 0;
-  box-shadow: 0 1px 2px #2a462408;
+  box-shadow: none;
 }
 .messenger-bubble.bubble-own {
   margin: 0 0 14px auto;
-  background: #e1efdd;
-  border-color: #d7e6d0;
+  background: var(--surface-alt);
+  border-color: var(--border);
   border-radius: 18px 18px 5px 18px;
 }
 .messenger-bubble.bubble-private {
-  background: #fff4d9;
-  border-color: #ead6a3;
+  background: var(--surface-alt);
+  border-color: var(--border);
 }
 .messenger-sender {
   display: block;
   font-size: 11px;
-  color: #66815b;
+  color: var(--foreground);
   margin-bottom: 3px;
 }
 .messenger-bubble .message-body {
@@ -185,7 +185,7 @@
   align-items: center;
   gap: 4px;
   font-size: 10px;
-  color: #7b8d70;
+  color: var(--foreground);
   margin-top: 4px;
 }
 .messenger-bubble .message-attachments {
@@ -208,15 +208,15 @@
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  box-shadow: 0 3px 15px #24462820;
+  box-shadow: none;
 }
 .messenger-composer {
   flex-shrink: 0;
   width: 100%;
   padding: 12px max(20px, calc((100% - 870px) / 2));
   padding-bottom: max(10px, env(safe-area-inset-bottom));
-  background: white;
-  border-top: 1px solid #e1e8df;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
   z-index: 3;
 }
 .messenger-input-row {
@@ -231,9 +231,9 @@
   min-height: 50px;
   height: 50px;
   max-height: 120px;
-  border: 1px solid #dfe7d9;
+  border: 1px solid var(--border);
   border-radius: 17px;
-  background: #f7faf4;
+  background: var(--surface);
   padding: 12px 15px;
   resize: none;
   font-size: 16px;
@@ -249,7 +249,7 @@
   height: 50px;
   padding: 0;
   border-radius: 16px;
-  box-shadow: 0 3px 8px #215d431a;
+  box-shadow: none;
 }
 .messenger-send:active:not(:disabled) {
   transform: scale(0.96);
@@ -270,7 +270,7 @@
   padding: 8px 2px;
   margin: 0;
   font-size: 13px !important;
-  color: #6c7e63;
+  color: var(--foreground);
   overflow: hidden;
   cursor: pointer;
   border-radius: 8px;
@@ -284,7 +284,7 @@
   cursor: pointer;
 }
 .messenger-attach:focus-within {
-  outline: 2px solid #398269;
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 .messenger-voice {
@@ -311,7 +311,7 @@
 }
 .messenger-chat .voice-row > small {
   font-size: 11px;
-  color: #839179;
+  color: var(--foreground);
 }
 .messenger-chat .audio-player {
   min-width: 0;
@@ -331,24 +331,24 @@
   border-radius: 9px;
   padding: 7px 11px;
   min-height: 38px;
-  color: #7e8975;
+  color: var(--foreground);
   font-size: 12px;
 }
 .messenger-visibility button[aria-pressed='true'] {
-  background: #edf4e7;
-  color: #4e7142;
+  background: var(--surface-alt);
+  color: var(--foreground);
   font-weight: 650;
 }
 .messenger-composer-private {
-  background: #fffaf0;
-  border-color: #ecdbaa;
+  background: var(--surface);
+  border-color: var(--border);
 }
 .messenger-composer-private .messenger-visibility button[aria-pressed='true'] {
-  background: #f7e8c3;
-  color: #795f28;
+  background: var(--surface-alt);
+  color: var(--foreground);
 }
 .messenger-private-notice {
-  color: #967638;
+  color: var(--foreground);
   font-size: 12px;
   margin-bottom: 8px;
 }
@@ -382,10 +382,10 @@
   justify-content: space-between;
   gap: 20px;
   padding: 9px 0;
-  border-bottom: 1px solid #e6ece1;
+  border-bottom: 1px solid var(--border);
 }
 .messenger-details dt {
-  color: #7b8a70;
+  color: var(--foreground);
 }
 .messenger-details dd {
   margin: 0;
@@ -393,7 +393,7 @@
 .messenger-history > summary {
   padding: 12px 0;
   cursor: pointer;
-  color: #46653c;
+  color: var(--foreground);
 }
 .messenger-history .history-event {
   padding: 18px 0;
@@ -405,7 +405,7 @@
 }
 .messenger-history time {
   font-size: 11px;
-  color: #85917a;
+  color: var(--foreground);
 }
 .messenger-thread-preview {
   font-size: 15px !important;
@@ -434,7 +434,7 @@
   display: none;
 }
 .app-frame .messenger-chat {
-  border: 1px solid #dfe7db;
+  border: 1px solid var(--border);
   border-radius: 18px;
 }
 @media (max-width: 640px) {
@@ -529,7 +529,7 @@
   display: grid;
   place-items: center;
   height: 100%;
-  color: #6b8062;
+  color: var(--foreground);
 }
 .messenger-skeleton {
   gap: 16px;
@@ -569,8 +569,8 @@
   align-items: center;
   gap: 10px;
   padding: 5px 20px;
-  background: #e8f0e5;
-  color: #426341;
+  background: var(--surface-alt);
+  color: var(--foreground);
   font-size: 12px;
 }
 .messenger-audio-bar button {
