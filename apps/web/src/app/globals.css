@@ -240,7 +240,8 @@
 }
 .message-attachments {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
   align-items: flex-start;
   gap: 12px;
   margin-top: 12px;
