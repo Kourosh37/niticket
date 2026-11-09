@@ -1,44 +1,60 @@
-/* Every UI color resolves to one of the four colors in its active palette. */
+/* Semantic roles based on Radix Slate, Blue, Green, Red and Amber scales.
+   https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
-  --palette-1: rgb(244, 190, 56);
-  --palette-2: rgb(237, 218, 94);
-  --palette-3: rgb(113, 149, 30);
-  --palette-4: rgb(88, 117, 41);
-  --background: var(--palette-1);
-  --surface: var(--palette-2);
-  --surface-alt: var(--palette-1);
-  --foreground: var(--palette-4);
-  --muted: var(--foreground);
-  --primary: var(--palette-4);
-  --on-primary: var(--palette-2);
-  --accent: var(--palette-1);
-  --accent-strong: var(--palette-3);
-  --border: var(--palette-3);
-  --border-strong: var(--palette-4);
-  --focus: var(--palette-4);
-  --overlay: var(--palette-4);
+  --background: #f9f9fb;
+  --surface: #ffffff;
+  --surface-alt: #f0f0f3;
+  --surface-hover: #e8e8ec;
+  --foreground: #1c2024;
+  --muted: #60646c;
+  --primary: #0d74ce;
+  --primary-hover: #113264;
+  --on-primary: #ffffff;
+  --accent: #e6f4fe;
+  --accent-strong: #0d74ce;
+  --border: #d9d9e0;
+  --border-strong: #80838d;
+  --focus: #0d74ce;
+  --overlay: rgba(28, 32, 36, 0.5);
+  --shadow: rgba(28, 32, 36, 0.08);
+  --bubble-own: #e6f4fe;
+  --bubble-border: #acd8fc;
+  --danger: #ce2c31;
+  --danger-surface: #feebec;
+  --success: #193b2d;
+  --success-surface: #e6f6eb;
+  --warning: #4f3422;
+  --warning-surface: #fff7c2;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --palette-1: rgb(9, 35, 40);
-  --palette-2: rgb(18, 84, 79);
-  --palette-3: rgb(42, 131, 95);
-  --palette-4: rgb(139, 187, 146);
-  --background: var(--palette-1);
-  --surface: var(--palette-1);
-  --surface-alt: var(--palette-2);
-  --foreground: var(--palette-4);
-  --primary: var(--palette-4);
-  --on-primary: var(--palette-1);
-  --accent: var(--palette-4);
-  --accent-strong: var(--palette-3);
-  --border: var(--palette-2);
-  --border-strong: var(--palette-3);
-  --focus: var(--palette-4);
-  --overlay: var(--palette-2);
+  --background: #111113;
+  --surface: #18191b;
+  --surface-alt: #212225;
+  --surface-hover: #272a2d;
+  --foreground: #edeef0;
+  --muted: #b0b4ba;
+  --primary: #70b8ff;
+  --primary-hover: #c2e6ff;
+  --on-primary: #0d1520;
+  --accent: #0d2847;
+  --accent-strong: #70b8ff;
+  --border: #363a3f;
+  --border-strong: #777b84;
+  --focus: #70b8ff;
+  --overlay: rgba(17, 17, 19, 0.8);
+  --shadow: rgba(0, 0, 0, 0.3);
+  --bubble-own: #0d2847;
+  --bubble-border: #104d87;
+  --danger: #ff9592;
+  --danger-surface: #3b1219;
+  --success: #3dd68c;
+  --success-surface: #132d21;
+  --warning: #ffe7b3;
+  --warning-surface: #302008;
 }
 
 body {
@@ -79,8 +95,8 @@ textarea:focus {
 
 .message-search-panel mark,
 .messenger-bubble mark {
-  background: var(--primary);
-  color: var(--on-primary);
+  background: var(--warning-surface);
+  color: var(--warning);
 }
 
 button,
@@ -117,8 +133,8 @@ button {
 }
 
 .theme-toggle:hover {
-  background: var(--surface-alt);
-  border-color: var(--border-strong);
+  background: var(--bubble-own);
+  border-color: var(--bubble-border);
 }
 
 .auth-theme-control {
@@ -134,14 +150,15 @@ button {
 
 .button-primary:hover,
 .button-danger {
-  background: var(--primary);
+  background: var(--primary-hover);
   color: var(--on-primary);
-  border-color: var(--on-primary);
+  border-color: transparent;
 }
 
 .button-danger {
-  border-style: double;
-  border-width: 3px;
+  background: var(--danger);
+  color: var(--surface);
+  border: 1px solid transparent;
 }
 
 .easy-navigation a[aria-current],
@@ -240,4 +257,63 @@ button {
   .messenger-header .avatar {
     display: none;
   }
+}
+
+/* Neutral surfaces carry content; accent and semantic colors indicate actions and state. */
+.easy-navigation,
+.surface,
+.auth-simple .auth-form-area {
+  box-shadow: 0 6px 24px var(--shadow);
+}
+.easy-navigation a[aria-current],
+.search-kind-tabs button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--bubble-border);
+}
+.easy-navigation a[aria-current] .dock-unread-count {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--surface);
+}
+.button-outline:hover,
+.settings-preference-row:hover,
+.inbox-thread:hover {
+  background: var(--surface-hover);
+}
+input,
+select,
+textarea {
+  border-color: var(--border-strong);
+}
+.page-heading p,
+.field-hint,
+.messenger-sender,
+.messenger-bubble > time,
+.messenger-contact p,
+.settings-preference-row p,
+.settings-application-info,
+.inbox-footnote {
+  color: var(--muted);
+}
+.error-message {
+  color: var(--danger);
+  background: var(--danger-surface);
+  border-color: var(--danger);
+}
+.download-error {
+  color: var(--danger);
+}
+.success-message {
+  color: var(--success);
+  background: var(--success-surface);
+  border-color: var(--success);
+}
+.messenger-bubble.bubble-private,
+.messenger-composer-private {
+  background: var(--warning-surface);
+}
+.messenger-private-notice,
+.internal-label {
+  color: var(--warning);
 }

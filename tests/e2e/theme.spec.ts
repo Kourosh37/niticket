@@ -13,12 +13,40 @@ process.env.DATABASE_URL = database.toString();
 
 async function palette(page: Page, dark: boolean) {
   await expect(page.locator('html')).toHaveAttribute('data-theme', dark ? 'dark' : 'light');
-  const invalid = await page.evaluate((dark) => {
-    const allowed = new Set(
-      dark
-        ? ['rgb(9, 35, 40)', 'rgb(18, 84, 79)', 'rgb(42, 131, 95)', 'rgb(139, 187, 146)']
-        : ['rgb(244, 190, 56)', 'rgb(237, 218, 94)', 'rgb(113, 149, 30)', 'rgb(88, 117, 41)'],
-    );
+  const invalid = await page.evaluate(() => {
+    const roles = [
+      'background',
+      'surface',
+      'surface-alt',
+      'surface-hover',
+      'foreground',
+      'muted',
+      'primary',
+      'primary-hover',
+      'on-primary',
+      'accent',
+      'accent-strong',
+      'border',
+      'border-strong',
+      'focus',
+      'overlay',
+      'bubble-own',
+      'bubble-border',
+      'danger',
+      'danger-surface',
+      'success',
+      'success-surface',
+      'warning',
+      'warning-surface',
+    ];
+    const allowed = new Set<string>();
+    const probe = document.createElement('span');
+    document.body.append(probe);
+    for (const role of roles) {
+      probe.style.color = `var(--${role})`;
+      allowed.add(getComputedStyle(probe).color);
+    }
+    probe.remove();
     const errors: string[] = [];
     for (const node of document.querySelectorAll<HTMLElement>('body *')) {
       if (!node.getClientRects().length) continue;
@@ -44,7 +72,7 @@ async function palette(page: Page, dark: boolean) {
       }
     }
     return [...new Set(errors)].slice(0, 20);
-  }, dark);
+  });
   expect(invalid).toEqual([]);
 }
 
