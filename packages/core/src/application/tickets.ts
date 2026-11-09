@@ -445,7 +445,7 @@ export async function getTicket(
   assertRead(actor, ticket);
   const staff = isStaff(actor, ticket);
   const internal = canReadInternal(actor, ticket);
-  const [messagePage, historyPage, attachments] = await Promise.all([
+  const [messagePage, historyPage, attachments, responsible] = await Promise.all([
     focusMessageId
       ? getMessageContext(actor, id, focusMessageId).then((context) => ({
           items: context.items,
@@ -475,9 +475,21 @@ export async function getTicket(
         waveform: true,
       },
     }),
+    db.departmentMembership
+      .findFirst({
+        where: {
+          departmentId: ticket.departmentId,
+          active: true,
+          user: { active: true, role: 'STAFF' },
+        },
+        orderBy: [{ role: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        select: { user: { select: { id: true, name: true, image: true } } },
+      })
+      .then((membership) => membership?.user ?? null),
   ]);
   return {
     ticket,
+    responsible,
     messages: messagePage.items,
     nextMessageCursor: messagePage.nextCursor,
     messageFocus: messagePage.focusId

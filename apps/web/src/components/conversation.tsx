@@ -502,15 +502,23 @@ export function Conversation({
         <ArrowRight size={24} />
       </Link>
       <Avatar
-        name={counterpart}
-        image={permissions.staff || permissions.readOnly ? ticket.creator.image : null}
+        name={
+          permissions.staff || permissions.readOnly
+            ? counterpart
+            : (data.responsible?.name ?? counterpart)
+        }
+        image={
+          permissions.staff || permissions.readOnly ? ticket.creator.image : data.responsible?.image
+        }
       />
       <div className="messenger-contact">
         <h1>{counterpart}</h1>
-        <p className={permissions.staff ? 'officer-unit' : undefined}>
+        <p className="officer-unit">
           {permissions.staff || permissions.readOnly
             ? ticket.department.name
-            : 'گفتگو با واحد دانشگاه'}
+            : data.responsible
+              ? `مسئول: ${data.responsible.name}`
+              : 'مسئول واحد هنوز تعیین نشده'}
         </p>
       </div>
       <button
@@ -849,6 +857,10 @@ export function Conversation({
           <div>
             <dt>واحد</dt>
             <dd>{ticket.department.name}</dd>
+          </div>
+          <div>
+            <dt>مسئول واحد</dt>
+            <dd>{data.responsible?.name ?? 'هنوز تعیین نشده'}</dd>
           </div>
           <div>
             <dt>شروع گفتگو</dt>
