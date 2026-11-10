@@ -4,6 +4,7 @@ import { Status } from './status';
 import { date, priorityNames } from '@/lib/utils';
 import { ticketNumber, type TicketSummary } from '@niticket/core/application/tickets';
 import { Button } from './ui/button';
+import { replyStatus } from '@/lib/ticket-ui';
 
 export function TicketList({
   tickets,
@@ -66,7 +67,11 @@ export function TicketList({
             </span>
           </span>
           <span className="ticket-department">{t.department.name}</span>
-          <Status value={t.status} />
+          {replyStatus(t) ? (
+            <Status value={replyStatus(t)!} />
+          ) : (
+            <span className="status">بدون پیام</span>
+          )}
           <time className="ticket-date" dateTime={new Date(t.lastActivityAt).toISOString()}>
             {date(t.lastActivityAt)}
           </time>

@@ -126,7 +126,7 @@ export async function Inbox({
           {result.items.length ? (
             <div className="inbox-threads">
               {result.items.map((ticket) => {
-                const action = needsReply(ticket.status, staff);
+                const action = needsReply(ticket, staff);
                 const preview = ticket.messages[0];
                 return (
                   <Link
@@ -155,7 +155,7 @@ export async function Inbox({
                           : 'هنوز پیامی نفرستاده‌اید.'}
                       </p>
                       <span className={`thread-state ${action ? 'state-action' : ''}`}>
-                        {ticketState(ticket.status, staff)}
+                        {ticketState(ticket, staff)}
                       </span>
                       {staff && <small className="thread-unit">{ticket.department.name}</small>}
                     </div>

@@ -537,12 +537,14 @@ export async function reports(actor: Actor, input: unknown = {}) {
       resolutionSeconds: number | null;
       overdue: number;
       pendingReplies: number;
+      answeredReplies: number;
     }[]
   >(Prisma.sql`
     SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"-"createdAt")))::double precision AS "firstResponseSeconds",
       AVG(EXTRACT(EPOCH FROM ("resolvedAt"-"createdAt")))::double precision AS "resolutionSeconds",
       COUNT(*) FILTER (WHERE "dueAt"<NOW() AND status NOT IN ('RESOLVED','CLOSED'))::int AS overdue,
-      COUNT(*) FILTER (WHERE latest."senderId"=t."creatorId")::int AS "pendingReplies"
+      COUNT(*) FILTER (WHERE latest."senderId"=t."creatorId")::int AS "pendingReplies",
+      COUNT(*) FILTER (WHERE latest."senderId"<>t."creatorId")::int AS "answeredReplies"
     FROM "Ticket" t
     LEFT JOIN LATERAL (
       SELECT m."senderId" FROM "Message" m
@@ -567,6 +569,7 @@ export async function reports(actor: Actor, input: unknown = {}) {
   return {
     total,
     pendingReplies: timing[0].pendingReplies,
+    answeredReplies: timing[0].answeredReplies,
     byStatus,
     byPriority,
     byDepartment,

@@ -15,8 +15,11 @@ it('counts only conversations whose latest public message needs an officer reply
     admin = await f.actor(f.admin.id);
   const count = async () =>
     (await reports(admin, { departmentId: f.department.id })).pendingReplies;
+  const answered = async () =>
+    (await reports(admin, { departmentId: f.department.id })).answeredReplies;
   await openConversation(student, { departmentId: f.department.id });
   expect(await count()).toBe(0);
+  expect(await answered()).toBe(0);
   const ticket = await createTicket(
     student,
     {
@@ -37,9 +40,11 @@ it('counts only conversations whose latest public message needs an officer reply
   expect(await count()).toBe(1);
   await addMessage(officer, ticket.id, { version: 2, body: 'پاسخ عمومی به دانشجو' });
   expect(await count()).toBe(0);
+  expect(await answered()).toBe(1);
   // Historical status edits must not turn an answered conversation into pending work.
   await db.ticket.update({ where: { id: ticket.id }, data: { status: 'IN_PROGRESS' } });
   expect(await count()).toBe(0);
+  expect(await answered()).toBe(1);
   await addMessage(student, ticket.id, { version: 3, body: 'پرسش تکمیلی دانشجو پس از پاسخ' });
   await addMessage(officer, ticket.id, {
     version: 4,
@@ -48,6 +53,7 @@ it('counts only conversations whose latest public message needs an officer reply
   });
   await db.ticket.update({ where: { id: ticket.id }, data: { status: 'CLOSED' } });
   expect(await count()).toBe(1);
+  expect(await answered()).toBe(0);
   expect((await reports(student)).pendingReplies).toBe(1);
   expect((await reports(await f.actor(f.outsider.id))).pendingReplies).toBe(0);
   expect((await reports(admin, { departmentId: f.destination.id })).pendingReplies).toBe(0);

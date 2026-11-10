@@ -96,6 +96,11 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   await expect(o.locator('.inbox-thread')).toHaveCount(0);
   await o.getByRole('link', { name: 'پاسخ داده‌شده', exact: true }).click();
   await expect(o.locator('.inbox-thread')).toHaveCount(1);
+  await db.ticket.update({ where: { id }, data: { status: 'IN_PROGRESS' } });
+  await o.reload();
+  await expect(o.locator('.inbox-thread')).toHaveCount(1);
+  await expect(o.locator('.thread-state')).toHaveText('پاسخ داده‌شده');
+  await expect(o.locator('.inbox-thread')).not.toHaveClass(/thread-action/);
   await s.getByLabel('پاسخ شما', { exact: true }).fill('ممنون، این هم توضیح تکمیلی من.');
   await s.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
   await expect(

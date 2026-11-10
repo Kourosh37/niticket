@@ -121,7 +121,7 @@ export async function RoleDashboard({ actor }: { actor: Actor }) {
           { label: 'در حال پیگیری', count: open, icon: Clock3 },
           {
             label: 'منتظر پاسخ دانشجو',
-            count: report.byStatus.find((g) => g.status === 'WAITING_FOR_USER')?._count ?? 0,
+            count: report.answeredReplies,
             icon: Users,
           },
           {
