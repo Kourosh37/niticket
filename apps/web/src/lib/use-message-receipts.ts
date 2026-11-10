@@ -34,12 +34,15 @@ export function useMessageReceipts(
       timer = setTimeout(() => {
         if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
         inFlight = true;
-        void request(`/api/v1/tickets/${ticketId}/read`, {
+        void request<{ notificationsRead: number }>(`/api/v1/tickets/${ticketId}/read`, {
           method: 'POST',
           signal: abort.signal,
           body: JSON.stringify({ messageIds: pending }),
         })
-          .then(() => {
+          .then((result) => {
+            // The server may commit just before a visibility change aborts the
+            // request. Publish completed notification changes independently.
+            if (result.notificationsRead) window.dispatchEvent(new Event('notifications:changed'));
             if (!abort.signal.aborted) remember(acknowledged.current, pending);
           })
           .catch(() => {

@@ -8,7 +8,13 @@ import { request, dateTime } from '@/lib/utils';
 import { Button } from './ui/button';
 import type { notifications } from '@niticket/core/application/administration';
 
-export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifications>> }) {
+export function Notifications({
+  data,
+  replyRequired = false,
+}: {
+  data: Awaited<ReturnType<typeof notifications>>;
+  replyRequired?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -35,11 +41,17 @@ export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifi
       <div className="page-heading">
         <div>
           <h1>اعلان‌ها</h1>
-          <p>تازه‌ترین خبرها از روند پیگیری درخواست‌های شما</p>
+          <p>
+            {replyRequired
+              ? 'اعلان هر گفتگو پس از ارسال پاسخ به دانشجو خوانده می‌شود.'
+              : 'تازه‌ترین خبرها از روند پیگیری درخواست‌های شما'}
+          </p>
         </div>
-        <Button variant="outline" disabled={busy} onClick={() => read()}>
-          <CheckCheck size={17} /> خواندن همه
-        </Button>
+        {!replyRequired && (
+          <Button variant="outline" disabled={busy} onClick={() => read()}>
+            <CheckCheck size={17} /> خواندن همه
+          </Button>
+        )}
       </div>
       {error && (
         <p className="error-message" role="alert">
@@ -55,7 +67,7 @@ export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifi
               </span>
               <div>
                 {n.ticketId ? (
-                  <Link href={`/tickets/${n.ticketId}`} onClick={() => void read(n.id, false)}>
+                  <Link href={`/tickets/${n.ticketId}`}>
                     <strong>{n.title}</strong>
                   </Link>
                 ) : (
@@ -63,7 +75,7 @@ export function Notifications({ data }: { data: Awaited<ReturnType<typeof notifi
                 )}
                 <time>{dateTime(n.createdAt)}</time>
               </div>
-              {!n.readAt && (
+              {!n.readAt && !replyRequired && (
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => read(n.id)}>
                   خوانده شد
                 </Button>

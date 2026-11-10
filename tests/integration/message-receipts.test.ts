@@ -34,11 +34,12 @@ it('marks only eligible counterparty messages, preserves the first view and leav
   expect(await db.message.count({ where: { ticketId: ticket.id, readAt: { not: null } } })).toBe(0);
   expect(
     await markMessagesSeen(agent, ticket.id, { messageIds: [ids[0], ids[1], ids[3]] }),
-  ).toEqual({ updated: 1 });
+  ).toEqual({ updated: 1, notificationsRead: 0 });
   const first = (await db.message.findUniqueOrThrow({ where: { id: ids[0] } })).readAt;
   expect(first).not.toBeNull();
   expect(await markMessagesSeen(agent, ticket.id, { messageIds: [ids[0]] })).toEqual({
     updated: 0,
+    notificationsRead: 0,
   });
   expect((await db.message.findUniqueOrThrow({ where: { id: ids[0] } })).readAt).toEqual(first);
   expect((await getMessageReceipts(student, ticket.id, ids)).items).toEqual([
@@ -46,10 +47,11 @@ it('marks only eligible counterparty messages, preserves the first view and leav
   ]);
   expect(
     await markMessagesSeen(student, ticket.id, { messageIds: [ids[0], ids[1], ids[2], ids[3]] }),
-  ).toEqual({ updated: 2 });
+  ).toEqual({ updated: 2, notificationsRead: 0 });
   expect((await db.message.findUniqueOrThrow({ where: { id: ids[2] } })).readAt).toBeNull();
   expect(await markMessagesSeen(manager, ticket.id, { messageIds: [ids[2]] })).toEqual({
     updated: 1,
+    notificationsRead: 0,
   });
   const after = await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
   expect([after.version, after.updatedAt, after.lastActivityAt]).toEqual([

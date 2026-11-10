@@ -212,16 +212,17 @@ model Ticket {
 }
 
 model Message {
-  id          String       @id @default(uuid())
-  ticketId    String
-  senderId    String
-  body        String
-  visibility  Visibility   @default(PUBLIC)
-  createdAt   DateTime     @default(now())
-  readAt      DateTime?
-  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Restrict)
-  sender      User         @relation(fields: [senderId], references: [id], onDelete: Restrict)
-  attachments Attachment[]
+  id            String         @id @default(uuid())
+  ticketId      String
+  senderId      String
+  body          String
+  visibility    Visibility     @default(PUBLIC)
+  createdAt     DateTime       @default(now())
+  readAt        DateTime?
+  ticket        Ticket         @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  sender        User           @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  attachments   Attachment[]
+  notifications Notification[]
   // Expression GIN indexes and clean-file partial indexes live in the search SQL migration.
 
   @@index([ticketId, createdAt, id])
@@ -317,14 +318,17 @@ model Notification {
   eventId    String
   userId     String
   ticketId   String?
+  messageId  String?
   title      String
   readAt     DateTime?
   createdAt  DateTime               @default(now())
   user       User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  message    Message?               @relation(fields: [messageId], references: [id], onDelete: Restrict)
   deliveries NotificationDelivery[]
 
   @@unique([eventId, userId])
   @@index([userId, createdAt, id])
+  @@index([userId, ticketId, readAt, messageId])
 }
 
 model NotificationDelivery {

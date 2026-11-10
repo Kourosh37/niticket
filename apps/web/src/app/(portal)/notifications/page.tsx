@@ -9,5 +9,5 @@ export default async function Page({
 }) {
   const a = await currentActor();
   const { cursor } = await searchParams;
-  return <Notifications data={await notifications(a, cursor)} />;
+  return <Notifications data={await notifications(a, cursor)} replyRequired={a.role === 'STAFF'} />;
 }

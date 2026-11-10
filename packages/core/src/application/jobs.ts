@@ -20,6 +20,7 @@ export const eventPayload = z.object({
   ticketId: z.string(),
   actorId: z.string(),
   type: z.string(),
+  messageId: z.string().optional(),
 });
 
 const titles: Record<string, string> = {
@@ -45,6 +46,18 @@ export async function processNotification(eventId: string, payload: unknown) {
         },
       },
     });
+    const message = ['TICKET_CREATED', 'PUBLIC_REPLY'].includes(data.type)
+      ? await tx.message.findFirst({
+          where: {
+            ticketId: ticket.id,
+            senderId: data.actorId,
+            visibility: 'PUBLIC',
+            ...(data.messageId ? { id: data.messageId } : { createdAt: { lte: event.createdAt } }),
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { id: true, readAt: true },
+        })
+      : null;
     const recipients = new Set([
       ticket.creatorId,
       ...ticket.department.memberships.map((m) => m.userId),
@@ -76,8 +89,9 @@ export async function processNotification(eventId: string, payload: unknown) {
           eventId,
           userId,
           ticketId: ticket.id,
+          messageId: message?.id,
           title: titles[data.type] ?? 'درخواست شما به‌روزرسانی شد',
-          readAt: handled?.createdAt ?? null,
+          readAt: handled?.createdAt ?? (userId === ticket.creatorId ? message?.readAt : null),
         },
         update: {},
       });

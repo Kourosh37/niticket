@@ -50,6 +50,7 @@ async function event(
   type: string,
   metadata: Prisma.InputJsonValue = {},
   internal = false,
+  messageId?: string,
 ) {
   await tx.activity.create({
     data: {
@@ -67,7 +68,12 @@ async function event(
     await tx.outboxEvent.create({
       data: {
         type: 'TICKET_NOTIFICATION',
-        payload: { ticketId: ticket.id, actorId: actor.id, type },
+        payload: {
+          ticketId: ticket.id,
+          actorId: actor.id,
+          type,
+          ...(messageId ? { messageId } : {}),
+        },
       },
     });
 }
@@ -139,8 +145,9 @@ export async function createTicket(actor: Actor, input: unknown, key: string) {
         priority: data.priority,
         messages: { create: { senderId: actor.id, body: data.body } },
       },
+      include: { messages: { select: { id: true } } },
     });
-    await event(tx, actor, ticket, 'TICKET_CREATED');
+    await event(tx, actor, ticket, 'TICKET_CREATED', {}, false, ticket.messages[0].id);
     await tx.idempotency.create({
       data: { actorId: actor.id, key, fingerprint, resourceId: ticket.id },
     });
@@ -567,6 +574,7 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
       internal ? 'INTERNAL_NOTE' : firstPublicMessage ? 'TICKET_CREATED' : 'PUBLIC_REPLY',
       {},
       internal,
+      message.id,
     );
     return { id: message.id, version: ticket.version + 1 };
   });

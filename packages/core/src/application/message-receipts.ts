@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { db, type Prisma } from '@niticket/database';
 import type { Actor } from '../domain/authorization';
-import { assertParticipant, assertRead, canReadInternal, isStaff } from '../domain/authorization';
+import {
+  assertParticipant,
+  assertRead,
+  canReadInternal,
+  isStaff,
+  userRole,
+} from '../domain/authorization';
 import { fail } from '../domain/errors';
 import { uuid } from '../validation';
 import { transaction } from '../infrastructure/transaction';
@@ -42,8 +48,28 @@ export async function markMessagesSeen(actor: Actor, ticketId: string, input: un
       },
       data: { readAt: new Date() },
     });
-    // No ticket version, activity time, notification or audit write for receipt-only changes.
-    return { updated: result.count };
+    // Only the student's visible public replies dismiss notifications. Viewing a
+    // student's message still records a receipt but never dismisses a staff task.
+    const notifications =
+      userRole(actor) === 'STUDENT'
+        ? await tx.notification.updateMany({
+            where: {
+              userId: actor.id,
+              ticketId,
+              readAt: null,
+              messageId: { in: [...new Set(data.messageIds)] },
+              message: {
+                ticketId,
+                visibility: 'PUBLIC',
+                senderId: { not: actor.id },
+                readAt: { not: null },
+              },
+            },
+            data: { readAt: new Date() },
+          })
+        : { count: 0 };
+    // Receipt-only changes do not advance the ticket revision or activity time.
+    return { updated: result.count, notificationsRead: notifications.count };
   });
 }
 

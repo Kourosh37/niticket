@@ -476,6 +476,8 @@ export async function notifications(actor: Actor, cursor?: string) {
 
 export async function readNotification(actor: Actor, input: unknown) {
   const { id } = z.object({ id: uuid.optional() }).strict().parse(input);
+  if (userRole(actor) === 'STAFF')
+    fail('REPLY_REQUIRED', 403, 'اعلان‌های مسئول واحد پس از ارسال پاسخ عمومی خوانده می‌شوند.');
   await db.notification.updateMany({
     where: { userId: actor.id, readAt: null, ...(id ? { id } : {}) },
     data: { readAt: new Date() },
