@@ -107,7 +107,7 @@ export async function createUpload(actor: Actor, input: unknown) {
       },
     });
   });
-  return { id, url: await signedUpload(objectKey, data.mime), expiresIn: 180 };
+  return { id, url: await signedUpload(objectKey, data.mime, data.size), expiresIn: 180 };
 }
 
 export async function createAvatarUpload(actor: Actor, input: unknown) {
@@ -145,7 +145,7 @@ export async function createAvatarUpload(actor: Actor, input: unknown) {
       },
     });
   });
-  return { id, url: await signedUpload(objectKey, data.mime), expiresIn: 180 };
+  return { id, url: await signedUpload(objectKey, data.mime, data.size), expiresIn: 180 };
 }
 
 export async function completeUpload(actor: Actor, id: string) {

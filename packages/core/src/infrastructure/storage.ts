@@ -24,11 +24,16 @@ export function storage(publicEndpoint = false) {
   return publicEndpoint ? create() : (client ??= create());
 }
 
-export async function signedUpload(key: string, mime: string) {
+export async function signedUpload(key: string, mime: string, size: number) {
   return getSignedUrl(
     storage(true),
-    new PutObjectCommand({ Bucket: config().S3_BUCKET, Key: key, ContentType: mime }),
-    { expiresIn: 180 },
+    new PutObjectCommand({
+      Bucket: config().S3_BUCKET,
+      Key: key,
+      ContentType: mime,
+      ContentLength: size,
+    }),
+    { expiresIn: 180, signableHeaders: new Set(['content-type', 'content-length']) },
   );
 }
 

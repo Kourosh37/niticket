@@ -31,6 +31,27 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.$disconnect();
 });
+it('rejects uploads whose actual length differs from the signed intent at storage', async () => {
+  const intent = await createUpload(await f.actor(f.student.id), {
+    ticketId,
+    filename: 'bounded.txt',
+    mime: 'text/plain',
+    size: 4,
+  });
+  expect(new URL(intent.url).searchParams.get('X-Amz-SignedHeaders')).toContain('content-length');
+  const response = await fetch(intent.url, {
+    method: 'PUT',
+    headers: { 'content-type': 'text/plain' },
+    body: Buffer.alloc(1024, 65),
+  });
+  expect(response.ok).toBe(false);
+  const valid = await fetch(intent.url, {
+    method: 'PUT',
+    headers: { 'content-type': 'text/plain' },
+    body: Buffer.from('safe'),
+  });
+  expect(valid.ok).toBe(true);
+});
 it('uploads real bytes, quarantines, scans and promotes an immutable clean object', async () => {
   const actor = await f.actor(f.student.id);
   const bytes = Buffer.from('پیوست آزمایشی برای بررسی امن دانشگاه');
