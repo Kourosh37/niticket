@@ -349,11 +349,14 @@ test('three roles complete a ticket with private history notes, file previews an
   await u.goto(ticketUrl);
   await expect(u.locator('.messenger-contact h1')).toHaveText(f.student.name);
   await u.getByLabel('پاسخ شما', { exact: true }).fill('پاسخ مسئول واحد به دانشجو');
-  await u.locator('#attachment').setInputFiles({
-    name: 'officer.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from('پیوست پاسخ مسئول واحد'),
-  });
+  await u
+    .getByRole('main')
+    .locator('#attachment')
+    .setInputFiles({
+      name: 'officer.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('پیوست پاسخ مسئول واحد'),
+    });
   await u.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
   await expect(
     u.locator('.message-body').filter({ hasText: 'پاسخ مسئول واحد به دانشجو' }),
@@ -387,6 +390,7 @@ test('three roles complete a ticket with private history notes, file previews an
   // All common document types are processed locally after authorized download.
   await s.getByLabel('پاسخ شما', { exact: true }).fill('مدارک دانشجو برای بررسی');
   await s
+    .getByRole('main')
     .locator('#attachment')
     .setInputFiles([
       'tests/fixtures/document.pdf',
