@@ -96,6 +96,9 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
         requestId,
         operation: new URL(request.url).pathname,
         category: code,
+        ...(status >= 500
+          ? { err: error instanceof Error ? error : new Error('Non-error exception') }
+          : {}),
         duration: Math.round(performance.now() - started),
       },
       'Request failed',
