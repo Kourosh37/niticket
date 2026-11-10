@@ -1,4 +1,5 @@
 import { boundedOfficeArchive } from '../lib/office-archive';
+import { formatOfficeRows } from '../lib/office-content';
 
 export type OfficePreview = { text?: string; rows?: string[][] };
 
@@ -14,19 +15,7 @@ self.onmessage = async (event: MessageEvent<{ data: ArrayBuffer; mime: string }>
       // The universal entry runs inside this worker without spawning untracked child workers.
       const { readSheet } = await import('read-excel-file/universal');
       const values = await readSheet(bytes.buffer as ArrayBuffer);
-      result = {
-        rows: values
-          .slice(0, 500)
-          .map((row) =>
-            row
-              .slice(0, 30)
-              .map((value) =>
-                value instanceof Date
-                  ? new Intl.DateTimeFormat('fa-IR').format(value)
-                  : String(value ?? ''),
-              ),
-          ),
-      };
+      result = { rows: formatOfficeRows(values) };
     }
     self.postMessage({ result });
   } catch (error) {
