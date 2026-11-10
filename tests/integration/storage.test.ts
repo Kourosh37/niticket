@@ -11,6 +11,9 @@ import {
 import { processScan } from '@niticket/core/application/jobs';
 import { scanBytes } from '@niticket/core/infrastructure/scanner';
 import { objectBytes } from '@niticket/core/infrastructure/storage';
+import { deleteObject, putObject, storage } from '@niticket/core/infrastructure/storage';
+import { ListObjectVersionsCommand } from '@aws-sdk/client-s3';
+import { config } from '@niticket/core/infrastructure/config';
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 let ticketId: string;
@@ -30,6 +33,22 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+});
+it('permanently removes all versions of one object without deleting prefix neighbors', async () => {
+  const key = `pending/${randomUUID()}`;
+  const neighbor = `${key}-neighbor`;
+  await putObject(key, Buffer.from('first'), 'text/plain');
+  await putObject(key, Buffer.from('second'), 'text/plain');
+  await putObject(neighbor, Buffer.from('keep'), 'text/plain');
+  await deleteObject(key);
+  const versions = await storage().send(
+    new ListObjectVersionsCommand({ Bucket: config().S3_BUCKET, Prefix: key }),
+  );
+  expect(
+    [...(versions.Versions ?? []), ...(versions.DeleteMarkers ?? [])].filter((v) => v.Key === key),
+  ).toEqual([]);
+  expect((await objectBytes(neighbor, 10)).toString()).toBe('keep');
+  await deleteObject(neighbor);
 });
 it('rejects uploads whose actual length differs from the signed intent at storage', async () => {
   const intent = await createUpload(await f.actor(f.student.id), {

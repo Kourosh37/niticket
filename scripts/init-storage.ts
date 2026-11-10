@@ -4,6 +4,9 @@ import {
   CreateBucketCommand,
   PutBucketVersioningCommand,
   PutBucketCorsCommand,
+  GetBucketLifecycleConfigurationCommand,
+  PutBucketLifecycleConfigurationCommand,
+  type LifecycleRule,
 } from '@aws-sdk/client-s3';
 import { config } from '@niticket/core/infrastructure/config';
 
@@ -38,6 +41,47 @@ await client.send(
     Bucket: c.S3_BUCKET,
     ChecksumAlgorithm: 'SHA256',
     VersioningConfiguration: { Status: 'Enabled' },
+  }),
+);
+// Preserve unrelated bucket rules; these IDs belong to the application.
+const managedRules: LifecycleRule[] = [
+  {
+    ID: 'niticket-pending-expiration',
+    Status: 'Enabled',
+    Filter: { Prefix: 'pending/' },
+    Expiration: { Days: 1 },
+    AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
+  },
+  {
+    ID: 'niticket-noncurrent-expiration',
+    Status: 'Enabled',
+    Filter: { Prefix: '' },
+    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+  },
+  {
+    ID: 'niticket-delete-marker-expiration',
+    Status: 'Enabled',
+    Filter: { Prefix: '' },
+    Expiration: { ExpiredObjectDeleteMarker: true },
+  },
+];
+let existingRules: LifecycleRule[] = [];
+try {
+  existingRules =
+    (await client.send(new GetBucketLifecycleConfigurationCommand({ Bucket: c.S3_BUCKET })))
+      .Rules ?? [];
+} catch (error) {
+  if ((error as { name?: string }).name !== 'NoSuchLifecycleConfiguration') throw error;
+}
+await client.send(
+  new PutBucketLifecycleConfigurationCommand({
+    Bucket: c.S3_BUCKET,
+    LifecycleConfiguration: {
+      Rules: [
+        ...existingRules.filter((rule) => !managedRules.some((managed) => managed.ID === rule.ID)),
+        ...managedRules,
+      ],
+    },
   }),
 );
 if (c.S3_PROVIDER === 's3')

@@ -3,7 +3,8 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   HeadObjectCommand,
-  DeleteObjectCommand,
+  ListObjectVersionsCommand,
+  DeleteObjectsCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from './config';
@@ -88,5 +89,23 @@ export async function putObject(key: string, bytes: Buffer, mime: string) {
 }
 
 export async function deleteObject(key: string) {
-  await storage().send(new DeleteObjectCommand({ Bucket: config().S3_BUCKET, Key: key }));
+  const Bucket = config().S3_BUCKET;
+  let KeyMarker: string | undefined;
+  let VersionIdMarker: string | undefined;
+  do {
+    const page = await storage().send(
+      new ListObjectVersionsCommand({ Bucket, Prefix: key, KeyMarker, VersionIdMarker }),
+    );
+    const objects = [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])]
+      .filter((version) => version.Key === key && version.VersionId)
+      .map((version) => ({ Key: key, VersionId: version.VersionId! }));
+    if (objects.length) {
+      const result = await storage().send(
+        new DeleteObjectsCommand({ Bucket, Delete: { Objects: objects, Quiet: true } }),
+      );
+      if (result.Errors?.length) throw new Error('Object version cleanup failed');
+    }
+    KeyMarker = page.IsTruncated ? page.NextKeyMarker : undefined;
+    VersionIdMarker = page.IsTruncated ? page.NextVersionIdMarker : undefined;
+  } while (KeyMarker);
 }
