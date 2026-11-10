@@ -7,10 +7,11 @@ import {
   useRef,
   useLayoutEffect,
   useEffect,
+  useCallback,
   useImperativeHandle,
   type RefObject,
 } from 'react';
-import { Virtuoso, type VirtuosoHandle, type Components } from 'react-virtuoso';
+import { Virtuoso, type Components } from 'react-virtuoso';
 import { Check, CheckCheck, LoaderCircle, Lock, MessageCircle } from 'lucide-react';
 import { observeVisibleMessages } from '@/lib/message-visibility';
 import type { getTicket } from '@niticket/core/application/tickets';
@@ -183,8 +184,36 @@ export const MessageTimeline = memo(function MessageTimeline({
   seenIds: ReadonlySet<string>;
   onVisibleMessages?: (ids: string[]) => void;
 }) {
-  const virtual = useRef<VirtuosoHandle>(null),
-    scroller = useRef<HTMLElement | null>(null);
+  const scroller = useRef<HTMLElement | null>(null),
+    following = useRef(!focusId),
+    geometry = useRef({ height: 0, viewport: 0 }),
+    previousTail = useRef(messages.at(-1)?.id);
+  const followEnd = useCallback(() => {
+    const area = scroller.current;
+    if (area && following.current && !focusId) area.scrollTop = area.scrollHeight;
+  }, [focusId]);
+  const jumpToLatest = useCallback(() => {
+    following.current = true;
+    followEnd();
+  }, [followEnd]);
+  // Native follow scrolls have no delayed scrollToIndex retries that could
+  // override an upward user scroll after the new batch is painted.
+  useLayoutEffect(() => {
+    const tail = messages.at(-1)?.id;
+    const appended = tail !== previousTail.current;
+    previousTail.current = tail;
+    if (appended && following.current) jumpToLatest();
+  }, [messages, jumpToLatest]);
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    const area = scroller.current;
+    if (!area) return;
+    const observer = new ResizeObserver(followEnd);
+    observer.observe(area);
+    const list = area.querySelector('.messenger-virtual-list');
+    if (list) observer.observe(list);
+    return () => observer.disconnect();
+  }, [followEnd, hasMessages]);
   const anchor = useRef<{ id: string; offset: number } | null>(null);
   useEffect(() => {
     if (scroller.current && onVisibleMessages)
@@ -193,9 +222,9 @@ export const MessageTimeline = memo(function MessageTimeline({
   useImperativeHandle(
     apiRef,
     () => ({
-      jumpToLatest: () =>
-        virtual.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' }),
+      jumpToLatest,
       preserveAnchor: () => {
+        following.current = false;
         const area = scroller.current;
         if (!area) return;
         const top = area.getBoundingClientRect().top;
@@ -209,7 +238,7 @@ export const MessageTimeline = memo(function MessageTimeline({
           };
       },
     }),
-    [],
+    [jumpToLatest],
   );
   useLayoutEffect(() => {
     if (!anchor.current) return;
@@ -232,8 +261,8 @@ export const MessageTimeline = memo(function MessageTimeline({
     return () => cancelAnimationFrame(frame);
   }, [messages]);
   useLayoutEffect(() => {
-    if (jumpRequest) virtual.current?.scrollToIndex({ index: 'LAST', align: 'end' });
-  }, [jumpRequest]);
+    if (jumpRequest) jumpToLatest();
+  }, [jumpRequest, jumpToLatest]);
   const [position, setPosition] = useState({ firstId: messages[0]?.id, firstIndex: 1_000_000 });
   // Prepending decreases the logical first index; Virtuoso preserves the visible item and its offset.
   if (position.firstId !== messages[0]?.id) {
@@ -244,12 +273,32 @@ export const MessageTimeline = memo(function MessageTimeline({
   }
   return (
     <Virtuoso<Message, Context>
-      ref={virtual}
       scrollerRef={(node) => {
         scroller.current = node instanceof HTMLElement ? node : null;
       }}
-      onWheelCapture={() => {
+      onWheelCapture={(event) => {
         anchor.current = null;
+        if (event.deltaY < 0) following.current = false;
+      }}
+      onKeyDownCapture={(event) => {
+        if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) following.current = false;
+      }}
+      onTouchMoveCapture={() => {
+        following.current = false;
+      }}
+      onScrollCapture={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const area = event.currentTarget;
+        const height = area.scrollHeight,
+          viewport = area.clientHeight;
+        const resized =
+          height !== geometry.current.height || viewport !== geometry.current.viewport;
+        // A measured row or composer resize can temporarily move the bottom
+        // while following. Only a scroll within unchanged geometry pauses it;
+        // upward input above already pauses immediately, including during resize.
+        following.current =
+          height - area.scrollTop - viewport <= 100 || (resized && following.current);
+        geometry.current = { height, viewport };
       }}
       onPointerDownCapture={() => {
         anchor.current = null;
@@ -278,7 +327,7 @@ export const MessageTimeline = memo(function MessageTimeline({
       increaseViewportBy={{ top: 350, bottom: 350 }}
       atBottomThreshold={100}
       atBottomStateChange={onBottomChange}
-      followOutput={focusId ? false : 'auto'}
+      followOutput={false}
       computeItemKey={(_, message) => message.id}
       itemContent={(index, message) => {
         const local = index - position.firstIndex;

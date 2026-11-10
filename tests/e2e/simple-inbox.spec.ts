@@ -172,7 +172,10 @@ test('long chats use a single message scroller, preserve older-message position 
   await expect(oldMessage).toBeInViewport();
   expect(await page.locator('[data-message-id]').count()).toBeLessThan(35);
   await expect
-    .poll(async () => Math.abs((await oldMessage.boundingBox())!.y - before))
+    .poll(async () => {
+      const box = await oldMessage.boundingBox();
+      return box ? Math.abs(box.y - before) : Infinity;
+    })
     .toBeLessThan(4);
   const top = await area.evaluate((element) => element.scrollTop);
   await page.getByLabel('پاسخ شما', { exact: true }).fill('پیش‌نویس من حفظ شود');
@@ -212,8 +215,11 @@ test('long chats use a single message scroller, preserve older-message position 
   await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeInViewport({
     timeout: 15000,
   });
+  // Keep a real upward scroll immediately after the new batch is painted: the
+  // virtualizer must not pull the reader back down while measuring new rows.
   await area.hover();
   await s.mouse.wheel(0, -100000);
+  await expect(s.getByRole('button', { name: 'پیام‌های قبلی', exact: true })).toBeInViewport();
   const preserved = s.getByText('پیام شماره 60 برای بررسی گفتگو', { exact: true });
   await expect(preserved).toBeInViewport();
   const position = (await preserved.boundingBox())!.y;
@@ -228,11 +234,28 @@ test('long chats use a single message scroller, preserve older-message position 
   ).toBe(true);
   await expect(preserved).toBeInViewport();
   await expect
-    .poll(async () => Math.abs((await preserved.boundingBox())!.y - position))
+    .poll(async () => {
+      const box = await preserved.boundingBox();
+      return box ? Math.abs(box.y - position) : Infinity;
+    })
     .toBeLessThan(4);
   await area.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
+  await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeInViewport();
+  await db.message.create({
+    data: {
+      ticketId: ticket.id,
+      senderId: f.agent.id,
+      body: 'پاسخ پس از بازگشت به انتهای گفتگو',
+      createdAt: new Date(later + 55000),
+    },
+  });
+  await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
+  await expect(s.getByText('پاسخ پس از بازگشت به انتهای گفتگو', { exact: true })).toBeInViewport({
+    timeout: 15000,
+  });
+  await expect(s.getByLabel('پاسخ شما', { exact: true })).toHaveValue('پیش‌نویس من حفظ شود');
   for (const [width, height] of [
     [320, 600],
     [390, 844],
