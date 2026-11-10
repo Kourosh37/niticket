@@ -494,8 +494,7 @@ test('three roles complete a ticket with private history notes, file previews an
   await a.locator('.ticket-row').filter({ hasText: name }).click();
   await expect(a.getByLabel('پاسخ شما', { exact: true })).toHaveCount(0);
   await expect(a.getByLabel('تغییر وضعیت', { exact: true })).toHaveCount(0);
-  await a.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
-  await a.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
+  await expect(a.getByRole('dialog', { name: 'اطلاعات گفتگو', exact: true })).toBeVisible();
   await expect(a.getByText('PRIVATE_HISTORY_BROWSER', { exact: true })).toBeVisible();
   expect(
     (

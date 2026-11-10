@@ -336,7 +336,10 @@ test('filters administrative lists live and searches messages in place without a
   await expect(page.locator('.ticket-row')).toHaveCount(2);
   await page.getByRole('searchbox', { name: 'جستجو در تاریخچه واحد', exact: true }).fill(tag);
   await expect(page.locator('.ticket-row')).toHaveCount(1);
-  await expect(page.locator('.ticket-row')).toHaveAttribute('href', `/tickets/${ticket.id}`);
+  await expect(page.locator('.ticket-row')).toHaveAttribute(
+    'href',
+    `/tickets/${ticket.id}?history=1`,
+  );
   const path = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'جستجو در همه پیام‌ها', exact: true }).click();
   await page.getByRole('searchbox', { name: 'جستجو در همه پیام‌ها', exact: true }).fill(tag);

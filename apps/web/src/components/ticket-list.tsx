@@ -9,10 +9,12 @@ export function TicketList({
   tickets,
   emptyText = 'هنوز درخواستی ثبت نکرده‌اید.',
   canCreate = true,
+  showHistory = false,
 }: {
   tickets: TicketSummary[];
   emptyText?: string;
   canCreate?: boolean;
+  showHistory?: boolean;
 }) {
   if (!tickets.length)
     return (
@@ -45,7 +47,11 @@ export function TicketList({
         <span />
       </div>
       {tickets.map((t) => (
-        <Link href={`/tickets/${t.id}`} key={t.id} className="ticket-row">
+        <Link
+          href={`/tickets/${t.id}${showHistory ? '?history=1' : ''}`}
+          key={t.id}
+          className="ticket-row"
+        >
           <span className="ticket-subject">
             <span className="ticket-row-icon">
               <MessageSquare size={19} />

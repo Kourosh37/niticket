@@ -69,6 +69,7 @@ export default async function Page({
         <TicketList
           tickets={tickets.items}
           canCreate={false}
+          showHistory
           emptyText="هنوز درخواستی برای این واحد ثبت نشده است."
         />
         {tickets.nextCursor && (

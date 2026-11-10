@@ -93,6 +93,7 @@ export function Conversation({
   initialContext,
   initialTerms = [],
   returnTo,
+  initialHistoryOpen = false,
 }: {
   detail: Detail;
   actorId: string;
@@ -101,6 +102,7 @@ export function Conversation({
   initialContext?: Pick<Awaited<ReturnType<typeof getMessageContext>>, 'focusId' | 'newerCursor'>;
   initialTerms?: string[];
   returnTo?: string;
+  initialHistoryOpen?: boolean;
 }) {
   const [data, setData] = useState(detail),
     [messages, setMessages] = useState(detail.messages),
@@ -122,7 +124,7 @@ export function Conversation({
     [busy, setBusy] = useState(false),
     [loadingOlder, setLoadingOlder] = useState(false),
     [error, setError] = useState(''),
-    [info, setInfo] = useState(false),
+    [info, setInfo] = useState(initialHistoryOpen && detail.permissions.readOnly),
     [newMessages, setNewMessages] = useState(false),
     [jumpRequest, setJumpRequest] = useState(0),
     [progress, setProgress] = useState<number | null>(null),
@@ -474,13 +476,14 @@ export function Conversation({
     }
   }
 
-  const [historyOpen, setHistoryOpen] = useState(false),
+  const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen && detail.permissions.readOnly),
     [historyError, setHistoryError] = useState('');
   const historyInFlight = useRef(false);
   const fetchHistory = useCallback(
     async (cursor?: string) => {
       if (historyInFlight.current) return;
       historyInFlight.current = true;
+      setLoadingHistory(true);
       try {
         const page = await request<{ items: Detail['activities']; nextCursor: string | null }>(
           `/api/v1/tickets/${id}/history${cursor ? `?cursor=${cursor}` : ''}`,
@@ -511,8 +514,12 @@ export function Conversation({
   );
   useEffect(() => {
     if (!info || !historyOpen) return;
+    const initial = setTimeout(() => void fetchHistory(), 0);
     const timer = setInterval(() => void fetchHistory(), 15000);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(timer);
+    };
   }, [info, historyOpen, fetchHistory]);
   const activities = useMemo(
     () => [...new Map(olderActivities.map((activity) => [activity.id, activity])).values()],
@@ -903,12 +910,9 @@ export function Conversation({
         {(permissions.staff || permissions.readOnly) && (
           <details
             className="messenger-history"
+            open={historyOpen}
             onToggle={(event) => {
               setHistoryOpen(event.currentTarget.open);
-              if (event.currentTarget.open) {
-                setLoadingHistory(true);
-                void fetchHistory();
-              }
             }}
           >
             <summary>تاریخچه و یادداشت‌های واحد</summary>
@@ -920,6 +924,9 @@ export function Conversation({
                   تلاش دوباره
                 </Button>
               </p>
+            )}
+            {!loadingHistory && !historyError && !activities.length && (
+              <p className="muted">هنوز رویدادی برای این گفتگو ثبت نشده است.</p>
             )}
             {activities.map((activity) => (
               <article className="history-event" key={activity.id}>
