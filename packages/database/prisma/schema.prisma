@@ -308,9 +308,10 @@ model OutboxEvent {
   payload      Json
   dispatchedAt DateTime?
   processedAt  DateTime?
+  failedAt     DateTime?
   createdAt    DateTime  @default(now())
 
-  @@index([processedAt, createdAt])
+  @@index([processedAt, failedAt, createdAt])
 }
 
 model Notification {

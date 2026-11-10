@@ -1,4 +1,4 @@
-import { Queue } from 'bullmq';
+import { Queue, type Job } from 'bullmq';
 import Redis from 'ioredis';
 import { db } from '@niticket/database';
 import { assertAdmin, type Actor } from '../domain/authorization';
@@ -33,9 +33,21 @@ export async function failedJobs(actor: Actor) {
         attempts: j.attemptsMade,
         failedAt: j.finishedOn ?? j.timestamp,
       })),
-      pendingOutbox: await db.outboxEvent.count({ where: { processedAt: null } }),
+      pendingOutbox: await db.outboxEvent.count({ where: { processedAt: null, failedAt: null } }),
+      failedOutbox: await db.outboxEvent.count({
+        where: { processedAt: null, failedAt: { not: null } },
+      }),
     };
   });
+}
+
+export async function retryOutboxJob(job: Job) {
+  await job.retry('failed', { resetAttemptsMade: true });
+  await db.outboxEvent.update({
+    where: { id: job.id! },
+    data: { failedAt: null, dispatchedAt: new Date() },
+  });
+  return { ok: true };
 }
 
 export async function retryJob(actor: Actor, id: string) {
@@ -48,7 +60,6 @@ export async function retryJob(actor: Actor, id: string) {
     await db.auditLog.create({
       data: { actorId: actor.id, action: 'JOB_RETRY_REQUESTED', resourceId: id, metadata: {} },
     });
-    await job.retry();
-    return { ok: true };
+    return retryOutboxJob(job);
   });
 }

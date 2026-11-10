@@ -247,6 +247,42 @@ export async function cleanupExpiredAuth() {
     });
 }
 
+export async function dispatchOutbox(queue: Queue, limit = 100) {
+  z.number().int().min(1).max(100).parse(limit);
+  const events = await db.outboxEvent.findMany({
+    where: {
+      processedAt: null,
+      failedAt: null,
+      OR: [{ dispatchedAt: null }, { dispatchedAt: { lt: new Date(Date.now() - 60000) } }],
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: limit,
+  });
+  for (const event of events) {
+    const existing = await queue.getJob(event.id);
+    if (existing && (await existing.getState()) === 'failed') {
+      // A terminal job needs explicit retry; repeatedly adding its ID cannot restart it.
+      await db.outboxEvent.updateMany({
+        where: { id: event.id, processedAt: null, dispatchedAt: event.dispatchedAt },
+        data: { failedAt: new Date(existing.finishedOn ?? Date.now()) },
+      });
+      continue;
+    }
+    await queue.add(
+      event.type,
+      { eventId: event.id },
+      {
+        jobId: event.id,
+        attempts: 8,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { age: 86400 },
+        removeOnFail: false,
+      },
+    );
+    await db.outboxEvent.update({ where: { id: event.id }, data: { dispatchedAt: new Date() } });
+  }
+}
+
 export function startJobs() {
   const connection = new Redis(config().REDIS_URL, { maxRetriesPerRequest: null });
   const queue = new Queue(config().QUEUE_NAME, { connection });
@@ -273,31 +309,7 @@ export function startJobs() {
     if (dispatching) return;
     dispatching = true;
     try {
-      const events = await db.outboxEvent.findMany({
-        where: {
-          processedAt: null,
-          OR: [{ dispatchedAt: null }, { dispatchedAt: { lt: new Date(Date.now() - 60000) } }],
-        },
-        orderBy: { createdAt: 'asc' },
-        take: 100,
-      });
-      for (const event of events) {
-        await queue.add(
-          event.type,
-          { eventId: event.id },
-          {
-            jobId: event.id,
-            attempts: 8,
-            backoff: { type: 'exponential', delay: 2000 },
-            removeOnComplete: { age: 86400 },
-            removeOnFail: false,
-          },
-        );
-        await db.outboxEvent.update({
-          where: { id: event.id },
-          data: { dispatchedAt: new Date() },
-        });
-      }
+      await dispatchOutbox(queue);
       await writeFile(path.join(tmpdir(), 'niticket-worker-heartbeat'), String(Date.now()));
       if (Date.now() - lastAuthCleanup >= 60000) {
         await cleanupExpiredAuth();
