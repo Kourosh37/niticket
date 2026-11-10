@@ -190,57 +190,63 @@ export async function openConversation(actor: Actor, input: unknown) {
 
 export async function listTickets(actor: Actor, input: unknown) {
   const q = listSchema.parse(input);
-  const where: Prisma.TicketWhereInput = {
-    AND: [
-      ticketScope(actor),
-      userRole(actor) === 'STAFF' ? { messages: { some: { visibility: 'PUBLIC' } } } : {},
-      q.scope === 'mine'
-        ? { creatorId: actor.id }
-        : q.scope === 'assigned'
-          ? { assigneeId: actor.id }
-          : q.scope === 'unassigned'
-            ? { assigneeId: null }
-            : {},
-      q.departmentId ? { departmentId: q.departmentId } : {},
-      q.status ? { status: q.status } : {},
-      q.view === 'action'
-        ? {
-            status: {
-              in:
-                userRole(actor) === 'STAFF'
-                  ? ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_DEPARTMENT', 'REOPENED']
-                  : ['WAITING_FOR_USER', 'RESOLVED', 'CLOSED'],
-            },
-          }
-        : q.view === 'done' || q.view === 'answered'
-          ? { status: { in: ['WAITING_FOR_USER', 'RESOLVED', 'CLOSED'] } }
-          : {},
+  const staff = userRole(actor) === 'STAFF';
+  const departments = actor.memberships.filter((m) => m.active).map((m) => m.departmentId);
+  const access = !actor.active
+    ? Prisma.sql`FALSE`
+    : actor.isAdmin
+      ? Prisma.sql`TRUE`
+      : staff
+        ? departments.length
+          ? Prisma.sql`t."departmentId" IN (${Prisma.join(departments)})`
+          : Prisma.sql`FALSE`
+        : Prisma.sql`t."creatorId"=${actor.id}`;
+  const pattern = `%${(q.q ?? '').replace(/[\\%_]/g, '\\$&')}%`;
+  const predicate = Prisma.sql`${access}
+    ${staff ? Prisma.sql`AND latest."senderId" IS NOT NULL` : Prisma.empty}
+    ${q.scope === 'mine' ? Prisma.sql`AND t."creatorId"=${actor.id}` : Prisma.empty}
+    ${q.scope === 'assigned' ? Prisma.sql`AND t."assigneeId"=${actor.id}` : Prisma.empty}
+    ${q.scope === 'unassigned' ? Prisma.sql`AND t."assigneeId" IS NULL` : Prisma.empty}
+    ${q.departmentId ? Prisma.sql`AND t."departmentId"=${q.departmentId}` : Prisma.empty}
+    ${q.status ? Prisma.sql`AND t.status::text=${q.status}` : Prisma.empty}
+    ${
+      q.view === 'action' && staff
+        ? Prisma.sql`AND latest."senderId"=t."creatorId"`
+        : q.view !== 'all'
+          ? Prisma.sql`AND latest."senderId"<>t."creatorId"`
+          : Prisma.empty
+    }
+    ${
       q.q
-        ? {
-            OR: [
-              { subject: { contains: q.q, mode: 'insensitive' } },
-              { department: { name: { contains: q.q, mode: 'insensitive' } } },
-              { creator: { name: { contains: q.q, mode: 'insensitive' } } },
-              {
-                messages: {
-                  some: { visibility: 'PUBLIC', body: { contains: q.q, mode: 'insensitive' } },
-                },
-              },
-            ],
-          }
-        : {},
-    ],
-  };
-  // Validate cursors within the same scope; do not use inaccessible resources as anchors.
-  if (
-    q.cursor &&
-    !(await db.ticket.findFirst({
-      where: { AND: [where, { id: q.cursor }] },
-      select: { id: true },
-    }))
-  )
-    fail();
-  const rows = await ticketRepository.list(where, q.limit, q.cursor);
+        ? Prisma.sql`AND (
+      t.subject ILIKE ${pattern}
+      OR EXISTS (SELECT 1 FROM "Department" d WHERE d.id=t."departmentId" AND d.name ILIKE ${pattern})
+      OR EXISTS (SELECT 1 FROM "User" u WHERE u.id=t."creatorId" AND u.name ILIKE ${pattern})
+      OR EXISTS (SELECT 1 FROM "Message" m WHERE m."ticketId"=t.id AND m.visibility='PUBLIC' AND m.body ILIKE ${pattern})
+    )`
+        : Prisma.empty
+    }`;
+  const source = Prisma.sql`FROM "Ticket" t LEFT JOIN LATERAL (
+    SELECT m."senderId" FROM "Message" m WHERE m."ticketId"=t.id AND m.visibility='PUBLIC'
+    ORDER BY m."createdAt" DESC,m.id DESC LIMIT 1
+  ) latest ON TRUE WHERE ${predicate}`;
+  // Validate the cursor against the same access, search and reply-state filters.
+  const anchors = q.cursor
+    ? await db.$queryRaw<{ id: string; lastActivityAt: Date }[]>(Prisma.sql`
+        SELECT t.id,t."lastActivityAt" ${source} AND t.id=${q.cursor}`)
+    : [];
+  if (q.cursor && !anchors.length) fail();
+  const anchor = anchors[0];
+  const ids = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
+    SELECT t.id ${source}
+    ${anchor ? Prisma.sql`AND (t."lastActivityAt",t.id)<(${anchor.lastActivityAt},${anchor.id})` : Prisma.empty}
+    ORDER BY t."lastActivityAt" DESC,t.id DESC LIMIT ${q.limit + 1}`);
+  const selected = await db.ticket.findMany({
+    where: { AND: [ticketScope(actor), { id: { in: ids.map((row) => row.id) } }] },
+    select: ticketSelect,
+  });
+  const byId = new Map(selected.map((row) => [row.id, row]));
+  const rows = ids.flatMap(({ id }) => (byId.has(id) ? [byId.get(id)!] : []));
   return {
     items: rows.slice(0, q.limit),
     nextCursor: rows.length > q.limit ? rows[q.limit - 1].id : null,
@@ -592,6 +598,13 @@ export async function changeStatus(actor: Actor, id: string, input: unknown) {
     const ticket = loaded.ticket;
     assertParticipant(actor, ticket);
     assertTransition(ticket.status, data.status);
+    const latest = await tx.message.findFirst({
+      where: { ticketId: id, visibility: 'PUBLIC' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { senderId: true },
+    });
+    if (data.status === 'WAITING_FOR_USER' && (!latest || latest.senderId === ticket.creatorId))
+      fail('REPLY_REQUIRED', 409, 'ابتدا پاسخ عمومی برای دانشجو ارسال کنید.');
     if (!isStaff(actor, ticket)) {
       if (
         ticket.creatorId !== actor.id ||

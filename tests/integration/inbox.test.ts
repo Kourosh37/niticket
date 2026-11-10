@@ -42,6 +42,15 @@ it('scopes new and answered inboxes to the current role and hides private previe
                 visibility: 'INTERNAL',
                 createdAt: new Date('2026-11-01T10:01:00Z'),
               },
+              ...(status === 'OPEN'
+                ? []
+                : [
+                    {
+                      senderId: f.agent.id,
+                      body: 'PUBLIC_PREVIEW',
+                      createdAt: new Date('2026-11-01T10:02:00Z'),
+                    },
+                  ]),
             ],
           },
         },
@@ -67,6 +76,34 @@ it('scopes new and answered inboxes to the current role and hides private previe
     (await listTickets(await f.actor(f.outsider.id), { view: 'action', scope: 'department' }))
       .items,
   ).toEqual([]);
+});
+
+it('classifies legacy states by the last public reply and rejects a forged answered status', async () => {
+  const student = await f.actor(f.outsider.id),
+    staff = await f.actor(f.agent.id);
+  const { id } = await openConversation(student, { departmentId: f.department.id });
+  await addMessage(student, id, { version: 1, body: 'پرسش جدید دانشجو' });
+  await expect(
+    changeStatus(staff, id, { version: 2, status: 'WAITING_FOR_USER' }),
+  ).rejects.toMatchObject({ code: 'REPLY_REQUIRED' });
+  await db.ticket.update({ where: { id }, data: { status: 'CLOSED' } });
+  expect(
+    (await listTickets(staff, { scope: 'department', view: 'action' })).items.some(
+      (t) => t.id === id,
+    ),
+  ).toBe(true);
+  await addMessage(staff, id, { version: 2, body: 'پاسخ عمومی مسئول' });
+  await db.ticket.update({ where: { id }, data: { status: 'IN_PROGRESS' } });
+  expect(
+    (await listTickets(staff, { scope: 'department', view: 'action' })).items.some(
+      (t) => t.id === id,
+    ),
+  ).toBe(false);
+  expect(
+    (await listTickets(student, { scope: 'mine', view: 'answered' })).items.some(
+      (t) => t.id === id,
+    ),
+  ).toBe(true);
 });
 
 it('opens one persistent unit chat concurrently without a title, initial message or premature notification', async () => {
