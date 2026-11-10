@@ -1,4 +1,5 @@
 import { request, RequestError } from './utils';
+import { uploadMime } from './file-type';
 
 const uploadKeys = new WeakMap<File, Map<string, string>>();
 
@@ -66,7 +67,7 @@ export async function uploadFile(
       messageId,
       noteId,
       filename: file.name,
-      mime: file.type.split(';')[0] || 'application/octet-stream',
+      mime: uploadMime(file),
       size: file.size,
     },
     onProgress,
@@ -84,7 +85,7 @@ export async function uploadAvatar(
     {
       userId,
       filename: file.name,
-      mime: file.type.split(';')[0],
+      mime: uploadMime(file),
       size: file.size,
     },
     onProgress,
