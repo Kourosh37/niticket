@@ -175,9 +175,7 @@ export async function saveDepartment(actor: Actor, input: unknown, id?: string) 
   return transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     assertAdmin(actor);
-    const department = id
-      ? await tx.department.update({ where: { id }, data })
-      : await tx.department.create({ data: { ...data, slug: `unit-${randomUUID()}` } });
+    const department = await tx.department.update({ where: { id }, data });
     await audit(tx, actor, id ? 'DEPARTMENT_UPDATED' : 'DEPARTMENT_CREATED', department.id, {
       active: data.active,
     });

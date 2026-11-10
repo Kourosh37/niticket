@@ -2,8 +2,36 @@ import { afterAll, expect, it } from 'vitest';
 import { db } from '@niticket/database';
 import { fixtures } from '../helpers/fixtures';
 import { getTicket } from '@niticket/core/application/tickets';
+import { saveDepartment } from '@niticket/core/application/administration';
 
 afterAll(() => db.$disconnect());
+
+it('preserves omitted department fields when applying a partial update', async () => {
+  const f = await fixtures();
+  await db.department.update({
+    where: { id: f.department.id },
+    data: {
+      active: false,
+      visible: false,
+      acceptingTickets: false,
+      description: 'Keep this description',
+    },
+  });
+  const admin = await f.actor(f.admin.id);
+  await saveDepartment(admin, { name: 'Renamed hidden unit' }, f.department.id);
+  expect(await db.department.findUniqueOrThrow({ where: { id: f.department.id } })).toMatchObject({
+    name: 'Renamed hidden unit',
+    active: false,
+    visible: false,
+    acceptingTickets: false,
+    description: 'Keep this description',
+  });
+  await saveDepartment(admin, { visible: true }, f.department.id);
+  expect((await db.department.findUniqueOrThrow({ where: { id: f.department.id } })).visible).toBe(
+    true,
+  );
+  await expect(saveDepartment(admin, {}, f.department.id)).rejects.toThrow();
+});
 
 it('shows the active unit manager contact to participants and excludes inactive contacts and unrelated users', async () => {
   const f = await fixtures();

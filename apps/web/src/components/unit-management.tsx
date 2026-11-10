@@ -349,7 +349,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                     name: f.get('name'),
                     description: f.get('description'),
                     active: f.has('active'),
-                    visible: true,
+                    visible: f.has('visible'),
                     acceptingTickets: f.has('acceptingTickets'),
                   }),
                 });
@@ -382,6 +382,10 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
               <label className="checkbox-field">
                 <input type="checkbox" name="active" defaultChecked={editing.active} /> واحد فعال
                 باشد
+              </label>
+              <label className="checkbox-field">
+                <input type="checkbox" name="visible" defaultChecked={editing.visible} /> در فهرست
+                واحدها نمایش داده شود
               </label>
               <label className="checkbox-field">
                 <input

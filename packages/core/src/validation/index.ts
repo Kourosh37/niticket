@@ -57,18 +57,19 @@ export const transferSchema = versionSchema
 
 export const departmentSchema = z
   .object({
-    name: z.string().trim().min(2).max(100),
+    name: z.string().trim().min(2).max(100).optional(),
     slug: z
       .string()
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
       .max(80)
       .optional(),
-    description: z.string().max(1000).default(''),
-    active: z.boolean().default(true),
-    visible: z.boolean().default(true),
-    acceptingTickets: z.boolean().default(true),
+    description: z.string().max(1000).optional(),
+    active: z.boolean().optional(),
+    visible: z.boolean().optional(),
+    acceptingTickets: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => Object.values(data).some((value) => value !== undefined));
 
 export const memberSchema = z
   .object({ userId: uuid, role: z.enum(['AGENT', 'MANAGER']), active: z.boolean().default(true) })
