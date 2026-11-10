@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { db } from '@niticket/database';
+import { randomUUID, createHash } from 'node:crypto';
+import { db, type Prisma } from '@niticket/database';
 import type { Attachment } from '@prisma/client';
 import {
   assertRead,
@@ -17,6 +17,53 @@ import { transaction } from '../infrastructure/transaction';
 import { refreshActor } from './context';
 import { z } from 'zod';
 import { AppError } from '../domain/errors';
+
+async function findUploadRetry(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  clientId: string | undefined,
+  data: unknown,
+) {
+  if (!clientId) return null;
+  const saved = await tx.idempotency.findUnique({
+    where: { actorId_key: { actorId: actor.id, key: `upload:${clientId}` } },
+  });
+  if (!saved) return null;
+  if (saved.fingerprint !== createHash('sha256').update(JSON.stringify(data)).digest('hex'))
+    fail('IDEMPOTENCY_CONFLICT', 409, 'کلید تکراری برای فایل متفاوت استفاده شده است.');
+  return tx.attachment.findUniqueOrThrow({ where: { id: saved.resourceId } });
+}
+
+async function rememberUpload(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  clientId: string | undefined,
+  data: unknown,
+  id: string,
+) {
+  if (clientId)
+    await tx.idempotency.create({
+      data: {
+        actorId: actor.id,
+        key: `upload:${clientId}`,
+        resourceId: id,
+        fingerprint: createHash('sha256').update(JSON.stringify(data)).digest('hex'),
+      },
+    });
+}
+
+async function uploadIntent(attachment: Attachment) {
+  if (attachment.scanStatus !== 'PENDING')
+    return { id: attachment.id, scanStatus: attachment.scanStatus, url: null, expiresIn: 0 };
+  if (attachment.expiresAt <= new Date())
+    fail('UPLOAD_EXPIRED', 409, 'مهلت بارگذاری تمام شده است.');
+  return {
+    id: attachment.id,
+    scanStatus: attachment.scanStatus,
+    url: await signedUpload(attachment.objectKey, attachment.declaredMime, attachment.expectedSize),
+    expiresIn: 180,
+  };
+}
 
 async function authorize(
   actor: Actor,
@@ -65,11 +112,10 @@ async function authorize(
 }
 
 export async function createUpload(actor: Actor, input: unknown) {
-  const data = uploadSchema.parse(input);
+  const { clientId, ...data } = uploadSchema.extend({ clientId: uuid.optional() }).parse(input);
   if (data.messageId && data.noteId)
     fail('VALIDATION', 400, 'پیوست فقط به یک پیام یا یادداشت متصل می‌شود.');
-  if (data.size > (await settings()).maxUploadBytes)
-    fail('VALIDATION', 400, 'حجم فایل بیش از حد مجاز است.');
+  const limit = (await settings()).maxUploadBytes;
   const context = {
     ticketId: data.ticketId,
     messageId: data.messageId ?? null,
@@ -81,11 +127,14 @@ export async function createUpload(actor: Actor, input: unknown) {
   if (data.noteId) assertStaff(actor, ticket);
   const id = randomUUID(),
     objectKey = `pending/${randomUUID()}`;
-  await transaction(async (tx) => {
+  const attachment = await transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     const current = await tx.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
     assertParticipant(actor, current);
     if (data.noteId) assertStaff(actor, current);
+    const retry = await findUploadRetry(tx, actor, clientId, data);
+    if (retry) return retry;
+    if (data.size > limit) fail('VALIDATION', 400, 'حجم فایل بیش از حد مجاز است.');
     if (
       (await tx.attachment.count({
         where: {
@@ -96,7 +145,7 @@ export async function createUpload(actor: Actor, input: unknown) {
       })) >= 100
     )
       fail('VALIDATION', 400, 'تعداد پیوست‌ها به حد مجاز رسیده است.');
-    await tx.attachment.create({
+    const created = await tx.attachment.create({
       data: {
         id,
         ...context,
@@ -108,14 +157,16 @@ export async function createUpload(actor: Actor, input: unknown) {
         expiresAt: new Date(Date.now() + 600000),
       },
     });
+    await rememberUpload(tx, actor, clientId, data, created.id);
+    return created;
   });
-  return { id, url: await signedUpload(objectKey, data.mime, data.size), expiresIn: 180 };
+  return uploadIntent(attachment);
 }
 
 export async function createAvatarUpload(actor: Actor, input: unknown) {
-  const data = uploadSchema
+  const { clientId, ...data } = uploadSchema
     .omit({ ticketId: true, messageId: true, noteId: true })
-    .extend({ userId: uuid.optional() })
+    .extend({ userId: uuid.optional(), clientId: uuid.optional() })
     .strict()
     .parse(input);
   const userId = data.userId ?? actor.id;
@@ -125,16 +176,18 @@ export async function createAvatarUpload(actor: Actor, input: unknown) {
   await authorize(actor, context, true);
   const id = randomUUID(),
     objectKey = `pending/${randomUUID()}`;
-  await transaction(async (tx) => {
+  const attachment = await transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     if (!actor.isAdmin && actor.id !== userId) fail();
+    const retry = await findUploadRetry(tx, actor, clientId, data);
+    if (retry) return retry;
     if (
       (await tx.attachment.count({
         where: { avatarOwnerId: userId, scanStatus: { in: ['PENDING', 'QUARANTINED'] } },
       })) >= 5
     )
       fail('VALIDATION', 400, 'لطفاً تا پایان بررسی تصویر قبلی صبر کنید.');
-    await tx.attachment.create({
+    const created = await tx.attachment.create({
       data: {
         id,
         ...context,
@@ -146,8 +199,10 @@ export async function createAvatarUpload(actor: Actor, input: unknown) {
         expiresAt: new Date(Date.now() + 600000),
       },
     });
+    await rememberUpload(tx, actor, clientId, data, created.id);
+    return created;
   });
-  return { id, url: await signedUpload(objectKey, data.mime, data.size), expiresIn: 180 };
+  return uploadIntent(attachment);
 }
 
 export async function completeUpload(actor: Actor, id: string) {

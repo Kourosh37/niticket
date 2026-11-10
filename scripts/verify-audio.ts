@@ -76,7 +76,7 @@ try {
       mime: 'audio/wav',
       size: bytes.length,
     });
-    const uploaded = await fetch(intent.url, {
+    const uploaded = await fetch(intent.url!, {
       method: 'PUT',
       headers: { 'content-type': 'audio/wav' },
       body: bytes,

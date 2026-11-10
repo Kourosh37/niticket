@@ -58,19 +58,46 @@ it('rejects uploads whose actual length differs from the signed intent at storag
     mime: 'text/plain',
     size: 4,
   });
-  expect(new URL(intent.url).searchParams.get('X-Amz-SignedHeaders')).toContain('content-length');
-  const response = await fetch(intent.url, {
+  expect(new URL(intent.url!).searchParams.get('X-Amz-SignedHeaders')).toContain('content-length');
+  const response = await fetch(intent.url!, {
     method: 'PUT',
     headers: { 'content-type': 'text/plain' },
     body: Buffer.alloc(1024, 65),
   });
   expect(response.ok).toBe(false);
-  const valid = await fetch(intent.url, {
+  const valid = await fetch(intent.url!, {
     method: 'PUT',
     headers: { 'content-type': 'text/plain' },
     body: Buffer.from('safe'),
   });
   expect(valid.ok).toBe(true);
+});
+it('reuses an upload intent across lost responses and never rewrites completed files', async () => {
+  const actor = await f.actor(f.student.id);
+  const input = {
+    ticketId,
+    filename: 'retry.txt',
+    mime: 'text/plain',
+    size: 4,
+    clientId: randomUUID(),
+  };
+  const first = await createUpload(actor, input);
+  expect((await createUpload(actor, input)).id).toBe(first.id);
+  await expect(createUpload(actor, { ...input, size: 5 })).rejects.toMatchObject({
+    code: 'IDEMPOTENCY_CONFLICT',
+  });
+  await fetch(first.url!, {
+    method: 'PUT',
+    headers: { 'content-type': 'text/plain' },
+    body: Buffer.from('safe'),
+  });
+  await completeUpload(actor, first.id);
+  expect(await createUpload(actor, input)).toMatchObject({
+    id: first.id,
+    url: null,
+    scanStatus: 'QUARANTINED',
+  });
+  expect(await db.attachment.count({ where: { ticketId, filename: input.filename } })).toBe(1);
 });
 it('uploads real bytes, quarantines, scans and promotes an immutable clean object', async () => {
   const actor = await f.actor(f.student.id);
@@ -83,7 +110,7 @@ it('uploads real bytes, quarantines, scans and promotes an immutable clean objec
     mime: 'text/plain',
     size: bytes.length,
   });
-  const response = await fetch(intent.url, {
+  const response = await fetch(intent.url!, {
     method: 'PUT',
     headers: { 'content-type': 'text/plain' },
     body: bytes,
@@ -102,7 +129,7 @@ it('uploads real bytes, quarantines, scans and promotes an immutable clean objec
     { id: intent.id, scanStatus: 'CLEAN', detectedMime: 'text/plain' },
   ]);
   // Replay the original PUT after approval. It must not replace the released object.
-  await fetch(intent.url, {
+  await fetch(intent.url!, {
     method: 'PUT',
     headers: { 'content-type': 'text/plain' },
     body: Buffer.from('replaced'),
@@ -127,7 +154,7 @@ it('does not expose an internal attachment to the requester', async () => {
     mime: 'text/plain',
     size: bytes.length,
   });
-  await fetch(intent.url, {
+  await fetch(intent.url!, {
     method: 'PUT',
     headers: { 'content-type': 'text/plain' },
     body: bytes,
@@ -149,7 +176,11 @@ it('rejects spoofed image signatures', async () => {
     mime: 'image/png',
     size: bytes.length,
   });
-  await fetch(intent.url, { method: 'PUT', headers: { 'content-type': 'image/png' }, body: bytes });
+  await fetch(intent.url!, {
+    method: 'PUT',
+    headers: { 'content-type': 'image/png' },
+    body: bytes,
+  });
   await completeUpload(actor, intent.id);
   const event = await db.outboxEvent.findFirstOrThrow({
     where: { type: 'SCAN_ATTACHMENT', payload: { path: ['attachmentId'], equals: intent.id } },

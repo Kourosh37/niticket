@@ -188,7 +188,7 @@ test('downloads and parses a PDF only once while changing its preview pages', as
     });
   expect(
     (
-      await fetch(upload.url, {
+      await fetch(upload.url!, {
         method: 'PUT',
         headers: { 'content-type': 'application/pdf' },
         body: bytes,

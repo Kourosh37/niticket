@@ -153,7 +153,7 @@ it('keeps optional per-event notes and their attachments private to the unit and
     mime: 'text/plain',
     size: bytes.length,
   });
-  await fetch(intent.url, {
+  await fetch(intent.url!, {
     method: 'PUT',
     headers: { 'content-type': 'text/plain' },
     body: bytes,
@@ -188,7 +188,7 @@ it('scans and normalizes profile photos and restricts changes to the administrat
   await expect(createAvatarUpload(await f.actor(f.manager.id), input)).rejects.toThrow();
   for (const actor of [await f.actor(f.admin.id), await f.actor(f.agent.id)]) {
     const intent = await createAvatarUpload(actor, input);
-    await fetch(intent.url, {
+    await fetch(intent.url!, {
       method: 'PUT',
       headers: { 'content-type': 'image/png' },
       body: bytes,
