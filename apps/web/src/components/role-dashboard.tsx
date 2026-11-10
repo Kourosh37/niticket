@@ -13,9 +13,7 @@ export async function RoleDashboard({ actor }: { actor: Actor }) {
     reports(actor),
     listDepartments(actor, true, { limit: actor.isAdmin ? 6 : 1000 }),
   ]);
-  const open = report.byStatus
-    .filter((g) => !['CLOSED', 'RESOLVED'].includes(g.status))
-    .reduce((sum, g) => sum + g._count, 0);
+  const open = report.pendingReplies;
   if (actor.isAdmin)
     return (
       <>

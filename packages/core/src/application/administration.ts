@@ -527,12 +527,24 @@ export async function reports(actor: Actor, input: unknown = {}) {
         : Prisma.sql`FALSE`
       : Prisma.sql`"creatorId"=${actor.id}`;
   const timing = await db.$queryRaw<
-    { firstResponseSeconds: number | null; resolutionSeconds: number | null; overdue: number }[]
+    {
+      firstResponseSeconds: number | null;
+      resolutionSeconds: number | null;
+      overdue: number;
+      pendingReplies: number;
+    }[]
   >(Prisma.sql`
     SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"-"createdAt")))::double precision AS "firstResponseSeconds",
       AVG(EXTRACT(EPOCH FROM ("resolvedAt"-"createdAt")))::double precision AS "resolutionSeconds",
-      COUNT(*) FILTER (WHERE "dueAt"<NOW() AND status NOT IN ('RESOLVED','CLOSED'))::int AS overdue
-    FROM "Ticket" WHERE ${scopeSql}
+      COUNT(*) FILTER (WHERE "dueAt"<NOW() AND status NOT IN ('RESOLVED','CLOSED'))::int AS overdue,
+      COUNT(*) FILTER (WHERE latest."senderId"=t."creatorId")::int AS "pendingReplies"
+    FROM "Ticket" t
+    LEFT JOIN LATERAL (
+      SELECT m."senderId" FROM "Message" m
+      WHERE m."ticketId"=t.id AND m.visibility='PUBLIC'
+      ORDER BY m."createdAt" DESC,m.id DESC LIMIT 1
+    ) latest ON TRUE
+    WHERE ${scopeSql}
       ${data.departmentId ? Prisma.sql`AND "departmentId"=${data.departmentId}` : Prisma.empty}
       ${data.from ? Prisma.sql`AND "createdAt">=${new Date(data.from)}` : Prisma.empty}
       ${data.to ? Prisma.sql`AND "createdAt"<=${new Date(data.to)}` : Prisma.empty}`);
@@ -549,6 +561,7 @@ export async function reports(actor: Actor, input: unknown = {}) {
   });
   return {
     total,
+    pendingReplies: timing[0].pendingReplies,
     byStatus,
     byPriority,
     byDepartment,
