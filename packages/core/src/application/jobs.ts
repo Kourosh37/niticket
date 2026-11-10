@@ -108,11 +108,12 @@ export async function processScan(eventId: string, payload: unknown) {
     return;
   }
   const policy = await settings();
-  const bytes = await objectBytes(
-    attachment.objectKey,
-    attachment.avatarOwnerId ? 2097152 : policy.maxUploadBytes,
-  );
   try {
+    // The intent already passed the upload policy. Later policy edits apply to new intents.
+    const bytes = await objectBytes(
+      attachment.objectKey,
+      Math.min(attachment.expectedSize, attachment.avatarOwnerId ? 2097152 : 52428800),
+    );
     if (bytes.length !== attachment.expectedSize) throw new Error('File size mismatch');
     const detected = await detectFile(bytes, attachment.declaredMime);
     await scanBytes(bytes);
@@ -197,6 +198,8 @@ export async function processScan(eventId: string, payload: unknown) {
         'MALWARE_FOUND',
         'File signature mismatch',
         'File size mismatch',
+        'Invalid object size',
+        'Object too large',
         'Audio duration or stream invalid',
         'Audio duration invalid',
         'Avatar invalid',

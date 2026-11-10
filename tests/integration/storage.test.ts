@@ -15,6 +15,7 @@ import { objectBytes } from '@niticket/core/infrastructure/storage';
 import { deleteObject, putObject, storage } from '@niticket/core/infrastructure/storage';
 import { ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { config } from '@niticket/core/infrastructure/config';
+import { settings, saveSettings } from '@niticket/core/application/settings';
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 let ticketId: string;
@@ -98,6 +99,32 @@ it('reuses an upload intent across lost responses and never rewrites completed f
     scanStatus: 'QUARANTINED',
   });
   expect(await db.attachment.count({ where: { ticketId, filename: input.filename } })).toBe(1);
+});
+
+it('honors accepted upload sizes when the administrator lowers the policy before completion or scanning', async () => {
+  const policy = await settings();
+  const admin = await f.actor(f.admin.id),
+    actor = await f.actor(f.student.id);
+  const bytes = Buffer.alloc(2048, 65);
+  const input = { ticketId, filename: 'accepted.txt', mime: 'text/plain', size: bytes.length };
+  const intent = await createUpload(actor, input);
+  await fetch(intent.url!, {
+    method: 'PUT',
+    headers: { 'content-type': 'text/plain' },
+    body: bytes,
+  });
+  try {
+    await saveSettings(admin, { ...policy, maxUploadBytes: 1024 });
+    await expect(createUpload(actor, input)).rejects.toThrow();
+    await completeUpload(actor, intent.id);
+    const event = await db.outboxEvent.findFirstOrThrow({
+      where: { type: 'SCAN_ATTACHMENT', payload: { path: ['attachmentId'], equals: intent.id } },
+    });
+    await processScan(event.id, event.payload);
+    expect((await downloadAttachment(actor, intent.id)).bytes.equals(bytes)).toBe(true);
+  } finally {
+    await saveSettings(admin, policy);
+  }
 });
 it('uploads real bytes, quarantines, scans and promotes an immutable clean object', async () => {
   const actor = await f.actor(f.student.id);

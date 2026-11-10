@@ -212,7 +212,8 @@ export async function completeUpload(actor: Actor, id: string) {
   await authorize(actor, a, true);
   if (a.scanStatus !== 'PENDING') return { id, scanStatus: a.scanStatus };
   if (a.expiresAt < new Date()) fail('VALIDATION', 400, 'مهلت بارگذاری تمام شده است.');
-  const limit = a.avatarOwnerId ? 2097152 : (await settings()).maxUploadBytes;
+  // Honor the size approved when this intent was created, with an absolute safety cap.
+  const limit = a.avatarOwnerId ? 2097152 : 52428800;
   const head = await headObject(a.objectKey);
   if (head.ContentLength !== a.expectedSize || head.ContentLength > limit)
     fail('VALIDATION', 400, 'حجم فایل بارگذاری‌شده معتبر نیست.');
