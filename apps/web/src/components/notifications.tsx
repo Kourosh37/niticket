@@ -67,7 +67,9 @@ export function Notifications({
               </span>
               <div>
                 {n.ticketId ? (
-                  <Link href={`/tickets/${n.ticketId}`}>
+                  <Link
+                    href={`/tickets/${n.ticketId}${n.messageId ? `?message=${n.messageId}` : ''}`}
+                  >
                     <strong>{n.title}</strong>
                   </Link>
                 ) : (

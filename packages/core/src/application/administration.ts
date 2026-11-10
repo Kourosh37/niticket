@@ -463,7 +463,14 @@ export async function notifications(actor: Actor, cursor?: string) {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: 31,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    select: { id: true, title: true, ticketId: true, readAt: true, createdAt: true },
+    select: {
+      id: true,
+      title: true,
+      ticketId: true,
+      messageId: true,
+      readAt: true,
+      createdAt: true,
+    },
   });
   return {
     items: rows.slice(0, 30),

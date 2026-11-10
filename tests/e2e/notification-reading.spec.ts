@@ -13,6 +13,67 @@ if (!database.pathname.endsWith('_test')) throw new Error('Test database require
 process.env.DATABASE_URL = database.toString();
 const origin = 'http://localhost:3001';
 
+test('opens the exact old reply from its notification and acknowledges it on visibility', async ({
+  page,
+}) => {
+  const { fixtures } = await import('../helpers/fixtures');
+  const { db } = await import('@niticket/database');
+  const { createTicket, addMessage } = await import('@niticket/core/application/tickets');
+  const { processNotification } = await import('@niticket/core/application/jobs');
+  const f = await fixtures();
+  const ticket = await createTicket(
+    await f.actor(f.student.id),
+    {
+      departmentId: f.department.id,
+      subject: 'اعلان پاسخ قدیمی',
+      body: 'پرسش اولیه برای بررسی هدایت اعلان',
+    },
+    randomUUID(),
+  );
+  const reply = await addMessage(await f.actor(f.agent.id), ticket.id, {
+    version: 1,
+    body: 'پاسخ قدیمی مورد نظر اعلان',
+  });
+  const event = await db.outboxEvent.findFirstOrThrow({
+    where: { payload: { path: ['messageId'], equals: reply.id } },
+  });
+  await processNotification(event.id, event.payload);
+  await db.message.createMany({
+    data: Array.from({ length: 60 }, (_, index) => ({
+      ticketId: ticket.id,
+      senderId: f.student.id,
+      body: `پیام بعدی ${index}`,
+      createdAt: new Date(Date.now() + 1000 + index),
+    })),
+  });
+  expect(
+    (
+      await page.request.post('/api/auth/sign-in/phone-number', {
+        headers: { origin },
+        data: { phoneNumber: f.student.phoneNumber, password: f.password },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.goto('/notifications');
+  const link = page.getByRole('link', { name: 'پاسخ جدیدی برای درخواست ثبت شد', exact: true });
+  await expect(link).toHaveAttribute('href', `/tickets/${ticket.id}?message=${reply.id}`);
+  await link.click();
+  await page.bringToFront();
+  await expect(page.getByText('پاسخ قدیمی مورد نظر اعلان', { exact: true })).toBeInViewport();
+  await page.getByLabel('پاسخ شما', { exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        !!(
+          await db.notification.findUniqueOrThrow({
+            where: { eventId_userId: { eventId: event.id, userId: f.student.id } },
+          })
+        ).readAt,
+    )
+    .toBe(true);
+  await db.$disconnect();
+});
+
 test('keeps officer notifications until reply and clears student notifications only when the reply is visible', async ({
   browser,
 }) => {
