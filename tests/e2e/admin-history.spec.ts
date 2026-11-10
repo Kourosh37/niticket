@@ -85,6 +85,35 @@ test('opens a unit history from administration and reads its conversations and p
     (
       await page.request.post('/api/auth/sign-in/phone-number', {
         headers: { origin },
+        data: { phoneNumber: f.agent.phoneNumber, password: f.password },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.goto(`/tickets/${ticket.id}`);
+  await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
+  await page.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
+  await expect(page.locator('.history-event')).toHaveCount(50);
+  await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
+  await expect(page.locator('.history-event')).toHaveCount(100);
+  await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
+  await expect(page.locator('.history-event')).toHaveCount(106);
+  const oldEvent = page
+    .locator('.history-event')
+    .filter({ hasText: 'یادداشت خصوصی قابل مشاهده برای مدیر' });
+  await oldEvent.getByRole('button', { name: 'یادداشت یا وویس', exact: true }).click();
+  const noteDialog = page.getByRole('dialog', { name: 'یادداشت برای این رویداد', exact: true });
+  await noteDialog
+    .getByLabel('یادداشت متنی (اختیاری)', { exact: true })
+    .fill('یادداشت تازه برای رویداد قدیمی');
+  await noteDialog.getByRole('button', { name: 'ثبت یادداشت', exact: true }).click();
+  await expect(noteDialog).toHaveCount(0);
+  await expect(page.getByText('یادداشت تازه برای رویداد قدیمی', { exact: true })).toBeVisible();
+  await expect(page.locator('.history-event')).toHaveCount(106);
+  await page.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
+  expect(
+    (
+      await page.request.post('/api/auth/sign-in/phone-number', {
+        headers: { origin },
         data: { phoneNumber: f.student.phoneNumber, password: f.password },
       })
     ).status(),
