@@ -15,7 +15,7 @@ FROM dependencies AS tools
 COPY . .
 RUN bun run db:generate
 RUN mkdir -p apps/web/.next node_modules/.vite-temp node_modules/.vite \
-    && chown -R bun:bun apps/web \
+    && chown -R bun:bun apps/web node_modules/.prisma \
     && chown bun:bun node_modules/.vite-temp node_modules/.vite
 USER bun
 
