@@ -7,6 +7,7 @@ import {
   createUpload,
   completeUpload,
   downloadAttachment,
+  uploadStatuses,
 } from '@niticket/core/application/attachments';
 import { processScan } from '@niticket/core/application/jobs';
 import { scanBytes } from '@niticket/core/infrastructure/scanner';
@@ -96,6 +97,10 @@ it('uploads real bytes, quarantines, scans and promotes an immutable clean objec
   await processScan(event.id, event.payload);
   expect((await downloadAttachment(actor, intent.id)).bytes.equals(bytes)).toBe(true);
   await expect(downloadAttachment(await f.actor(f.outsider.id), intent.id)).rejects.toThrow();
+  expect(await uploadStatuses(await f.actor(f.outsider.id), [intent.id])).toEqual([]);
+  expect(await uploadStatuses(actor, [intent.id])).toMatchObject([
+    { id: intent.id, scanStatus: 'CLEAN', detectedMime: 'text/plain' },
+  ]);
   // Replay the original PUT after approval. It must not replace the released object.
   await fetch(intent.url, {
     method: 'PUT',

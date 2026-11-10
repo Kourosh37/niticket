@@ -15,6 +15,8 @@ import { settings } from './settings';
 import { signedUpload, headObject, objectBytes } from '../infrastructure/storage';
 import { transaction } from '../infrastructure/transaction';
 import { refreshActor } from './context';
+import { z } from 'zod';
+import { AppError } from '../domain/errors';
 
 async function authorize(
   actor: Actor,
@@ -191,7 +193,31 @@ export async function uploadStatus(actor: Actor, id: string) {
     a.avatarOwnerId !== actor.id
   )
     fail();
-  return { id, scanStatus: a.scanStatus };
+  return {
+    id,
+    filename: a.filename,
+    scanStatus: a.scanStatus,
+    detectedMime: a.detectedMime,
+    size: a.size,
+    durationSeconds: a.durationSeconds,
+    waveform: a.waveform,
+  };
+}
+
+export async function uploadStatuses(actor: Actor, input: unknown) {
+  const ids = z.array(uuid).min(1).max(50).parse(input);
+  const results = await Promise.all(
+    [...new Set(ids)].map(async (id) => {
+      try {
+        return await uploadStatus(actor, id);
+      } catch (error) {
+        // A revoked or inaccessible attachment must not reveal its existence or block other items.
+        if (error instanceof AppError && [403, 404].includes(error.status)) return null;
+        throw error;
+      }
+    }),
+  );
+  return results.filter((item) => item !== null);
 }
 
 async function authorizedDownload(actor: Actor, id: string) {

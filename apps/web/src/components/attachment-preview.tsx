@@ -10,6 +10,7 @@ import { AudioPlayer } from './audio-player';
 import { DownloadButton } from './downloads';
 import { formatFileSize } from '@/lib/downloads';
 import { digits, checkSession } from '@/lib/utils';
+import { useAttachmentStatus } from '@/lib/attachment-status';
 
 export type AttachmentInfo = {
   id: string;
@@ -238,7 +239,8 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
   );
 }
 
-export function AttachmentPreview({ file }: { file: AttachmentInfo }) {
+export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
+  const file = useAttachmentStatus(initial);
   const [open, setOpen] = useState(false);
   const url = `/api/v1/attachments/${file.id}/access`;
   if (file.scanStatus !== 'CLEAN')

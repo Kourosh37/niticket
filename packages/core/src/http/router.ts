@@ -119,6 +119,11 @@ export async function dispatch(
   }
   if (resource === 'uploads' && id && action === 'status' && method === 'GET')
     return attachments.uploadStatus(actor, id);
+  if (resource === 'uploads' && id === 'statuses' && method === 'GET')
+    return attachments.uploadStatuses(
+      actor,
+      typeof query.ids === 'string' && query.ids.length <= 1850 ? query.ids.split(',') : [],
+    );
   if (resource === 'avatars' && id === 'intents' && method === 'POST')
     return attachments.createAvatarUpload(actor, await readJson(request));
   if (resource === 'avatars' && id && method === 'GET') {
