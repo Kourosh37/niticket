@@ -11,6 +11,7 @@ import { DownloadButton } from './downloads';
 import { formatFileSize } from '@/lib/downloads';
 import { digits, checkSession } from '@/lib/utils';
 import { useAttachmentStatus } from '@/lib/attachment-status';
+import { previewOffice } from '@/lib/office-preview';
 
 export type AttachmentInfo = {
   id: string;
@@ -111,27 +112,15 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
           const render = p.render({ canvas: target, viewport });
           rendering = render;
           await render.promise;
-        } else if (file.detectedMime?.includes('wordprocessingml')) {
-          const mammoth = await import('mammoth');
-          const result = await mammoth.extractRawText({ arrayBuffer: data! });
-          if (active) setText(result.value.slice(0, 300000));
-        } else if (file.detectedMime?.includes('spreadsheetml')) {
-          const { readSheet: read } = await import('read-excel-file/browser');
-          const values = await read(new Blob([data!]));
-          if (active)
-            setRows(
-              values
-                .slice(0, 500)
-                .map((row) =>
-                  row
-                    .slice(0, 30)
-                    .map((value) =>
-                      value instanceof Date
-                        ? new Intl.DateTimeFormat('fa-IR').format(value)
-                        : String(value ?? ''),
-                    ),
-                ),
-            );
+        } else if (
+          file.detectedMime?.includes('wordprocessingml') ||
+          file.detectedMime?.includes('spreadsheetml')
+        ) {
+          const result = await previewOffice(data!, file.detectedMime, abort.signal);
+          if (active) {
+            setText(result.text ?? '');
+            setRows(result.rows ?? []);
+          }
         } else if (file.detectedMime === 'text/plain') {
           if (active) setText(new TextDecoder('utf-8').decode(data!).slice(0, 300000));
         } else throw new Error('پیش‌نمایش این قالب در دسترس نیست. فایل را دریافت کنید.');
