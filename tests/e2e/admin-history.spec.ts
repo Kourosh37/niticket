@@ -33,7 +33,7 @@ test('opens a unit history from administration and reads its conversations and p
     body: 'یادداشت خصوصی قابل مشاهده برای مدیر',
   });
   await db.activity.createMany({
-    data: Array.from({ length: 55 }, (_, index) => ({
+    data: Array.from({ length: 105 }, (_, index) => ({
       ticketId: ticket.id,
       actorId: f.agent.id,
       type: 'INTERNAL_NOTE',
@@ -61,11 +61,15 @@ test('opens a unit history from administration and reads its conversations and p
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'اطلاعات گفتگو' })).toBeVisible();
   await expect(page.locator('.history-event')).toHaveCount(50);
+  await page.clock.install();
   await expect(page.getByText('یادداشت خصوصی قابل مشاهده برای مدیر', { exact: true })).toHaveCount(
     0,
   );
   await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
-  await expect(page.locator('.history-event')).toHaveCount(56);
+  await expect(page.locator('.history-event')).toHaveCount(100);
+  await page.clock.fastForward(15000);
+  await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
+  await expect(page.locator('.history-event')).toHaveCount(106);
   await expect(
     page.getByText('یادداشت خصوصی قابل مشاهده برای مدیر', { exact: true }),
   ).toBeVisible();

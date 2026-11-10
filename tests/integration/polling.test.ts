@@ -9,6 +9,7 @@ import {
   addMessage,
   addActivityNote,
   getHistoryPage,
+  getHistoryActivity,
   getMessagePage,
 } from '@niticket/core/application/tickets';
 import { cleanupExpiredAuth } from '@niticket/core/application/jobs';
@@ -50,6 +51,38 @@ it('limits the inbox revision to visible conversations', async () => {
   expect(await inboxRevision(student)).toEqual(before);
   await openConversation(student, { departmentId: f.department.id });
   expect(await inboxRevision(student)).not.toEqual(before);
+});
+
+it('refreshes a specific old activity while enforcing ticket and private visibility', async () => {
+  const f = await fixtures();
+  const { id } = await openConversation(await f.actor(f.student.id), {
+    departmentId: f.department.id,
+  });
+  await addMessage(await f.actor(f.student.id), id, { body: 'پرسش اولیه', version: 1 });
+  const old = await db.activity.findFirstOrThrow({ where: { ticketId: id } });
+  await db.activity.createMany({
+    data: Array.from({ length: 60 }, () => ({
+      ticketId: id,
+      actorId: f.agent.id,
+      type: 'INTERNAL_NOTE',
+      visibility: 'INTERNAL' as const,
+      metadata: {},
+    })),
+  });
+  const staff = await f.actor(f.agent.id);
+  const note = await addActivityNote(staff, id, old.id, { body: 'یادداشت تازه روی رویداد قدیمی' });
+  expect((await getHistoryPage(staff, id)).items.some((a) => a.id === old.id)).toBe(false);
+  expect((await getHistoryActivity(staff, id, old.id)).notes.some((n) => n.id === note.id)).toBe(
+    true,
+  );
+  expect((await getHistoryActivity(await f.actor(f.student.id), id, old.id)).notes).toEqual([]);
+  await expect(getHistoryActivity(await f.actor(f.outsider.id), id, old.id)).rejects.toThrow();
+  const privateActivity = await db.activity.findFirstOrThrow({
+    where: { ticketId: id, visibility: 'INTERNAL' },
+  });
+  await expect(
+    getHistoryActivity(await f.actor(f.student.id), id, privateActivity.id),
+  ).rejects.toThrow();
 });
 
 it('cleans expired sessions in bounded batches and cascades step-up proofs without removing live sessions', async () => {

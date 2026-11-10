@@ -479,6 +479,7 @@ export function Conversation({
   const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen && detail.permissions.readOnly),
     [historyError, setHistoryError] = useState('');
   const historyInFlight = useRef(false);
+  const historyPaged = useRef(false);
   const fetchHistory = useCallback(
     async (cursor?: string) => {
       if (historyInFlight.current) return;
@@ -501,13 +502,33 @@ export function Conversation({
               b.id.localeCompare(a.id),
           ),
         );
-        setActivityCursor(page.nextCursor);
+        if (cursor) historyPaged.current = true;
+        if (cursor || !historyPaged.current) setActivityCursor(page.nextCursor);
       } catch (error) {
         if (mounted.current)
           setHistoryError(error instanceof Error ? error.message : 'تاریخچه دریافت نشد.');
       } finally {
         historyInFlight.current = false;
         if (mounted.current) setLoadingHistory(false);
+      }
+    },
+    [id],
+  );
+  const refreshActivity = useCallback(
+    async (activityId: string) => {
+      try {
+        const activity = await request<Detail['activities'][number]>(
+          `/api/v1/tickets/${id}/history/${activityId}`,
+        );
+        if (mounted.current) {
+          setOlderActivities((current) =>
+            current.map((item) => (item.id === activity.id ? activity : item)),
+          );
+          setHistoryError('');
+        }
+      } catch (error) {
+        if (mounted.current)
+          setHistoryError(error instanceof Error ? error.message : 'تاریخچه دریافت نشد.');
       }
     },
     [id],
@@ -949,7 +970,7 @@ export function Conversation({
                     activityId={activity.id}
                     maxSeconds={maxSeconds}
                     maxBytes={maxBytes}
-                    onSaved={() => void fetchHistory()}
+                    onSaved={() => void refreshActivity(activity.id)}
                   />
                 )}
               </article>

@@ -73,7 +73,9 @@ export async function dispatch(
             query.direction as 'older' | 'newer' | undefined,
           );
     if (id && action === 'history' && method === 'GET')
-      return tickets.getHistoryPage(actor, id, query.cursor);
+      return segments[3]
+        ? tickets.getHistoryActivity(actor, id, segments[3])
+        : tickets.getHistoryPage(actor, id, query.cursor);
     if (id && method === 'POST') {
       const body = await readJson(request);
       if (action === 'activities' && segments[3] && segments[4] === 'notes')

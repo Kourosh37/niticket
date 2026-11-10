@@ -307,9 +307,15 @@ async function readMessagePage(
   };
 }
 
-async function readHistoryPage(id: string, activityCursor: string | undefined, internal: boolean) {
+async function readHistoryPage(
+  id: string,
+  activityCursor: string | undefined,
+  internal: boolean,
+  activityId?: string,
+) {
   const activityWhere: Prisma.ActivityWhereInput = {
     ticketId: id,
+    ...(activityId ? { id: activityId } : {}),
     ...(!internal ? { visibility: 'PUBLIC' } : {}),
   };
   if (
@@ -386,6 +392,18 @@ export async function getMessagePage(
 export async function getHistoryPage(actor: Actor, id: string, cursor?: string) {
   if (cursor) uuid.parse(cursor);
   return readHistoryPage(id, cursor, await authorizeConversation(actor, id));
+}
+
+export async function getHistoryActivity(actor: Actor, id: string, activityId: string) {
+  uuid.parse(activityId);
+  const page = await readHistoryPage(
+    id,
+    undefined,
+    await authorizeConversation(actor, id),
+    activityId,
+  );
+  if (!page.items.length) fail();
+  return page.items[0];
 }
 
 export async function getMessageContext(actor: Actor, id: string, messageId: string) {
