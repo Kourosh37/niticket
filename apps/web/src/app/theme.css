@@ -1,33 +1,33 @@
-/* Semantic roles based on Radix Slate, Blue, Green, Red and Amber scales.
-   https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale */
+/* Warm paper surfaces and muted ink accents for light mode.
+   Dark mode retains its Slate, Blue, Green, Red and Amber semantic palette. */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
-  --background: #f9f9fb;
-  --surface: #ffffff;
-  --surface-alt: #f0f0f3;
-  --surface-hover: #e8e8ec;
-  --foreground: #1c2024;
-  --muted: #60646c;
-  --primary: #0d74ce;
-  --primary-hover: #113264;
-  --on-primary: #ffffff;
-  --accent: #e6f4fe;
-  --accent-foreground: #113264;
-  --accent-strong: #0d74ce;
-  --border: #d9d9e0;
-  --border-strong: #80838d;
-  --focus: #0d74ce;
-  --overlay: rgba(28, 32, 36, 0.5);
-  --shadow: rgba(28, 32, 36, 0.08);
-  --bubble-own: #e6f4fe;
-  --bubble-border: #acd8fc;
-  --danger: #ce2c31;
-  --danger-surface: #feebec;
-  --success: #193b2d;
-  --success-surface: #e6f6eb;
-  --warning: #4f3422;
-  --warning-surface: #fff7c2;
+  --background: #e8e1d5;
+  --surface: #f5f0e5;
+  --surface-alt: #ded6c7;
+  --surface-hover: #d7cfc0;
+  --foreground: #30352f;
+  --muted: #515a50;
+  --primary: #315c70;
+  --primary-hover: #24495b;
+  --on-primary: #f5f0e5;
+  --accent: #dbe5e8;
+  --accent-foreground: #24495b;
+  --accent-strong: #315c70;
+  --border: #c2b6a3;
+  --border-strong: #7c7160;
+  --focus: #315c70;
+  --overlay: rgba(48, 45, 38, 0.5);
+  --shadow: rgba(75, 66, 47, 0.1);
+  --bubble-own: #dbe5e8;
+  --bubble-border: #a6bbc3;
+  --danger: #a23d35;
+  --danger-surface: #f1ddd5;
+  --success: #355e48;
+  --success-surface: #dde6d6;
+  --warning: #70512d;
+  --warning-surface: #eee0bd;
 }
 
 :root[data-theme='dark'] {
@@ -317,4 +317,38 @@ textarea {
 .messenger-private-notice,
 .internal-label {
   color: var(--warning);
+}
+
+/* Separate the paper sheets from their canvas without adding bright white areas. */
+:root[data-theme='light'] .messenger-chat {
+  background: var(--background);
+}
+:root[data-theme='light'] .messenger-bubble {
+  box-shadow: 0 1px 2px var(--shadow);
+}
+:root[data-theme='light'] .surface,
+:root[data-theme='light'] .auth-simple .auth-form-area,
+:root[data-theme='light'] .easy-navigation {
+  box-shadow: 0 2px 6px var(--shadow);
+}
+:root[data-theme='light'] .field input,
+:root[data-theme='light'] .field select,
+:root[data-theme='light'] .field textarea,
+:root[data-theme='light'] .auth-form input,
+:root[data-theme='light'] .messenger-input-row textarea {
+  background: var(--background);
+}
+:root[data-theme='light'] .inbox-tabs {
+  background: var(--surface-alt);
+}
+:root[data-theme='light'] .inbox-tabs a[aria-current] {
+  background: var(--surface);
+  color: var(--accent-foreground);
+  border-color: var(--primary);
+}
+:root[data-theme='light'] .inbox-thread.thread-action {
+  background: var(--accent);
+}
+:root[data-theme='light'] .inbox-thread:hover {
+  background: var(--surface-hover);
 }

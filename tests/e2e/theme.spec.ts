@@ -86,6 +86,26 @@ async function login(page: Page, number: string, password: string) {
   await expect(page).toHaveURL('http://localhost:3001/');
 }
 
+async function lightLayers(page: Page, layers: [string, string][]) {
+  const colors = await page.evaluate(
+    (roles) => {
+      const probe = document.createElement('span');
+      document.body.append(probe);
+      const resolved: Record<string, string> = {};
+      for (const role of roles) {
+        probe.style.color = `var(--${role})`;
+        resolved[role] = getComputedStyle(probe).color;
+      }
+      probe.remove();
+      return resolved;
+    },
+    layers.map(([, role]) => role),
+  );
+  for (const [selector, role] of layers)
+    await expect(page.locator(selector).first()).toHaveCSS('background-color', colors[role]);
+  expect(colors.surface).not.toBe(colors.background);
+}
+
 test('applies the system theme before paint, persists choices with CSP and synchronizes tabs', async ({
   page,
   context,
@@ -158,6 +178,12 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     );
   }
   await palette(page, false);
+  await lightLayers(page, [
+    ['body', 'background'],
+    ['.inbox-panel', 'surface'],
+    ['.inbox-tabs', 'surface-alt'],
+  ]);
+  await page.screenshot({ path: '.local/ui-preview/theme-inbox-light.png' });
   await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await palette(page, true);
@@ -184,6 +210,12 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await page.goto(`/tickets/${ticket.id}`);
   await palette(page, false);
+  await lightLayers(page, [
+    ['.messenger-chat', 'background'],
+    ['.messenger-bubble:not(.bubble-own)', 'surface'],
+    ['.messenger-bubble.bubble-own', 'bubble-own'],
+    ['.messenger-input-row textarea', 'background'],
+  ]);
   await page.screenshot({ path: '.local/ui-preview/theme-chat-light.png' });
   await page.keyboard.press('Control+f');
   await page.getByRole('searchbox').fill('پالت');
@@ -213,6 +245,8 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     await palette(page, true);
     await page.getByRole('switch', { name: 'حالت تاریک' }).click();
     await palette(page, false);
+    if (path === '/admin/departments')
+      await page.screenshot({ path: '.local/ui-preview/theme-admin-light.png' });
     await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
