@@ -3,6 +3,31 @@
   --app-viewport-height: 100dvh;
   --app-viewport-top: 0px;
 }
+.unit-search {
+  gap: 8px;
+}
+.unit-search > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.unit-search input {
+  min-width: 0;
+}
+.unit-search-clear {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-alt);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.unit-search-clear:hover {
+  background: var(--surface-hover);
+}
 .form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

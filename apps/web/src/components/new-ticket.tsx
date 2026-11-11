@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, ChevronLeft, LoaderCircle, Search } from 'lucide-react';
+import { Building2, ChevronLeft, LoaderCircle, Search, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { request } from '@/lib/utils';
 
@@ -24,6 +24,8 @@ export function NewTicket({
     [loading, setLoading] = useState(false);
   const first = useRef(true);
   const [composing, setComposing] = useState(false);
+  const [loadError, setLoadError] = useState(''),
+    [revision, setRevision] = useState(0);
   const [search, setSearch] = useState(''),
     [openingId, setOpeningId] = useState<string | null>(null),
     [error, setError] = useState('');
@@ -66,12 +68,12 @@ export function NewTicket({
         .then((result) => {
           if (!abort.signal.aborted) {
             setData(result);
-            setError('');
+            setLoadError('');
           }
         })
         .catch((error) => {
           if (!abort.signal.aborted)
-            setError(error instanceof Error ? error.message : 'دریافت واحدها انجام نشد.');
+            setLoadError(error instanceof Error ? error.message : 'دریافت واحدها انجام نشد.');
         })
         .finally(() => {
           if (!abort.signal.aborted) setLoading(false);
@@ -81,7 +83,17 @@ export function NewTicket({
       clearTimeout(timer);
       abort.abort();
     };
-  }, [search, cursor, composing]);
+  }, [search, cursor, composing, revision]);
+
+  function searchUnits(value: string) {
+    setSearch(value);
+    setCursor(undefined);
+    setPrevious([]);
+    setLoadError('');
+    setError('');
+    setLoading(true);
+  }
+
   return (
     <div className="easy-new-ticket messenger-picker">
       <div className="new-ticket-heading">
@@ -89,25 +101,48 @@ export function NewTicket({
         <p>واحد را انتخاب کنید و همان‌جا پیام بفرستید.</p>
       </div>
       <section className="new-ticket-card" aria-label="واحدهای دانشگاه">
-        {(initial.items.length > 5 || initial.nextCursor) && (
-          <div className="unit-search">
-            <Search size={20} />
-            <input
-              type="search"
-              enterKeyHint="search"
-              onCompositionStart={() => setComposing(true)}
-              onCompositionEnd={() => setComposing(false)}
-              aria-label="جستجوی واحد"
-              placeholder="نام واحد را بنویسید…"
-              value={search}
-              maxLength={100}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setCursor(undefined);
-                setPrevious([]);
+        <div className="unit-search">
+          <Search size={20} aria-hidden="true" />
+          <input
+            type="search"
+            enterKeyHint="search"
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={() => setComposing(false)}
+            aria-label="جستجوی واحد"
+            placeholder="نام واحد را بنویسید…"
+            value={search}
+            disabled={!!openingId}
+            maxLength={100}
+            onChange={(event) => {
+              searchUnits(event.target.value);
+            }}
+          />
+          {!!search && (
+            <button
+              type="button"
+              className="unit-search-clear"
+              aria-label="پاک کردن جستجوی واحد"
+              disabled={!!openingId}
+              onClick={() => searchUnits('')}
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+        {loadError && (
+          <div role="alert" className="error-message">
+            <p>{loadError}</p>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => {
                 setLoading(true);
+                setRevision((value) => value + 1);
               }}
-            />
+            >
+              تلاش دوباره
+            </Button>
           </div>
         )}
         {error && (
@@ -115,13 +150,20 @@ export function NewTicket({
             {error}
           </p>
         )}
-        <div className="unit-choices" aria-busy={loading}>
+        <div
+          className="unit-choices"
+          role="region"
+          aria-label="نتایج جستجوی واحد"
+          aria-busy={loading}
+        >
           {data.items.map((d) => (
             <button
               type="button"
               key={d.id}
               className="unit-choice"
-              disabled={loading || !!openingId || !(d.acceptingTickets || d.canContinue)}
+              disabled={
+                loading || !!loadError || !!openingId || !(d.acceptingTickets || d.canContinue)
+              }
               aria-label={`انتخاب ${d.name}`}
               onClick={() => void open(d.id)}
             >
@@ -155,7 +197,7 @@ export function NewTicket({
               <Button
                 type="button"
                 variant="outline"
-                disabled={loading || !!openingId}
+                disabled={loading || !!loadError || !!openingId}
                 onClick={() => {
                   setLoading(true);
                   setCursor(previous.at(-1));
@@ -169,7 +211,7 @@ export function NewTicket({
               <Button
                 type="button"
                 variant="outline"
-                disabled={loading || !!openingId}
+                disabled={loading || !!loadError || !!openingId}
                 onClick={() => {
                   setLoading(true);
                   setPrevious((value) => [...value, cursor]);
@@ -181,7 +223,7 @@ export function NewTicket({
             )}
           </nav>
         )}
-        {!data.items.length && !loading && (
+        {!data.items.length && !loading && !loadError && (
           <p className="new-no-units" role="status">
             {search.trim()
               ? 'واحدی با این نام پیدا نشد.'
