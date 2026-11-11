@@ -67,7 +67,13 @@ try {
   );
   const initial = await db.message.findFirstOrThrow({ where: { ticketId: ticket.id } });
   const policy = await settings();
-  for (const seconds of [1, policy.maxVoiceSeconds + 1]) {
+  for (const seconds of [
+    1,
+    policy.maxVoiceSeconds,
+    policy.maxVoiceSeconds + 0.04,
+    policy.maxVoiceSeconds + 0.2,
+    policy.maxVoiceSeconds + 1,
+  ]) {
     const bytes = wav(seconds);
     const intent = await createUpload(actor, {
       ticketId: ticket.id,
@@ -88,7 +94,7 @@ try {
     });
     await scanInContainer(event.id);
     const result = await db.attachment.findUniqueOrThrow({ where: { id: intent.id } });
-    const expected = seconds === 1 ? 'CLEAN' : 'REJECTED';
+    const expected = seconds <= policy.maxVoiceSeconds + 0.1 ? 'CLEAN' : 'REJECTED';
     if (result.scanStatus !== expected) throw new Error('Unexpected audio scan result');
     if (expected === 'CLEAN') await downloadAttachment(actor, intent.id);
     console.log(JSON.stringify({ seconds, scanStatus: result.scanStatus, verifiedInDocker: true }));

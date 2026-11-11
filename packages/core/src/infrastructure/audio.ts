@@ -67,7 +67,10 @@ export async function inspectAudio(bytes: Buffer, maxSeconds: number) {
     // Browser MediaRecorder WebM frequently omits container duration. Decode the
     // samples to measure the real duration and enforce the limit for all formats.
     const durationSeconds = decoded.stdout.length / 16000;
-    if (durationSeconds <= 0 || durationSeconds > maxSeconds)
+    // Encoders finish whole frames: a recorder stopped at 10s can decode to
+    // 10.02s of Opus (or one AAC frame more). Preserve the tail and allow only
+    // 100ms of framing/timer precision rather than rejecting a valid recording.
+    if (durationSeconds <= 0 || durationSeconds > maxSeconds + 0.1)
       throw new Error('Audio duration invalid');
     return { durationSeconds, waveform: pcmWaveform(decoded.stdout) };
   } catch (error) {

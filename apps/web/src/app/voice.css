@@ -1,0 +1,119 @@
+.voice-toggle {
+  flex-shrink: 0;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+.voice-toggle.voice-toggle-active {
+  background: var(--danger-surface);
+  color: var(--danger);
+}
+.voice-toggle.voice-toggle-active:hover {
+  outline: 1px solid var(--danger);
+}
+.voice-session {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 12px;
+  min-height: 50px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.voice-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+.voice-recording-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--danger);
+}
+[data-state='recording'] .voice-recording-dot {
+  animation: voice-pulse 1.4s ease-in-out infinite;
+}
+.voice-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.voice-session .live-wave {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  justify-content: end;
+}
+.voice-session .button {
+  min-width: 36px;
+  width: 36px;
+  min-height: 36px;
+  height: 36px;
+  padding: 6px;
+  flex-shrink: 0;
+}
+.voice-spinner {
+  animation: voice-spin 1s linear infinite;
+}
+.messenger-input-row .messenger-voice,
+.messenger-input-row .voice-compact,
+.messenger-input-row .voice-compact .voice-row {
+  display: contents;
+}
+.messenger-input-row .voice-toggle {
+  grid-column: 3;
+  grid-row: 2;
+}
+.messenger-input-row .voice-session {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.messenger-input-row .voice-compact[data-state='ready'] .voice-row {
+  display: flex;
+  flex-wrap: nowrap;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-width: 0;
+}
+.voice-compact[data-state='ready'] .audio-player {
+  flex: 1;
+  min-width: 0;
+}
+.messenger-input-row .voice-compact > .error-message {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin: 0;
+}
+@keyframes voice-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes voice-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 380px) {
+  .voice-session {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+  .voice-status {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-spinner,
+  .voice-recording-dot {
+    animation: none !important;
+  }
+  .voice-toggle {
+    transition: none;
+  }
+}
