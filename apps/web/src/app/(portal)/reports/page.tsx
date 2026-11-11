@@ -3,6 +3,7 @@ import { reports, departmentChoices } from '@niticket/core/application/administr
 import { notFound } from 'next/navigation';
 import { statusNames, priorityNames, digits } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 
 export default async function Page({
   searchParams,
@@ -27,14 +28,16 @@ export default async function Page({
         </div>
       </div>
       <form className="surface filters" style={{ marginBottom: 24 }}>
-        <select name="departmentId" aria-label="واحد گزارش" defaultValue={query.departmentId ?? ''}>
-          <option value="">همه واحدهای مجاز</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          key={query.departmentId ?? ''}
+          name="departmentId"
+          aria-label="واحد گزارش"
+          defaultValue={query.departmentId ?? ''}
+          options={[
+            { value: '', label: 'همه واحدهای مجاز' },
+            ...departments.map((d) => ({ value: d.id, label: d.name })),
+          ]}
+        />
         <div>
           <label htmlFor="from">از تاریخ (میلادی)</label>
           <input id="from" name="from" type="date" dir="ltr" defaultValue={query.from} />

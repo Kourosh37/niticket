@@ -11,7 +11,7 @@ import {
   useImperativeHandle,
   type RefObject,
 } from 'react';
-import { Virtuoso, type Components } from 'react-virtuoso';
+import { Virtuoso, type Components, type VirtuosoHandle } from 'react-virtuoso';
 import { Check, CheckCheck, LoaderCircle, Lock, MessageCircle } from 'lucide-react';
 import { observeVisibleMessages } from '@/lib/message-visibility';
 import type { getTicket } from '@niticket/core/application/tickets';
@@ -184,6 +184,7 @@ export const MessageTimeline = memo(function MessageTimeline({
   seenIds: ReadonlySet<string>;
   onVisibleMessages?: (ids: string[]) => void;
 }) {
+  const virtualizer = useRef<VirtuosoHandle | null>(null);
   const scroller = useRef<HTMLElement | null>(null),
     following = useRef(!focusId),
     geometry = useRef({ height: 0, viewport: 0 }),
@@ -273,6 +274,7 @@ export const MessageTimeline = memo(function MessageTimeline({
   }
   return (
     <Virtuoso<Message, Context>
+      ref={virtualizer}
       scrollerRef={(node) => {
         scroller.current = node instanceof HTMLElement ? node : null;
       }}
@@ -284,6 +286,21 @@ export const MessageTimeline = memo(function MessageTimeline({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key))
           anchor.current = null;
         if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) following.current = false;
+        if (
+          event.target === event.currentTarget &&
+          event.ctrlKey &&
+          (event.key === 'Home' || event.key === 'End')
+        ) {
+          event.preventDefault();
+          following.current = event.key === 'End';
+          // Native jumps can be overwritten by Virtuoso's pending prepend measurements.
+          // Its indexed API keeps this explicit keyboard destination through those updates.
+          virtualizer.current?.scrollToIndex({
+            index: event.key === 'Home' ? 0 : 'LAST',
+            align: event.key === 'Home' ? 'start' : 'end',
+            behavior: 'auto',
+          });
+        }
       }}
       onTouchMoveCapture={() => {
         anchor.current = null;

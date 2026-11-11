@@ -1,5 +1,7 @@
 'use client';
 
+import { Select } from './ui/select';
+
 import Link from 'next/link';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, Bookmark, FilePlus, Plus, Search, Send, Trash2, X } from 'lucide-react';
@@ -323,13 +325,12 @@ export function SavedReplyManager({
       {departments.length > 1 && (
         <label className="field">
           <span>واحد</span>
-          <select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {departments.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            aria-label="واحد"
+            value={departmentId}
+            onValueChange={setDepartmentId}
+            options={departments.map((unit) => ({ value: unit.id, label: unit.name }))}
+          />
         </label>
       )}
       {departmentId ? (

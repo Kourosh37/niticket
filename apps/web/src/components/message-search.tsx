@@ -1,5 +1,7 @@
 'use client';
 
+import { Select } from './ui/select';
+
 import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -417,26 +419,28 @@ export function MessageSearch({
               <div className="search-filter-fields">
                 <label>
                   روش جستجو
-                  <select
+                  <Select
                     aria-label="روش جستجو"
                     value={filters.mode}
-                    onChange={(e) => change({ mode: e.target.value as SearchFilters['mode'] })}
-                  >
-                    <option value="all">همه واژه‌ها</option>
-                    <option value="phrase">عبارت دقیق</option>
-                    <option value="any">یکی از واژه‌ها</option>
-                  </select>
+                    onValueChange={(mode) => change({ mode: mode as SearchFilters['mode'] })}
+                    options={[
+                      { value: 'all', label: 'همه واژه‌ها' },
+                      { value: 'phrase', label: 'عبارت دقیق' },
+                      { value: 'any', label: 'یکی از واژه‌ها' },
+                    ]}
+                  />
                 </label>
                 <label>
                   ترتیب نتایج
-                  <select
+                  <Select
                     aria-label="ترتیب نتایج"
                     value={filters.sort}
-                    onChange={(e) => change({ sort: e.target.value as SearchFilters['sort'] })}
-                  >
-                    <option value="newest">جدیدترین پیام‌ها</option>
-                    <option value="oldest">قدیمی‌ترین پیام‌ها</option>
-                  </select>
+                    onValueChange={(sort) => change({ sort: sort as SearchFilters['sort'] })}
+                    options={[
+                      { value: 'newest', label: 'جدیدترین پیام‌ها' },
+                      { value: 'oldest', label: 'قدیمی‌ترین پیام‌ها' },
+                    ]}
+                  />
                 </label>
                 <label>
                   از تاریخ (میلادی)
@@ -459,17 +463,18 @@ export function MessageSearch({
                 {privateAllowed && (
                   <label>
                     نمایش پیام‌ها
-                    <select
+                    <Select
                       aria-label="نمایش پیام‌ها"
                       value={filters.visibility}
-                      onChange={(e) =>
-                        change({ visibility: e.target.value as SearchFilters['visibility'] })
+                      onValueChange={(visibility) =>
+                        change({ visibility: visibility as SearchFilters['visibility'] })
                       }
-                    >
-                      <option value="all">عمومی و خصوصی</option>
-                      <option value="public">فقط عمومی</option>
-                      <option value="internal">فقط خصوصی واحد</option>
-                    </select>
+                      options={[
+                        { value: 'all', label: 'عمومی و خصوصی' },
+                        { value: 'public', label: 'فقط عمومی' },
+                        { value: 'internal', label: 'فقط خصوصی واحد' },
+                      ]}
+                    />
                   </label>
                 )}
                 <div className="search-from-buttons">

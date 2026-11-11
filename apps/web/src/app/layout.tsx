@@ -13,6 +13,7 @@ import './downloads.css';
 import './theme.css';
 import './navigation.css';
 import './saved-replies.css';
+import './select.css';
 
 export const metadata: Metadata = {
   title: { default: 'نیتیکت | پشتیبانی دانشگاه', template: '%s | نیتیکت' },

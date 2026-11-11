@@ -95,6 +95,10 @@ test('categorizes requester chats and dismisses only replies actually seen in th
   await scroller.press('Control+Home');
   await expect(page.getByText('پیام صندوق 0', { exact: true })).toBeInViewport();
   await expect(page.locator('.dock-unread-count')).toHaveCount(0);
+  await scroller.press('Control+End');
+  await expect(page.getByText('پیام صندوق 61', { exact: true })).toBeInViewport();
+  await scroller.press('Control+Home');
+  await expect(page.getByText('پیام صندوق 0', { exact: true })).toBeInViewport();
   await otherInbox.bringToFront();
   await expect(otherInbox.locator('.inbox-thread')).toHaveCount(0);
   await otherInbox.close();

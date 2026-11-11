@@ -6,6 +6,7 @@ import { listTickets } from '@niticket/core/application/tickets';
 import { departmentChoices } from '@niticket/core/application/administration';
 import { Avatar } from './avatar';
 import { Button } from './ui/button';
+import { Select } from './ui/select';
 import { InboxRefresh } from './inbox-refresh';
 import { UnreadInboxNotice } from './notification-status';
 import { MessageSearch } from './message-search';
@@ -101,18 +102,16 @@ export async function Inbox({
             preserve={searchFilterFields.filter((key) => key !== 'departmentId')}
           >
             <input type="hidden" name="view" value={view} />
-            <select
+            <Select
+              key={query.departmentId ?? ''}
               name="departmentId"
               aria-label="واحد پاسخ‌گو"
               defaultValue={query.departmentId ?? ''}
-            >
-              <option value="">همه واحدها</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'همه واحدها' },
+                ...departments.map((d) => ({ value: d.id, label: d.name })),
+              ]}
+            />
           </LiveSearchForm>
         )}
         <MessageSearch
