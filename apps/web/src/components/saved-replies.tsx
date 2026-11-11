@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, Bookmark, FilePlus, Plus, Search, Send, Trash2, X } from 'lucide-react';
 import type { listSavedReplies } from '@niticket/core/application/saved-replies';
 import { request, digits } from '@/lib/utils';
@@ -103,6 +103,7 @@ function SavedReplyEditor({
   onSaved: () => void;
   onClose: () => void;
 }) {
+  const fieldId = useId();
   const [title, setTitle] = useState(initial?.title ?? ''),
     [body, setBody] = useState(initial?.body ?? '');
   const [existing, setExisting] = useState(initial?.attachments ?? []),
@@ -187,26 +188,28 @@ function SavedReplyEditor({
     >
       <form className="saved-reply-editor" onSubmit={submit}>
         <fieldset disabled={busy}>
-          <label className="field">
-            <span>عنوان پیام آماده</span>
+          <div className="field">
+            <label htmlFor={`${fieldId}-title`}>عنوان پیام آماده</label>
             <input
+              id={`${fieldId}-title`}
               autoFocus
               required
               value={title}
               maxLength={100}
               onChange={(event) => setTitle(event.target.value)}
             />
-          </label>
-          <label className="field">
-            <span>متن پیام آماده</span>
+          </div>
+          <div className="field">
+            <label htmlFor={`${fieldId}-body`}>متن پیام آماده</label>
             <textarea
+              id={`${fieldId}-body`}
               rows={5}
               value={body}
               maxLength={20000}
               placeholder="متن پیام (اختیاری)…"
               onChange={(event) => setBody(event.target.value)}
             />
-          </label>
+          </div>
           {retained.map((file) => (
             <div className="saved-reply-file" key={file.id}>
               <bdi>{file.filename}</bdi>

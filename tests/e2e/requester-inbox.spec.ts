@@ -74,6 +74,10 @@ test('categorizes requester chats and dismisses only replies actually seen in th
   await expect(page.locator('.thread-state')).toHaveText('پاسخ داده‌شده');
   await page.getByRole('link', { name: 'پاسخ‌های جدید', exact: true }).click();
   await expect(page.locator('.inbox-thread')).toHaveCount(1);
+  const otherInbox = await page.context().newPage();
+  await otherInbox.goto('/?view=action');
+  await expect(otherInbox.locator('.inbox-thread')).toHaveCount(1);
+  await page.bringToFront();
   await page.locator('.inbox-thread').click();
   await expect(page.getByText('پیام صندوق 61', { exact: true })).toBeInViewport();
   await page.getByLabel('پاسخ شما', { exact: true }).click();
@@ -83,16 +87,18 @@ test('categorizes requester chats and dismisses only replies actually seen in th
   expect((await db.message.findUniqueOrThrow({ where: { id: ids[0] } })).readAt).toBeNull();
   await expect(page.locator('.dock-unread-count')).toHaveText('۱');
   const scroller = page.getByLabel('پیام‌های گفتگو', { exact: true });
-  await scroller.evaluate((node) => {
-    node.scrollTop = 0;
-  });
+  await scroller.hover();
+  await page.mouse.wheel(0, -100000);
   await page.getByRole('button', { name: 'پیام‌های قبلی', exact: true }).click();
   await expect(page.getByRole('button', { name: 'پیام‌های قبلی', exact: true })).toHaveCount(0);
-  await scroller.evaluate((node) => {
-    node.scrollTop = 0;
-  });
+  await scroller.focus();
+  await scroller.press('Control+Home');
   await expect(page.getByText('پیام صندوق 0', { exact: true })).toBeInViewport();
   await expect(page.locator('.dock-unread-count')).toHaveCount(0);
+  await otherInbox.bringToFront();
+  await expect(otherInbox.locator('.inbox-thread')).toHaveCount(0);
+  await otherInbox.close();
+  await page.bringToFront();
   await page.getByRole('link', { name: 'بازگشت به گفتگوها', exact: true }).click();
   await page.getByRole('link', { name: 'پاسخ‌های جدید', exact: true }).click();
   await expect(page.locator('.inbox-thread')).toHaveCount(0);

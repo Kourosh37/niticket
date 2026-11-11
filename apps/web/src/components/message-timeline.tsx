@@ -281,9 +281,12 @@ export const MessageTimeline = memo(function MessageTimeline({
         if (event.deltaY < 0) following.current = false;
       }}
       onKeyDownCapture={(event) => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key))
+          anchor.current = null;
         if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) following.current = false;
       }}
       onTouchMoveCapture={() => {
+        anchor.current = null;
         following.current = false;
       }}
       onScrollCapture={(event) => {

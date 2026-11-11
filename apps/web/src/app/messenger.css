@@ -429,8 +429,16 @@
     transform: rotate(360deg);
   }
 }
+.app-frame:has(.messenger-chat) .main-area {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
 .app-frame:has(.messenger-chat) .page-content {
-  height: calc(100dvh - 80px);
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-width: none;
   padding: 15px;
   min-height: 0;
 }
@@ -438,6 +446,8 @@
   display: none;
 }
 .app-frame .messenger-chat {
+  flex: 1;
+  height: auto;
   border: 1px solid var(--border);
   border-radius: 18px;
 }

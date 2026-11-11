@@ -47,16 +47,26 @@ test('opens the full read-only chat for an administrator and pages through older
   await expect(page.getByText('پیام تاریخچه کامل 61', { exact: true })).toBeVisible();
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveCount(0);
   const scroller = page.getByLabel('پیام‌های گفتگو', { exact: true });
-  await scroller.evaluate((node) => {
-    node.scrollTop = 0;
-  });
+  await scroller.hover();
+  await page.mouse.wheel(0, -100000);
+  const olderResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/tickets/${ticket.id}/messages?cursor=`) &&
+      response.status() === 200,
+  );
   await page.getByRole('button', { name: 'پیام‌های قبلی', exact: true }).click();
+  expect((await (await olderResponse).json()).data.items[0].body).toBe('پیام تاریخچه کامل 0');
   await expect(page.getByRole('button', { name: 'پیام‌های قبلی', exact: true })).toHaveCount(0);
-  await scroller.evaluate((node) => {
-    node.scrollTop = 0;
-  });
+  await scroller.focus();
+  await scroller.press('Control+Home');
   await expect(page.getByText('پیام تاریخچه کامل 0', { exact: true })).toBeVisible();
   expect(await db.message.count({ where: { ticketId: ticket.id, readAt: { not: null } } })).toBe(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByText('پیام تاریخچه کامل 61', { exact: true })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
   await db.$disconnect();
 });
 

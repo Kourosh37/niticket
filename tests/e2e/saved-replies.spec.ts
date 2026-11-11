@@ -13,6 +13,8 @@ if (!database.pathname.endsWith('_test')) throw new Error('Test database require
 process.env.DATABASE_URL = database.toString();
 const origin = 'http://localhost:3001';
 
+test.use({ actionTimeout: 15000 });
+
 test('manages a minimal media library, searches and sends a complete saved reply without losing the current draft', async ({
   page,
   browser,
@@ -82,15 +84,22 @@ test('manages a minimal media library, searches and sends a complete saved reply
     .getByRole('searchbox', { name: 'جستجو در پیام‌های آماده', exact: true })
     .fill('پیدا نمی‌شود');
   await expect(page.getByText('پیامی پیدا نشد.', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/tickets/${ticket.id}`);
   const draft = page.getByLabel('پاسخ شما', { exact: true });
   await draft.fill('پیش‌نویس من باقی بماند');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
   await page.getByRole('button', { name: 'پیام‌های آماده', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'پیام‌های آماده', exact: true });
   await picker
     .getByRole('searchbox', { name: 'جستجو در پیام‌های آماده', exact: true })
     .fill('راهنما');
   await picker.getByRole('button', { name: `انتخاب ${title}`, exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
   await expect(picker.getByLabel('پیش‌نمایش پیام آماده', { exact: true })).toContainText(
     reply.body,
   );
