@@ -1,7 +1,7 @@
 /** Observe actual clipped message elements, including rows recycled by the virtualizer. */
 export function observeVisibleMessages(root: HTMLElement, notify: (ids: string[]) => void) {
   if (typeof IntersectionObserver === 'undefined') return () => {};
-  const observed = new Set<HTMLElement>(),
+  const observed = new Map<HTMLElement, string>(),
     visible = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let frame: number | undefined;
@@ -24,15 +24,15 @@ export function observeVisibleMessages(root: HTMLElement, notify: (ids: string[]
     { root, threshold: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 1] },
   );
   const reconcile = () => {
-    for (const element of observed)
-      if (!root.contains(element)) {
+    for (const [element, id] of observed)
+      if (!root.contains(element) || element.dataset.messageId !== id) {
         observer.unobserve(element);
         observed.delete(element);
-        visible.delete(element.dataset.messageId!);
+        visible.delete(id);
       }
     for (const element of root.querySelectorAll<HTMLElement>('[data-message-id]'))
       if (!observed.has(element)) {
-        observed.add(element);
+        observed.set(element, element.dataset.messageId!);
         observer.observe(element);
       }
     publish();
@@ -42,13 +42,22 @@ export function observeVisibleMessages(root: HTMLElement, notify: (ids: string[]
     (node.matches('[data-message-id]') || !!node.querySelector('[data-message-id]'));
   const mutations = new MutationObserver((records) => {
     if (
-      records.some((record) => [...record.addedNodes, ...record.removedNodes].some(containsMessage))
+      records.some(
+        (record) =>
+          record.type === 'attributes' ||
+          [...record.addedNodes, ...record.removedNodes].some(containsMessage),
+      )
     ) {
       if (frame !== undefined) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(reconcile);
     }
   });
-  mutations.observe(root, { childList: true, subtree: true });
+  mutations.observe(root, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['data-message-id'],
+  });
   reconcile();
   return () => {
     observer.disconnect();

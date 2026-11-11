@@ -81,7 +81,8 @@ export async function Inbox({
               ]
             : [
                 ['all', 'همه گفتگوها'],
-                ['action', 'پاسخ‌های واحد'],
+                ['action', 'پاسخ‌های جدید'],
+                ['answered', 'پاسخ داده‌شده'],
               ]
           ).map(([key, label]) => (
             <Link

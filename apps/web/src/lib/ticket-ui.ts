@@ -1,4 +1,8 @@
-type ReplySummary = { creatorId: string; messages: { senderId: string }[] };
+type ReplySummary = {
+  creatorId: string;
+  messages: { senderId: string; readAt?: Date | string | null }[];
+  hasUnreadReplies?: boolean;
+};
 
 export function replyStatus(ticket: ReplySummary) {
   const latest = ticket.messages[0];
@@ -7,18 +11,21 @@ export function replyStatus(ticket: ReplySummary) {
 
 export function ticketState(ticket: ReplySummary, staff = false) {
   if (!ticket.messages.length) return 'هنوز پیامی ارسال نشده';
+  if (!staff && needsReply(ticket)) return 'پاسخ جدید';
   return needsReply(ticket, true)
     ? staff
       ? 'پیام جدید'
       : 'منتظر پاسخ واحد'
     : staff
       ? 'پاسخ داده‌شده'
-      : 'پیام از واحد';
+      : 'پاسخ داده‌شده';
 }
 
 export function needsReply(ticket: ReplySummary, staff = false) {
   const status = replyStatus(ticket);
   if (!status) return false;
   const pending = status === 'OPEN';
-  return staff ? pending : !pending;
+  return staff
+    ? pending
+    : (ticket.hasUnreadReplies ?? (!pending && ticket.messages[0].readAt == null));
 }

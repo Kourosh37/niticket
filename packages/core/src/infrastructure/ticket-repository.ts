@@ -24,7 +24,7 @@ export const ticketSummarySelect = {
     where: { visibility: 'PUBLIC' },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: 1,
-    select: { body: true, senderId: true },
+    select: { body: true, senderId: true, readAt: true },
   },
 } satisfies Prisma.TicketSelect;
 

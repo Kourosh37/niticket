@@ -37,7 +37,9 @@ import {
   ticketRepository,
 } from '../infrastructure/ticket-repository';
 
-export type TicketSummary = Prisma.TicketGetPayload<{ select: typeof ticketSelect }>;
+export type TicketSummary = Prisma.TicketGetPayload<{ select: typeof ticketSelect }> & {
+  hasUnreadReplies?: boolean;
+};
 
 export function ticketNumber(ticket: { number: number; createdAt: Date | string }) {
   return `NIT-${new Date(ticket.createdAt).getUTCFullYear()}-${String(ticket.number).padStart(6, '0')}`;
@@ -191,6 +193,7 @@ export async function openConversation(actor: Actor, input: unknown) {
 export async function listTickets(actor: Actor, input: unknown) {
   const q = listSchema.parse(input);
   const staff = userRole(actor) === 'STAFF';
+  const student = userRole(actor) === 'STUDENT';
   const departments = actor.memberships.filter((m) => m.active).map((m) => m.departmentId);
   const access = !actor.active
     ? Prisma.sql`FALSE`
@@ -202,6 +205,11 @@ export async function listTickets(actor: Actor, input: unknown) {
           : Prisma.sql`FALSE`
         : Prisma.sql`t."creatorId"=${actor.id}`;
   const pattern = `%${(q.q ?? '').replace(/[\\%_]/g, '\\$&')}%`;
+  // Read state belongs to public replies, independently of notification delivery or the latest sender.
+  const unreadReplies = Prisma.sql`EXISTS (
+    SELECT 1 FROM "Message" unread WHERE unread."ticketId"=t.id
+      AND unread.visibility='PUBLIC' AND unread."senderId"<>t."creatorId" AND unread."readAt" IS NULL
+  )`;
   const predicate = Prisma.sql`${access}
     ${staff ? Prisma.sql`AND latest."senderId" IS NOT NULL` : Prisma.empty}
     ${q.scope === 'mine' ? Prisma.sql`AND t."creatorId"=${actor.id}` : Prisma.empty}
@@ -210,11 +218,15 @@ export async function listTickets(actor: Actor, input: unknown) {
     ${q.departmentId ? Prisma.sql`AND t."departmentId"=${q.departmentId}` : Prisma.empty}
     ${q.status ? Prisma.sql`AND t.status::text=${q.status}` : Prisma.empty}
     ${
-      q.view === 'action' && staff
-        ? Prisma.sql`AND latest."senderId"=t."creatorId"`
-        : q.view !== 'all'
-          ? Prisma.sql`AND latest."senderId"<>t."creatorId"`
-          : Prisma.empty
+      q.view === 'action' && student
+        ? Prisma.sql`AND ${unreadReplies}`
+        : q.view !== 'all' && student
+          ? Prisma.sql`AND latest."senderId"<>t."creatorId" AND NOT ${unreadReplies}`
+          : q.view === 'action' && staff
+            ? Prisma.sql`AND latest."senderId"=t."creatorId"`
+            : q.view !== 'all'
+              ? Prisma.sql`AND latest."senderId"<>t."creatorId"`
+              : Prisma.empty
     }
     ${
       q.q
@@ -237,8 +249,8 @@ export async function listTickets(actor: Actor, input: unknown) {
     : [];
   if (q.cursor && !anchors.length) fail();
   const anchor = anchors[0];
-  const ids = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
-    SELECT t.id ${source}
+  const ids = await db.$queryRaw<{ id: string; hasUnreadReplies: boolean }[]>(Prisma.sql`
+    SELECT t.id,${student ? unreadReplies : Prisma.sql`FALSE`} AS "hasUnreadReplies" ${source}
     ${anchor ? Prisma.sql`AND (t."lastActivityAt",t.id)<(${anchor.lastActivityAt},${anchor.id})` : Prisma.empty}
     ORDER BY t."lastActivityAt" DESC,t.id DESC LIMIT ${q.limit + 1}`);
   const selected = await db.ticket.findMany({
@@ -246,7 +258,9 @@ export async function listTickets(actor: Actor, input: unknown) {
     select: ticketSelect,
   });
   const byId = new Map(selected.map((row) => [row.id, row]));
-  const rows = ids.flatMap(({ id }) => (byId.has(id) ? [byId.get(id)!] : []));
+  const rows = ids.flatMap(({ id, hasUnreadReplies }) =>
+    byId.has(id) ? [{ ...byId.get(id)!, hasUnreadReplies }] : [],
+  );
   return {
     items: rows.slice(0, q.limit),
     nextCursor: rows.length > q.limit ? rows[q.limit - 1].id : null,
@@ -770,5 +784,19 @@ export async function inboxRevision(actor: Actor) {
     _count: { id: true },
     _max: { updatedAt: true },
   });
-  return { revision: `${result._count.id}:${result._max.updatedAt?.toISOString() ?? ''}` };
+  const unreadReplies =
+    userRole(actor) === 'STUDENT'
+      ? await db.message.count({
+          where: {
+            ticket: ticketScope(actor),
+            visibility: 'PUBLIC',
+            senderId: { not: actor.id },
+            readAt: null,
+          },
+        })
+      : 0;
+  // Receipt changes intentionally leave ticket activity untouched, but must refresh other inbox tabs.
+  return {
+    revision: `${result._count.id}:${result._max.updatedAt?.toISOString() ?? ''}:${unreadReplies}`,
+  };
 }

@@ -44,10 +44,16 @@ it('reports sufficiently visible rows, handles virtualization and disconnects wi
   report!([entry(first, 60)], {} as IntersectionObserver);
   await vi.advanceTimersByTimeAsync(100);
   expect(notify).toHaveBeenLastCalledWith(['first']);
+  (first as HTMLElement).dataset.messageId = 'recycled';
+  await vi.advanceTimersByTimeAsync(132);
+  expect(notify).toHaveBeenLastCalledWith([]);
+  report!([entry(first, 60)], {} as IntersectionObserver);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(notify).toHaveBeenLastCalledWith(['recycled']);
   root.innerHTML = '<article data-message-id="second"></article>';
   await vi.advanceTimersByTimeAsync(32);
   expect(unobserve).toHaveBeenCalledWith(first);
-  expect(observe).toHaveBeenCalledTimes(2);
+  expect(observe).toHaveBeenCalledTimes(3);
   report!([entry(root.firstElementChild!, 70)], {} as IntersectionObserver);
   await vi.advanceTimersByTimeAsync(100);
   expect(notify).toHaveBeenLastCalledWith(['second']);

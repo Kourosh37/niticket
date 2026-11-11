@@ -14,6 +14,12 @@ it('uses the last public sender for card labels regardless of historical workflo
   expect(ticketState(answered, true)).toBe('پاسخ داده‌شده');
   expect(needsReply(answered, true)).toBe(false);
   expect(needsReply(answered, false)).toBe(true);
+  expect(needsReply({ ...answered, hasUnreadReplies: false }, false)).toBe(false);
+  expect(ticketState({ ...answered, hasUnreadReplies: false })).toBe('پاسخ داده‌شده');
+  expect(ticketState({ ...pending, hasUnreadReplies: true })).toBe('پاسخ جدید');
+  expect(needsReply({ ...answered, messages: [{ senderId: 'officer', readAt: new Date() }] })).toBe(
+    false,
+  );
   expect(replyStatus(answered)).toBe('WAITING_FOR_USER');
   const empty = { creatorId: 'student', messages: [] };
   expect(needsReply(empty, true)).toBe(false);

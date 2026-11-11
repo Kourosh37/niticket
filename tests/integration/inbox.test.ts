@@ -10,6 +10,7 @@ import {
 } from '@niticket/core/application/tickets';
 import { fixtures } from '../helpers/fixtures';
 import { createUpload } from '@niticket/core/application/attachments';
+import { markMessagesSeen } from '@niticket/core/application/message-receipts';
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 beforeAll(async () => {
@@ -65,6 +66,16 @@ it('scopes new and answered inboxes to the current role and hides private previe
   );
   const staffAction = await listTickets(staff, { view: 'action', scope: 'department' });
   expect(staffAction.items.map((t) => t.id)).toEqual([tickets[0].id]);
+  expect((await listTickets(student, { view: 'answered', scope: 'mine' })).items).toEqual([]);
+  const replies = await db.message.findMany({
+    where: {
+      ticketId: { in: tickets.map((t) => t.id) },
+      visibility: 'PUBLIC',
+      senderId: f.agent.id,
+    },
+  });
+  for (const reply of replies)
+    await markMessagesSeen(student, reply.ticketId, { messageIds: [reply.id] });
   const done = await listTickets(student, { view: 'answered', scope: 'mine' });
   expect(new Set(done.items.map((t) => t.id))).toEqual(
     new Set([tickets[1].id, tickets[2].id, tickets[3].id]),
@@ -92,7 +103,7 @@ it('classifies legacy states by the last public reply and rejects a forged answe
       (t) => t.id === id,
     ),
   ).toBe(true);
-  await addMessage(staff, id, { version: 2, body: 'پاسخ عمومی مسئول' });
+  const reply = await addMessage(staff, id, { version: 2, body: 'پاسخ عمومی مسئول' });
   await db.ticket.update({ where: { id }, data: { status: 'IN_PROGRESS' } });
   expect(
     (await listTickets(staff, { scope: 'department', view: 'action' })).items.some(
@@ -100,10 +111,71 @@ it('classifies legacy states by the last public reply and rejects a forged answe
     ),
   ).toBe(false);
   expect(
+    (await listTickets(student, { scope: 'mine', view: 'action' })).items.some((t) => t.id === id),
+  ).toBe(true);
+  await markMessagesSeen(student, id, { messageIds: [reply.id] });
+  expect(
     (await listTickets(student, { scope: 'mine', view: 'answered' })).items.some(
       (t) => t.id === id,
     ),
   ).toBe(true);
+});
+
+it('keeps older unseen public replies new, independently of notification delivery, later user messages and private notes', async () => {
+  const f = await fixtures();
+  const student = await f.actor(f.student.id);
+  const ticket = await db.ticket.create({
+    data: {
+      creatorId: f.student.id,
+      departmentId: f.department.id,
+      subject: 'Unread replies',
+    },
+  });
+  const first = await db.message.create({
+    data: {
+      ticketId: ticket.id,
+      senderId: f.agent.id,
+      body: 'Older unread reply',
+      createdAt: new Date('2026-01-01'),
+    },
+  });
+  const latest = await db.message.create({
+    data: {
+      ticketId: ticket.id,
+      senderId: f.manager.id,
+      body: 'New reply',
+      createdAt: new Date('2026-01-02'),
+    },
+  });
+  const { inboxRevision } = await import('@niticket/core/application/tickets');
+  const before = await inboxRevision(student);
+  await markMessagesSeen(student, ticket.id, { messageIds: [latest.id] });
+  expect(await inboxRevision(student)).not.toEqual(before);
+  expect((await listTickets(student, { view: 'action' })).items.map((t) => t.id)).toEqual([
+    ticket.id,
+  ]);
+  expect((await listTickets(student, { view: 'answered' })).items).toEqual([]);
+  const own = await db.message.create({
+    data: {
+      ticketId: ticket.id,
+      senderId: f.student.id,
+      body: 'Follow-up',
+      createdAt: new Date('2026-01-03'),
+    },
+  });
+  expect((await listTickets(student, { view: 'action' })).items[0].hasUnreadReplies).toBe(true);
+  await markMessagesSeen(student, ticket.id, { messageIds: [first.id] });
+  expect((await listTickets(student, { view: 'action' })).items).toEqual([]);
+  expect((await listTickets(student, { view: 'answered' })).items).toEqual([]);
+  expect((await listTickets(student, { view: 'all' })).items.map((t) => t.id)).toEqual([ticket.id]);
+  await db.message.delete({ where: { id: own.id } });
+  await db.message.create({
+    data: { ticketId: ticket.id, senderId: f.agent.id, body: 'Private', visibility: 'INTERNAL' },
+  });
+  expect((await listTickets(student, { view: 'answered' })).items.map((t) => t.id)).toEqual([
+    ticket.id,
+  ]);
+  expect((await listTickets(await f.actor(f.outsider.id), { view: 'action' })).items).toEqual([]);
 });
 
 it('opens one persistent unit chat concurrently without a title, initial message or premature notification', async () => {
