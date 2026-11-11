@@ -10,14 +10,10 @@ import { Modal } from './ui/dialog';
 import { Avatar } from './avatar';
 import { useReauthentication } from './reauthentication';
 import { request, dateTime } from '@/lib/utils';
+import { roleLabels } from '@/lib/role-labels';
 import type { listUsers } from '@niticket/core/application/administration';
 
 type User = Awaited<ReturnType<typeof listUsers>>['items'][number];
-const roles: Record<string, string> = {
-  STUDENT: 'دانشجو',
-  STAFF: 'مسئول واحد',
-  ADMIN: 'مدیر سامانه',
-};
 
 export function AdminUsers({
   data,
@@ -64,7 +60,7 @@ export function AdminUsers({
       <div className="page-heading">
         <div>
           <h1>مدیریت کاربران</h1>
-          <p>اطلاعات و وضعیت حساب‌های دانشجو، مسئول واحد و مدیر سامانه</p>
+          <p>اطلاعات و وضعیت حساب‌های کاربر، مسئول واحد و مدیر سامانه</p>
         </div>
       </div>
       {error && !editing && (
@@ -109,7 +105,8 @@ export function AdminUsers({
                 </p>
               </div>
               <span className="status">
-                {roles[user.isAdmin ? 'ADMIN' : user.role]} · {user.active ? 'فعال' : 'غیرفعال'}
+                {roleLabels[user.isAdmin ? 'ADMIN' : user.role]} ·{' '}
+                {user.active ? 'فعال' : 'غیرفعال'}
               </span>
             </div>
             <div className="upload-controls">

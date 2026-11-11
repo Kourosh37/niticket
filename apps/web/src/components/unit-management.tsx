@@ -236,7 +236,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
         <section className="surface empty-state">
           <Building2 size={32} />
           <h3>هنوز واحدی ایجاد نشده است</h3>
-          <p>با ایجاد واحد و حساب مسئول آن، دانشجویان می‌توانند درخواست ثبت کنند.</p>
+          <p>با ایجاد واحد و حساب مسئول آن، کاربران می‌توانند درخواست ثبت کنند.</p>
         </section>
       )}
       <Modal

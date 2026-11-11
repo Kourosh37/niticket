@@ -622,7 +622,7 @@ export async function changeStatus(actor: Actor, id: string, input: unknown) {
       select: { senderId: true },
     });
     if (data.status === 'WAITING_FOR_USER' && (!latest || latest.senderId === ticket.creatorId))
-      fail('REPLY_REQUIRED', 409, 'ابتدا پاسخ عمومی برای دانشجو ارسال کنید.');
+      fail('REPLY_REQUIRED', 409, 'ابتدا پاسخ عمومی برای کاربر ارسال کنید.');
     if (!isStaff(actor, ticket)) {
       if (
         ticket.creatorId !== actor.id ||

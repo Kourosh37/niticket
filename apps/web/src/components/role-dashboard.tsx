@@ -109,7 +109,7 @@ export async function RoleDashboard({ actor }: { actor: Actor }) {
             <span /> پنل مسئول واحد
           </div>
           <h1>{departments.map((d) => d.name).join('، ') || 'میز کار واحد'}</h1>
-          <p>درخواست‌های دانشجویان را پاسخ دهید و روند رسیدگی را ثبت کنید.</p>
+          <p>درخواست‌های کاربران را پاسخ دهید و روند رسیدگی را ثبت کنید.</p>
         </div>
         <Button asChild variant="outline">
           <Link href="/workspace">همه درخواست‌های واحد</Link>
@@ -120,7 +120,7 @@ export async function RoleDashboard({ actor }: { actor: Actor }) {
           { label: 'همه درخواست‌ها', count: report.total, icon: Ticket },
           { label: 'در حال پیگیری', count: open, icon: Clock3 },
           {
-            label: 'منتظر پاسخ دانشجو',
+            label: 'منتظر پاسخ کاربر',
             count: report.answeredReplies,
             icon: Users,
           },

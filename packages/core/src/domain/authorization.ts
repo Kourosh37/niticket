@@ -17,7 +17,7 @@ export function userRole(actor: Actor) {
 
 export function assertStudent(actor: Actor) {
   if (!actor.active || userRole(actor) !== 'STUDENT')
-    fail('FORBIDDEN', 403, 'ثبت درخواست فقط برای دانشجو امکان‌پذیر است.');
+    fail('FORBIDDEN', 403, 'ثبت درخواست فقط برای کاربر امکان‌پذیر است.');
 }
 
 export function assertParticipant(

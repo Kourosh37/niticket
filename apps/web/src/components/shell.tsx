@@ -21,6 +21,7 @@ import {
   Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { roleLabels } from '@/lib/role-labels';
 import { Button } from './ui/button';
 import { Avatar } from './avatar';
 import { SessionGuard } from './session-guard';
@@ -281,7 +282,7 @@ export function Shell({
             <Avatar name={user.name} image={user.image} />
             <span>
               <b>{user.name}</b>
-              <small>{user.isAdmin ? 'مدیر سامانه' : user.staff ? 'مسئول واحد' : 'دانشجو'}</small>
+              <small>{roleLabels[user.isAdmin ? 'ADMIN' : user.staff ? 'STAFF' : 'STUDENT']}</small>
             </span>
             <Settings size={17} />
           </button>

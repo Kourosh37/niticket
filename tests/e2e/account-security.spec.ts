@@ -114,6 +114,8 @@ test('shows mobile numbers and navigates bounded user pages in both directions',
   const rows = page.locator('.user-management-row');
   await expect(rows).toHaveCount(30);
   await expect(rows.first()).toContainText(number.replace('+98', '0'));
+  await expect(rows.first().locator('.status')).toHaveText('کاربر · فعال');
+  await expect(page.locator('body')).not.toContainText('دانشجو');
   await page.getByRole('link', { name: 'صفحه بعد', exact: true }).click();
   await expect(page.getByRole('heading', { name: `${name}-30`, exact: true })).toBeVisible();
   await expect(rows).toHaveCount(30);

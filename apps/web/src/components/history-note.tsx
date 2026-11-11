@@ -101,7 +101,7 @@ export function HistoryNote({
             maxBytes={maxBytes}
           />
           <p className="field-hint">
-            <Lock size={12} style={{ display: 'inline' }} /> این یادداشت برای دانشجو نمایش داده
+            <Lock size={12} style={{ display: 'inline' }} /> این یادداشت برای کاربر نمایش داده
             نمی‌شود.
           </p>
           {percent !== null && <UploadProgress percent={percent} label="بارگذاری وویس یادداشت" />}
