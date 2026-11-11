@@ -86,13 +86,12 @@ test('keeps requester and officer navigation at the bottom and shares private un
   await expect(badge).toHaveCount(0);
   expect(await db.notification.count({ where: { userId: f.outsider.id, readAt: null } })).toBe(7);
   await page.goto(`/tickets/${ticket.id}`);
-  await expect(page.locator('header')).toHaveCount(0);
-  await expect(page.locator('.messenger-footer-controls')).toBeVisible();
-  await expect(dock).toBeInViewport();
+  await expect(page.locator('.messenger-header')).toBeInViewport();
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await expect(page.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
-    await expect(dock).toBeInViewport();
+    if (width < 768) await expect(dock).toBeHidden();
+    else await expect(dock).toBeInViewport();
     expect(
       await page.evaluate(
         () =>
@@ -104,7 +103,11 @@ test('keeps requester and officer navigation at the bottom and shares private un
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText('پیام آزمایش ناوبری', { exact: true })).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/simple-chat-navigation-390.png' });
-  await dock.getByRole('link', { name: 'تنظیمات', exact: true }).click();
+  await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
+    .getByRole('link', { name: 'تنظیمات', exact: true })
+    .click();
   await expect(page.getByRole('heading', { name: 'تنظیمات', exact: true })).toBeVisible();
   await expect(page.locator('.settings-preferences')).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/simple-settings-390.png', fullPage: true });

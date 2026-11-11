@@ -116,7 +116,11 @@ test('shows the responsible contact photo, compact composer controls and vertica
   }
   await page.setViewportSize({ width: 390, height: 900 });
   await page.screenshot({ path: '.local/ui-preview/chat-refinements-light.png' });
-  await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
+  await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
+    .getByRole('link', { name: 'تنظیمات', exact: true })
+    .click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await page.goto(`/tickets/${ticket.id}`);
   await expect(photo).toBeVisible();

@@ -110,40 +110,9 @@ a.settings-preference-row:hover {
   max-width: 220px;
   min-height: 52px;
 }
-.messenger-footer-controls {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px max(12px, calc((100% - 1124px) / 2));
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-}
-.messenger-footer-controls .avatar {
-  width: 30px;
-  height: 30px;
-  font-size: 13px;
-}
-.messenger-footer-controls .messenger-contact h1 {
-  font-size: 14px;
-  line-height: 1.35;
-}
-.messenger-footer-controls .messenger-contact p {
-  display: none;
-}
-.messenger-footer-controls .messenger-contact .officer-unit {
-  display: block;
-  font-size: 11px;
-  line-height: 1.2;
-}
 .easy-app .skeleton {
   background: var(--surface);
   border: 1px solid var(--border);
-}
-.messenger-footer-controls .messenger-back,
-.messenger-footer-controls .messenger-info-button {
-  min-width: 36px;
-  min-height: 36px;
 }
 @media (max-width: 640px) {
   .settings-preference-row {

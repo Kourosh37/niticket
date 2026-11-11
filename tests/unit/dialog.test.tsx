@@ -19,8 +19,10 @@ function Harness() {
 
 it('provides a labelled modal and closes by Escape', async () => {
   render(<Harness />);
+  screen.getByText('باز کردن').focus();
   fireEvent.click(screen.getByText('باز کردن'));
   expect(screen.getByRole('dialog', { name: 'تأیید عملیات' })).toBeTruthy();
   fireEvent.keyDown(document, { key: 'Escape' });
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('باز کردن')));
 });

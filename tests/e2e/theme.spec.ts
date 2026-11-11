@@ -194,7 +194,15 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole('switch', { name: 'حالت تاریک' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'تنظیمات', exact: true })).toBeInViewport();
+    if (width < 768) {
+      await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
+      await expect(
+        page
+          .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
+          .getByRole('link', { name: 'تنظیمات', exact: true }),
+      ).toBeInViewport();
+      await page.keyboard.press('Escape');
+    } else await expect(page.getByRole('link', { name: 'تنظیمات', exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -209,11 +217,19 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   );
   await expect(page.getByText('بررسی پالت گفتگو', { exact: true })).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/theme-chat-dark.png' });
-  await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
+  await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
+    .getByRole('button', { name: 'اطلاعات گفتگو', exact: true })
+    .click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await palette(page, true);
   await page.keyboard.press('Escape');
-  await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
+  await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
+    .getByRole('link', { name: 'تنظیمات', exact: true })
+    .click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await page.goto(`/tickets/${ticket.id}`);
   await palette(page, false);
@@ -235,7 +251,11 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await page.getByRole('searchbox').fill('پالت');
   await expect(page.locator('[data-search-result]')).toHaveCount(2);
   await palette(page, false);
-  await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
+  await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
+    .getByRole('link', { name: 'تنظیمات', exact: true })
+    .click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await palette(page, true);
   await page.goto('/profile');

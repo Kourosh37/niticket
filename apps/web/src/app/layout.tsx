@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies, headers } from 'next/headers';
 import { isTheme, THEME_KEY, themeBootstrap } from '@/lib/theme';
+import { ViewportLayout } from '@/components/viewport-layout';
 import '@fontsource/vazirmatn/400.css';
 import '@fontsource/vazirmatn/500.css';
 import '@fontsource/vazirmatn/600.css';
@@ -15,6 +16,7 @@ import './navigation.css';
 import './saved-replies.css';
 import './select.css';
 import './voice.css';
+import './responsive.css';
 
 export const metadata: Metadata = {
   title: { default: 'نیتیکت | پشتیبانی دانشگاه', template: '%s | نیتیکت' },
@@ -50,6 +52,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body>
+        <ViewportLayout />
         <a className="skip-link" href="#main-content">
           رفتن به محتوای اصلی
         </a>

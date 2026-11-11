@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   LayoutDashboard,
   Ticket,
@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { roleLabels } from '@/lib/role-labels';
 import { Button } from './ui/button';
+import { Modal } from './ui/dialog';
 import { Avatar } from './avatar';
 import { SessionGuard } from './session-guard';
 import { DownloadScope } from './downloads';
@@ -49,8 +50,17 @@ export function Shell({
 }: Props) {
   const path = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [globalSearch, setGlobalSearch] = useState(false);
+  const [menuPath, setMenuPath] = useState<string | null>(null);
+  const [searchPath, setSearchPath] = useState<string | null>(null);
+  const [navigationPath, setNavigationPath] = useState(path);
+  if (navigationPath !== path) {
+    setNavigationPath(path);
+    setMenuPath(null);
+    setSearchPath(null);
+  }
+  const open = menuPath === path;
+  const globalSearch = searchPath === path;
+  const setOpen = useCallback((value: boolean) => setMenuPath(value ? path : null), [path]);
   const inboxRoute = !user.isAdmin && ['/', '/tickets', '/workspace'].includes(path);
 
   function openSearch() {
@@ -64,7 +74,7 @@ export function Shell({
       const params = new URLSearchParams(window.location.search);
       params.set('search', '1');
       router.replace(`${path}?${params}`, { scroll: false });
-    } else setGlobalSearch((value) => !value);
+    } else setSearchPath((previous) => (previous === path ? null : path));
   }
 
   const search = globalSearch && !inboxRoute && !/^\/tickets\/(?!new$)[^/]+$/.test(path) && (
@@ -75,40 +85,21 @@ export function Shell({
         inline
         syncUrl={false}
         returnPath={path}
-        onClose={() => setGlobalSearch(false)}
+        onClose={() => setSearchPath(null)}
       />
     </section>
   );
   const [error, setError] = useState('');
-  const sidebar = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const nodes = () =>
-      Array.from(
-        sidebar.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') ?? [],
-      );
-    nodes()[0]?.focus();
+    const desktop = window.matchMedia('(min-width: 1024px)');
 
-    function keydown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-      if (event.key !== 'Tab') return;
-      const items = nodes();
-      if (event.shiftKey && document.activeElement === items[0]) {
-        event.preventDefault();
-        items.at(-1)?.focus();
-      } else if (!event.shiftKey && document.activeElement === items.at(-1)) {
-        event.preventDefault();
-        items[0]?.focus();
-      }
+    function closeOnDesktop(event: MediaQueryListEvent) {
+      if (event.matches) setMenuPath(null);
     }
 
-    document.addEventListener('keydown', keydown);
-    return () => {
-      document.removeEventListener('keydown', keydown);
-      previous?.focus();
-    };
-  }, [open]);
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
   const links = user.isAdmin
     ? [
         { href: '/', label: 'نمای کلی سامانه', icon: LayoutDashboard },
@@ -214,91 +205,112 @@ export function Shell({
     );
   }
 
+  const sidebarContent = (
+    <>
+      <Link href="/" className="brand">
+        <span className="brand-mark">
+          <GraduationCap size={25} />
+        </span>
+        <span>
+          <strong>
+            نیتیکت<span className="brand-dot">.</span>
+          </strong>
+          <small>سامانه پشتیبانی دانشگاه</small>
+        </span>
+      </Link>
+      <div className="sidebar-university">
+        <span className="tiny-label">{universityName}</span>
+        <span className="university-tag">همراه شما، تا رسیدن به پاسخ</span>
+      </div>
+      {!user.isAdmin && !user.staff && (
+        <Button asChild className="sidebar-create">
+          <Link href="/tickets/new" onClick={() => setOpen(false)}>
+            <Plus size={18} /> ثبت درخواست جدید <ChevronLeft size={16} />
+          </Link>
+        </Button>
+      )}
+      <p className="nav-label">فضای کار شما</p>
+      <nav aria-label="ناوبری اصلی">
+        {links.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            onClick={() => setOpen(false)}
+            className={cn(
+              'nav-item',
+              (href === '/' ? path === '/' : path === href || path.startsWith(href + '/')) &&
+                'active',
+            )}
+          >
+            <Icon size={19} />
+            <span>{label}</span>
+            {href === path && <i />}
+          </Link>
+        ))}
+      </nav>
+      <div className="sidebar-bottom">
+        {!user.isAdmin && (
+          <div className="support-note">
+            <span className="support-symbol">؟</span>
+            <strong>برای شروع نیاز به راهنمایی دارید؟</strong>
+            <p>
+              {user.staff
+                ? 'درخواست‌های واحد را پاسخ دهید و روند رسیدگی را ثبت کنید.'
+                : 'واحد مربوط را انتخاب کنید و موضوع خود را با ما در میان بگذارید.'}
+            </p>
+            <Link href="/help">
+              راهنمای سامانه <ArrowUpLeft size={14} />
+            </Link>
+          </div>
+        )}
+        <button
+          className="account-row"
+          onClick={() => {
+            setOpen(false);
+            router.push('/profile');
+          }}
+        >
+          <Avatar name={user.name} image={user.image} />
+          <span>
+            <b>{user.name}</b>
+            <small>{roleLabels[user.isAdmin ? 'ADMIN' : user.staff ? 'STAFF' : 'STUDENT']}</small>
+          </span>
+          <Settings size={17} />
+        </button>
+        <button className="logout" onClick={logout}>
+          <LogOut size={15} /> خروج از حساب
+        </button>
+        {error && <p role="alert">{error}</p>}
+      </div>
+    </>
+  );
+
   return (
     <div className="app-frame">
       <SessionGuard />
       <DownloadScope key={user.id} />
-      {open && (
-        <button className="drawer-backdrop" aria-label="بستن منو" onClick={() => setOpen(false)} />
-      )}
-      <aside ref={sidebar} id="sidebar" className={cn('sidebar', open && 'sidebar-open')}>
-        <Link href="/" className="brand">
-          <span className="brand-mark">
-            <GraduationCap size={25} />
-          </span>
-          <span>
-            <strong>
-              نیتیکت<span className="brand-dot">.</span>
-            </strong>
-            <small>سامانه پشتیبانی دانشگاه</small>
-          </span>
-        </Link>
-        <div className="sidebar-university">
-          <span className="tiny-label">{universityName}</span>
-          <span className="university-tag">همراه شما، تا رسیدن به پاسخ</span>
-        </div>
-        {!user.isAdmin && !user.staff && (
-          <Button asChild className="sidebar-create">
-            <Link href="/tickets/new" onClick={() => setOpen(false)}>
-              <Plus size={18} /> ثبت درخواست جدید <ChevronLeft size={16} />
-            </Link>
-          </Button>
-        )}
-        <p className="nav-label">فضای کار شما</p>
-        <nav aria-label="ناوبری اصلی">
-          {links.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setOpen(false)}
-              className={cn(
-                'nav-item',
-                (href === '/' ? path === '/' : path === href || path.startsWith(href + '/')) &&
-                  'active',
-              )}
-            >
-              <Icon size={19} />
-              <span>{label}</span>
-              {href === path && <i />}
-            </Link>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          {!user.isAdmin && (
-            <div className="support-note">
-              <span className="support-symbol">؟</span>
-              <strong>برای شروع نیاز به راهنمایی دارید؟</strong>
-              <p>
-                {user.staff
-                  ? 'درخواست‌های واحد را پاسخ دهید و روند رسیدگی را ثبت کنید.'
-                  : 'واحد مربوط را انتخاب کنید و موضوع خود را با ما در میان بگذارید.'}
-              </p>
-              <Link href="/help">
-                راهنمای سامانه <ArrowUpLeft size={14} />
-              </Link>
-            </div>
-          )}
-          <button className="account-row" onClick={() => router.push('/profile')}>
-            <Avatar name={user.name} image={user.image} />
-            <span>
-              <b>{user.name}</b>
-              <small>{roleLabels[user.isAdmin ? 'ADMIN' : user.staff ? 'STAFF' : 'STUDENT']}</small>
-            </span>
-            <Settings size={17} />
-          </button>
-          <button className="logout" onClick={logout}>
-            <LogOut size={15} /> خروج از حساب
-          </button>
-          {error && <p role="alert">{error}</p>}
-        </div>
+      <aside id="sidebar" className="sidebar admin-desktop-sidebar">
+        {sidebarContent}
       </aside>
+      <Modal
+        open={open}
+        onOpenChange={setOpen}
+        id="mobile-administration-menu"
+        title="منوی مدیریت"
+        description="دسترسی به بخش‌های سامانه و حساب کاربری"
+        presentation="drawer"
+        className="admin-mobile-drawer"
+      >
+        {sidebarContent}
+      </Modal>
       <div className="main-area">
         <header className="topbar">
           <div className="topbar-title">
             <button
               className="mobile-menu"
               aria-expanded={open}
-              aria-controls="sidebar"
+              aria-controls="mobile-administration-menu"
+              aria-haspopup="dialog"
               aria-label={open ? 'بستن منو' : 'باز کردن منو'}
               onClick={() => setOpen(!open)}
             >
@@ -308,14 +320,16 @@ export function Shell({
           </div>
           <div className="topbar-actions">
             {!/^\/tickets\/(?!new$)[^/]+$/.test(path) && <ThemeToggle />}
-            <button
-              type="button"
-              onClick={openSearch}
-              className="icon-link"
-              aria-label="جستجو در همه پیام‌ها"
-            >
-              <Search size={21} />
-            </button>
+            {!/^\/tickets\/(?!new$)[^/]+$/.test(path) && (
+              <button
+                type="button"
+                onClick={openSearch}
+                className="icon-link"
+                aria-label="جستجو در همه پیام‌ها"
+              >
+                <Search size={21} />
+              </button>
+            )}
             <span className="today">
               {new Intl.DateTimeFormat('fa-IR', {
                 dateStyle: 'long',

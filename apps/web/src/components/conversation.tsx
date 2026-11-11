@@ -15,6 +15,9 @@ import {
   LoaderCircle,
   RotateCcw,
   X,
+  EllipsisVertical,
+  Settings,
+  MessageCircle,
 } from 'lucide-react';
 import type { getTicket, getMessageContext } from '@niticket/core/application/tickets';
 import type { SearchSelection, SearchResult, SearchData } from './message-search';
@@ -34,6 +37,7 @@ import { VoiceRecorder } from './voice-recorder';
 import { date, dateTime, digits, request, RequestError } from '@/lib/utils';
 import { uploadFile } from '@/lib/upload';
 import { useMessageReceipts } from '@/lib/use-message-receipts';
+import { ConversationNavigation } from './notification-status';
 
 const MessageTimeline = dynamic(
   () => import('./message-timeline').then((module) => module.MessageTimeline),
@@ -117,6 +121,7 @@ export function Conversation({
     [windowKey, setWindowKey] = useState(0),
     [finding, setFinding] = useState(false);
   const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const savedAttempt = useRef<{
     id: string;
     replyId: string;
@@ -192,7 +197,7 @@ export function Conversation({
     id,
     incoming,
     outgoing,
-    !permissions.readOnly && !searchOpen && !finding && !info && !savedRepliesOpen,
+    !permissions.readOnly && !searchOpen && !finding && !info && !savedRepliesOpen && !actionsOpen,
   );
 
   const refresh = useCallback(() => {
@@ -644,7 +649,7 @@ export function Conversation({
       </div>
       <button
         type="button"
-        className="messenger-info-button"
+        className="messenger-info-button chat-search-quick"
         aria-label="جستجو در این گفتگو"
         disabled={busy || recording || loadingOlder || finding}
         aria-expanded={searchOpen}
@@ -655,13 +660,37 @@ export function Conversation({
       </button>
       <button
         type="button"
-        className="messenger-info-button"
+        className="messenger-info-button chat-info-quick"
         aria-label="اطلاعات گفتگو"
         onClick={() => setInfo(true)}
       >
         <Info size={23} />
       </button>
       {permissions.readOnly && <ThemeToggle />}
+      {permissions.staff && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="saved-reply-trigger"
+          aria-label="پیام‌های آماده"
+          title="پیام‌های آماده"
+          disabled={busy || recording || finding || !!pendingMessage}
+          onClick={() => setSavedRepliesOpen(true)}
+        >
+          <Bookmark size={21} />
+        </Button>
+      )}
+      <button
+        type="button"
+        className="messenger-info-button chat-actions-trigger"
+        aria-label="گزینه‌های گفتگو"
+        aria-haspopup="dialog"
+        aria-expanded={actionsOpen}
+        onClick={() => setActionsOpen(true)}
+      >
+        <EllipsisVertical size={22} />
+      </button>
     </>
   );
   const conversationState = (
@@ -736,7 +765,7 @@ export function Conversation({
   );
   return (
     <div className="messenger-chat">
-      {permissions.readOnly && <header className="messenger-header">{conversationControls}</header>}
+      <header className="messenger-header">{conversationControls}</header>
       {permissions.readOnly && (
         <p className="messenger-readonly">
           <Lock size={14} />
@@ -808,23 +837,6 @@ export function Conversation({
           </Button>
         )}
       </div>
-      {!permissions.readOnly && !searchOpen && (
-        <div className="messenger-footer-controls" aria-label="ابزارهای گفتگو">
-          {conversationControls}
-          {permissions.staff && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="saved-reply-trigger"
-              disabled={busy || recording || finding || !!pendingMessage}
-              onClick={() => setSavedRepliesOpen(true)}
-            >
-              <Bookmark size={18} />
-              <span>پیام‌های آماده</span>
-            </Button>
-          )}
-        </div>
-      )}
       {!permissions.readOnly && conversationState}
       {permissions.reply && (
         <form
@@ -975,6 +987,73 @@ export function Conversation({
           )}
         </form>
       )}
+      <Modal
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+        title="گزینه‌های گفتگو"
+        description={counterpart}
+        presentation="sheet"
+        onCloseAutoFocus={(event) => {
+          if (info || savedRepliesOpen || searchOpen) event.preventDefault();
+        }}
+      >
+        <div className="chat-actions-list">
+          <button
+            type="button"
+            disabled={busy || recording || finding}
+            onClick={() => {
+              setActionsOpen(false);
+              setSearchOpen(true);
+            }}
+          >
+            <Search size={20} />
+            <span>جستجو در این گفتگو</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActionsOpen(false);
+              setInfo(true);
+            }}
+          >
+            <Info size={20} />
+            <span>اطلاعات گفتگو</span>
+          </button>
+          {permissions.staff && (
+            <button
+              type="button"
+              disabled={busy || recording || finding || !!pendingMessage}
+              onClick={() => {
+                setActionsOpen(false);
+                setSavedRepliesOpen(true);
+              }}
+            >
+              <Bookmark size={20} />
+              <span>پیام‌های آماده</span>
+            </button>
+          )}
+          <Link
+            href={permissions.readOnly ? '/admin/departments' : '/'}
+            onClick={() => setActionsOpen(false)}
+          >
+            {permissions.readOnly ? (
+              <>
+                <MessageCircle size={20} />
+                <span>واحدها و گفتگوها</span>
+              </>
+            ) : (
+              <ConversationNavigation />
+            )}
+          </Link>
+          <Link
+            href={permissions.readOnly ? '/profile' : '/settings'}
+            onClick={() => setActionsOpen(false)}
+          >
+            <Settings size={20} />
+            <span>تنظیمات</span>
+          </Link>
+        </div>
+      </Modal>
       {permissions.staff && (
         <Modal
           open={savedRepliesOpen}
