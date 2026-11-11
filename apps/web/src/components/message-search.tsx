@@ -1,6 +1,7 @@
 'use client';
 
 import { Select } from './ui/select';
+import { DateRange } from './ui/date-picker';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
@@ -442,24 +443,7 @@ export function MessageSearch({
                     ]}
                   />
                 </label>
-                <label>
-                  از تاریخ (میلادی)
-                  <input
-                    type="date"
-                    aria-label="از تاریخ"
-                    value={filters.from ?? ''}
-                    onChange={(e) => change({ from: e.target.value || undefined })}
-                  />
-                </label>
-                <label>
-                  تا تاریخ (میلادی)
-                  <input
-                    type="date"
-                    aria-label="تا تاریخ"
-                    value={filters.to ?? ''}
-                    onChange={(e) => change({ to: e.target.value || undefined })}
-                  />
-                </label>
+                <DateRange from={filters.from ?? ''} to={filters.to ?? ''} onChange={change} />
                 {privateAllowed && (
                   <label>
                     نمایش پیام‌ها

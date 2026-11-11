@@ -17,6 +17,8 @@ import './saved-replies.css';
 import './select.css';
 import './voice.css';
 import './responsive.css';
+import '@daypicker/react/style.css';
+import './calendar.css';
 
 export const metadata: Metadata = {
   title: { default: 'نیتیکت | پشتیبانی دانشگاه', template: '%s | نیتیکت' },

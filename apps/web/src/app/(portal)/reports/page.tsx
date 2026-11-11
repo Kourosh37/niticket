@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { statusNames, priorityNames, digits } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { DateRange } from '@/components/ui/date-picker';
+import { validCalendarDate } from '@/lib/calendar';
 
 export default async function Page({
   searchParams,
@@ -15,8 +17,12 @@ export default async function Page({
   const query = await searchParams;
   const input = {
     departmentId: query.departmentId || undefined,
-    from: query.from ? new Date(query.from + 'T00:00:00+03:30').toISOString() : undefined,
-    to: query.to ? new Date(query.to + 'T23:59:59+03:30').toISOString() : undefined,
+    from: validCalendarDate(query.from)
+      ? new Date(query.from + 'T00:00:00+03:30').toISOString()
+      : undefined,
+    to: validCalendarDate(query.to)
+      ? new Date(query.to + 'T23:59:59.999+03:30').toISOString()
+      : undefined,
   };
   const [data, departments] = await Promise.all([reports(a, input), departmentChoices(a, true)]);
   return (
@@ -27,7 +33,7 @@ export default async function Page({
           <p>نمایی از وضعیت درخواست‌ها در محدوده دسترسی شما</p>
         </div>
       </div>
-      <form className="surface filters" style={{ marginBottom: 24 }}>
+      <form className="surface filters report-filters" style={{ marginBottom: 24 }}>
         <Select
           key={query.departmentId ?? ''}
           name="departmentId"
@@ -38,14 +44,12 @@ export default async function Page({
             ...departments.map((d) => ({ value: d.id, label: d.name })),
           ]}
         />
-        <div>
-          <label htmlFor="from">از تاریخ (میلادی)</label>
-          <input id="from" name="from" type="date" dir="ltr" defaultValue={query.from} />
-        </div>
-        <div>
-          <label htmlFor="to">تا تاریخ (میلادی)</label>
-          <input id="to" name="to" type="date" dir="ltr" defaultValue={query.to} />
-        </div>
+        <DateRange
+          key={`${query.from}:${query.to}`}
+          named
+          defaultFrom={validCalendarDate(query.from) ? query.from : ''}
+          defaultTo={validCalendarDate(query.to) ? query.to : ''}
+        />
         <Button variant="outline">نمایش گزارش</Button>
       </form>
       <div className="stats-grid">
