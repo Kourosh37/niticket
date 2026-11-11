@@ -12,6 +12,54 @@ if (!database.pathname.endsWith('_test')) throw new Error('Test database require
 process.env.DATABASE_URL = database.toString();
 const origin = 'http://localhost:3001';
 
+test('opens the full read-only chat for an administrator and pages through older public and private messages', async ({
+  page,
+}) => {
+  const { fixtures } = await import('../helpers/fixtures');
+  const { db } = await import('@niticket/database');
+  const f = await fixtures();
+  const start = Date.now() - 120000;
+  const ticket = await db.ticket.create({
+    data: {
+      creatorId: f.student.id,
+      departmentId: f.department.id,
+      subject: 'تاریخچه کامل گفتگو',
+      messages: {
+        create: Array.from({ length: 62 }, (_, index) => ({
+          senderId: index % 2 ? f.agent.id : f.student.id,
+          body: `پیام تاریخچه کامل ${index}`,
+          visibility: index === 61 ? 'INTERNAL' : 'PUBLIC',
+          createdAt: new Date(start + index * 1000),
+        })),
+      },
+    },
+  });
+  expect(
+    (
+      await page.request.post('/api/auth/sign-in/phone-number', {
+        headers: { origin },
+        data: { phoneNumber: f.admin.phoneNumber, password: f.password },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.goto(`/tickets/${ticket.id}?history=1`);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('پیام تاریخچه کامل 61', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveCount(0);
+  const scroller = page.getByLabel('پیام‌های گفتگو', { exact: true });
+  await scroller.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  await page.getByRole('button', { name: 'پیام‌های قبلی', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'پیام‌های قبلی', exact: true })).toHaveCount(0);
+  await scroller.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  await expect(page.getByText('پیام تاریخچه کامل 0', { exact: true })).toBeVisible();
+  expect(await db.message.count({ where: { ticketId: ticket.id, readAt: { not: null } } })).toBe(0);
+  await db.$disconnect();
+});
+
 test('opens a unit history from administration and reads its conversations and private activity notes', async ({
   page,
 }) => {
@@ -59,6 +107,11 @@ test('opens a unit history from administration and reads its conversations and p
   await page.locator('.ticket-row').filter({ hasText: 'درخواست آزمون تاریخچه مدیر' }).click();
   await expect(page).toHaveURL(`${origin}/tickets/${ticket.id}?history=1`);
   await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('متن قابل مشاهده در تاریخچه واحد', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('پیام‌های گفتگو', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
+  await page.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'اطلاعات گفتگو' })).toBeVisible();
   await expect(page.locator('.history-event')).toHaveCount(50);
   await page.clock.install();

@@ -18,12 +18,11 @@ export default async function Page({
   const a = await currentActor();
   const { id } = await params;
   const query = await searchParams;
-  const showHistory = a.isAdmin && query.history === '1';
   if (query.message && !uuid.safeParse(query.message).success) notFound();
   let detail, policy;
   try {
     [detail, policy] = await Promise.all([
-      getTicket(a, id, undefined, undefined, showHistory, query.message),
+      getTicket(a, id, undefined, undefined, false, query.message),
       currentPolicy(),
     ]);
   } catch (error) {
@@ -32,7 +31,7 @@ export default async function Page({
   }
   return (
     <Conversation
-      key={`${id}:${detail.messageFocus?.focusId ?? 'latest'}:${showHistory}`}
+      key={`${id}:${detail.messageFocus?.focusId ?? 'latest'}`}
       detail={detail}
       actorId={a.id}
       maxSeconds={policy.maxVoiceSeconds}
@@ -40,7 +39,6 @@ export default async function Page({
       initialContext={detail.messageFocus ?? undefined}
       initialTerms={searchTerms((query.q ?? '').slice(0, 200), 'all').include.slice(0, 8)}
       returnTo={searchReturnPath(query.returnTo)}
-      initialHistoryOpen={showHistory}
     />
   );
 }

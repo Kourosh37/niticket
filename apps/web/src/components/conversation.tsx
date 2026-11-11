@@ -93,7 +93,6 @@ export function Conversation({
   initialContext,
   initialTerms = [],
   returnTo,
-  initialHistoryOpen = false,
 }: {
   detail: Detail;
   actorId: string;
@@ -102,7 +101,6 @@ export function Conversation({
   initialContext?: Pick<Awaited<ReturnType<typeof getMessageContext>>, 'focusId' | 'newerCursor'>;
   initialTerms?: string[];
   returnTo?: string;
-  initialHistoryOpen?: boolean;
 }) {
   const [data, setData] = useState(detail),
     [messages, setMessages] = useState(detail.messages),
@@ -124,7 +122,7 @@ export function Conversation({
     [busy, setBusy] = useState(false),
     [loadingOlder, setLoadingOlder] = useState(false),
     [error, setError] = useState(''),
-    [info, setInfo] = useState(initialHistoryOpen && detail.permissions.readOnly),
+    [info, setInfo] = useState(false),
     [newMessages, setNewMessages] = useState(false),
     [jumpRequest, setJumpRequest] = useState(0),
     [progress, setProgress] = useState<number | null>(null),
@@ -476,7 +474,7 @@ export function Conversation({
     }
   }
 
-  const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen && detail.permissions.readOnly),
+  const [historyOpen, setHistoryOpen] = useState(false),
     [historyError, setHistoryError] = useState('');
   const historyInFlight = useRef(false);
   const historyPaged = useRef(false);
