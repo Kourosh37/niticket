@@ -11,6 +11,7 @@ import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { inspectAudio } from '../infrastructure/audio';
+import { inspectVideo } from '../infrastructure/video';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { settings } from './settings';
@@ -120,6 +121,7 @@ export async function processScan(eventId: string, payload: unknown) {
     const audio = detected.mime.startsWith('audio/')
       ? await inspectAudio(bytes, policy.maxVoiceSeconds)
       : null;
+    const video = detected.mime.startsWith('video/') ? await inspectVideo(bytes) : null;
     let cleanBytes = bytes;
     if (attachment.avatarOwnerId) {
       if (!detected.mime.startsWith('image/')) throw new Error('Avatar invalid');
@@ -147,6 +149,7 @@ export async function processScan(eventId: string, payload: unknown) {
           checksum: detected.checksum,
           size: cleanBytes.length,
           ...(audio ? { durationSeconds: audio.durationSeconds, waveform: audio.waveform } : {}),
+          ...(video ? { durationSeconds: video.durationSeconds } : {}),
           scanStatus: 'CLEAN',
           scanResult: 'CLEAN',
         },
@@ -203,6 +206,7 @@ export async function processScan(eventId: string, payload: unknown) {
         'Audio duration or stream invalid',
         'Audio duration invalid',
         'Avatar invalid',
+        'Video stream invalid',
       ].includes(message)
     ) {
       await db.$transaction([

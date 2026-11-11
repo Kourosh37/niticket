@@ -1,4 +1,3 @@
-
 <div dir="rtl" align="center">
 
 # 🎫 نیتیکت
@@ -8,7 +7,6 @@
 **یک پلتفرم مدرن، امن و واکنش‌گرا برای ارتباط کاربران با واحدهای سازمانی**
 
 سامانه‌ای برای ثبت، مدیریت و پیگیری گفتگوها و درخواست‌ها، با پشتیبانی از پیام متنی، صوتی، فایل و مدیریت متمرکز واحدها.
-
 
 <br>
 
@@ -56,6 +54,7 @@
   <li>📝 یادداشت‌های خصوصی، رویدادهای گفتگو و دسترسی نظارتی مدیر به تاریخچه.</li>
   <li>📁 آپلود خصوصی، اسکن فایل و پیش‌نمایش تصویر، PDF، متن، Word و Excel.</li>
   <li>🔐 ورود موبایلی، رمز اختیاری و مدیریت نشست‌ها.</li>
+  <li>🔖 پیام‌های آماده ویژه هر واحد با متن، صدا، عکس، ویدیو و سند؛ مدیریت جداگانه و انتخاب و جستجو داخل گفتگو.</li>
   <li>🎨 تم روشن و تاریک، رابط فارسی و طراحی واکنش‌گرا.</li>
 </ul>
 
@@ -340,6 +339,10 @@ docker compose exec -T postgres sh -c 'createdb -U "$POSTGRES_USER" niticket_tes
 
 bun --env-file=.env scripts/test-database.mjs
 
+# تست‌های رسانه به Worker ساخته‌شده از همین نسخه و FFmpeg داخل آن نیاز دارند.
+docker compose build worker
+docker compose up -d --no-deps --wait --wait-timeout 120 worker
+
 bun run format:check
 bun run typecheck
 bun run lint
@@ -376,6 +379,5 @@ bun audit --prod --audit-level=high
 [API](packages/core/src/http/router.ts) ·
 [پردازش صف](packages/core/src/application/jobs.ts) ·
 [تنظیمات](.env.example)
-
 
 </div>

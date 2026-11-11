@@ -80,6 +80,7 @@ model User {
   attachments         Attachment[]
   notifications       Notification[]
   activityNotes       ActivityNote[]
+  savedReplies        SavedReply[]
 
   @@index([phone])
 }
@@ -150,6 +151,7 @@ model Department {
   memberships      DepartmentMembership[]
   categories       Category[]
   tickets          Ticket[]
+  savedReplies     SavedReply[]
 }
 
 model DepartmentMembership {
@@ -219,6 +221,8 @@ model Message {
   visibility    Visibility     @default(PUBLIC)
   createdAt     DateTime       @default(now())
   readAt        DateTime?
+  savedReplyId  String?
+  savedReply    SavedReply?    @relation(fields: [savedReplyId], references: [id], onDelete: Restrict)
   ticket        Ticket         @relation(fields: [ticketId], references: [id], onDelete: Restrict)
   sender        User           @relation(fields: [senderId], references: [id], onDelete: Restrict)
   attachments   Attachment[]
@@ -228,6 +232,25 @@ model Message {
   @@index([ticketId, createdAt, id])
   @@index([createdAt, id])
   @@index([senderId, createdAt, id])
+  @@index([savedReplyId])
+}
+
+model SavedReply {
+  id           String       @id @default(uuid())
+  departmentId String
+  creatorId    String
+  title        String
+  body         String       @default("")
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  creator      User         @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  attachments  Attachment[]
+  messages     Message[]
+
+  @@index([departmentId, deletedAt, updatedAt, id])
 }
 
 model Activity {
@@ -263,9 +286,12 @@ model Attachment {
   messageId       String?
   noteId          String?
   avatarOwnerId   String?
+  savedReplyId    String?
+  archivedAt      DateTime?
   uploaderId      String
   filename        String
-  objectKey       String        @unique
+  // Approved saved-reply media can be referenced by independent conversation attachments.
+  objectKey       String
   declaredMime    String
   detectedMime    String?
   expectedSize    Int
@@ -283,11 +309,14 @@ model Attachment {
   note            ActivityNote? @relation(fields: [noteId], references: [id], onDelete: Restrict)
   avatarOwner     User?         @relation("AvatarOwner", fields: [avatarOwnerId], references: [id], onDelete: Restrict)
   avatarFor       User?         @relation("UserAvatar")
+  savedReply      SavedReply?   @relation(fields: [savedReplyId], references: [id], onDelete: Restrict)
 
   @@index([ticketId, messageId])
   @@index([scanStatus, expiresAt])
   @@index([noteId])
   @@index([avatarOwnerId, scanStatus])
+  @@index([objectKey])
+  @@index([savedReplyId, archivedAt])
 }
 
 model AuditLog {

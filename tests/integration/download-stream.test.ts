@@ -39,6 +39,25 @@ it('streams approved bytes with an exact length, checks ownership and cancels a 
     file = await streamAttachment(actor, attachment.id);
   expect(file.size).toBe(bytes.length);
   expect(Buffer.from(await new Response(file.stream).arrayBuffer()).equals(bytes)).toBe(true);
+  const partial = await streamAttachment(actor, attachment.id, undefined, 'bytes=10-29');
+  expect(partial.status).toBe(206);
+  expect(partial.contentRange).toBe(`bytes 10-29/${bytes.length}`);
+  expect(Buffer.from(await new Response(partial.stream).arrayBuffer())).toEqual(
+    bytes.subarray(10, 30),
+  );
+  const suffix = await streamAttachment(actor, attachment.id, undefined, 'bytes=-8');
+  expect(Buffer.from(await new Response(suffix.stream).arrayBuffer())).toEqual(bytes.subarray(-8));
+  const unsatisfied = await streamAttachment(
+    actor,
+    attachment.id,
+    undefined,
+    `bytes=${bytes.length}-`,
+  );
+  expect(unsatisfied).toMatchObject({
+    status: 416,
+    contentRange: `bytes */${bytes.length}`,
+    stream: null,
+  });
   await expect(streamAttachment(await f.actor(f.outsider.id), attachment.id)).rejects.toMatchObject(
     { status: 404 },
   );

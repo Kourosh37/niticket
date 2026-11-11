@@ -7,6 +7,7 @@ it('keeps inline search return links on allowed local pages', () => {
     '/workspace?q=test&view=action',
     '/search?q=test',
     '/admin/users?q=test',
+    '/saved-replies',
   ])
     expect(searchReturnPath(path)).toBe(path);
   for (const path of [

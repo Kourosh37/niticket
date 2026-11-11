@@ -17,6 +17,8 @@ import { transaction } from '../infrastructure/transaction';
 import { refreshActor } from './context';
 import { z } from 'zod';
 import { AppError } from '../domain/errors';
+import { requireSavedReply } from './saved-replies';
+import { byteRange } from '../domain/byte-range';
 
 async function findUploadRetry(
   tx: Prisma.TransactionClient,
@@ -67,9 +69,17 @@ async function uploadIntent(attachment: Attachment) {
 
 async function authorize(
   actor: Actor,
-  a: Pick<Attachment, 'ticketId' | 'messageId' | 'noteId' | 'avatarOwnerId'>,
+  a: Pick<Attachment, 'ticketId' | 'messageId' | 'noteId' | 'avatarOwnerId'> & {
+    savedReplyId?: string | null;
+    archivedAt?: Date | null;
+  },
   write = false,
 ) {
+  if (a.savedReplyId) {
+    if (a.archivedAt) fail();
+    await requireSavedReply(db, actor, a.savedReplyId);
+    return null;
+  }
   if (a.avatarOwnerId) {
     const user = await db.user.findUnique({
       where: { id: a.avatarOwnerId },
@@ -205,6 +215,46 @@ export async function createAvatarUpload(actor: Actor, input: unknown) {
   return uploadIntent(attachment);
 }
 
+export async function createSavedReplyUpload(actor: Actor, savedReplyId: string, input: unknown) {
+  const { clientId, ...file } = uploadSchema
+    .omit({ ticketId: true, messageId: true, noteId: true })
+    .extend({ clientId: uuid.optional() })
+    .strict()
+    .parse(input);
+  const data = { ...file, savedReplyId: uuid.parse(savedReplyId) };
+  const limit = (await settings()).maxUploadBytes;
+  const attachment = await transaction(async (tx) => {
+    actor = await refreshActor(tx, actor);
+    await requireSavedReply(tx, actor, savedReplyId);
+    const retry = await findUploadRetry(tx, actor, clientId, data);
+    if (retry) {
+      if (retry.archivedAt) fail();
+      return retry;
+    }
+    if (file.size > limit) fail('VALIDATION', 400, 'حجم فایل بیش از حد مجاز است.');
+    if ((await tx.attachment.count({ where: { savedReplyId, archivedAt: null } })) >= 5)
+      fail('VALIDATION', 400, 'هر پیام آماده حداکثر ۵ پیوست دارد.');
+    const created = await tx.attachment.create({
+      data: {
+        savedReplyId,
+        uploaderId: actor.id,
+        filename: file.filename,
+        objectKey: `pending/${randomUUID()}`,
+        declaredMime: file.mime,
+        expectedSize: file.size,
+        expiresAt: new Date(Date.now() + 600000),
+      },
+    });
+    await rememberUpload(tx, actor, clientId, data, created.id);
+    await tx.savedReply.update({
+      where: { id: savedReplyId },
+      data: { version: { increment: 1 } },
+    });
+    return created;
+  });
+  return uploadIntent(attachment);
+}
+
 export async function completeUpload(actor: Actor, id: string) {
   uuid.parse(id);
   const a = await db.attachment.findUnique({ where: { id } });
@@ -222,7 +272,8 @@ export async function completeUpload(actor: Actor, id: string) {
     if (a.ticketId) {
       const t = await tx.ticket.findUniqueOrThrow({ where: { id: a.ticketId } });
       assertParticipant(actor, t);
-    } else if (!actor.isAdmin && actor.id !== a.avatarOwnerId) fail();
+    } else if (a.savedReplyId) await requireSavedReply(tx, actor, a.savedReplyId);
+    else if (!actor.isAdmin && actor.id !== a.avatarOwnerId) fail();
     const changed = await tx.attachment.updateMany({
       where: { id, scanStatus: 'PENDING' },
       data: { scanStatus: 'QUARANTINED' },
@@ -284,13 +335,29 @@ async function authorizedDownload(actor: Actor, id: string) {
   return a;
 }
 
-export async function streamAttachment(actor: Actor, id: string, signal?: AbortSignal) {
+export async function streamAttachment(
+  actor: Actor,
+  id: string,
+  signal?: AbortSignal,
+  rangeHeader?: string,
+) {
   const a = await authorizedDownload(actor, id);
+  const total = a.size ?? a.expectedSize;
+  const range = byteRange(rangeHeader, total);
+  const metadata = { mime: a.detectedMime ?? 'application/octet-stream', filename: a.filename };
+  if (range === null)
+    return { ...metadata, stream: null, size: 0, status: 416, contentRange: `bytes */${total}` };
   const { objectStream } = await import('../infrastructure/storage');
   return {
-    ...(await objectStream(a.objectKey, 52428800, signal)),
-    mime: a.detectedMime ?? 'application/octet-stream',
-    filename: a.filename,
+    ...(await objectStream(
+      a.objectKey,
+      52428800,
+      signal,
+      range ? `bytes=${range.start}-${range.end}` : undefined,
+    )),
+    ...metadata,
+    status: range ? 206 : 200,
+    contentRange: range ? `bytes ${range.start}-${range.end}/${total}` : undefined,
   };
 }
 

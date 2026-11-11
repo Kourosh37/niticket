@@ -14,6 +14,7 @@ import { getAuth } from '../infrastructure/auth';
 import { searchMessages, searchSenders } from '../application/message-search';
 import { rateLimit } from '../infrastructure/redis';
 import { getMessageReceipts, markMessagesSeen } from '../application/message-receipts';
+import * as savedReplies from '../application/saved-replies';
 
 export async function dispatch(
   request: Request,
@@ -23,6 +24,19 @@ export async function dispatch(
   const [resource, id, action] = segments;
   const method = request.method;
   const query = Object.fromEntries(new URL(request.url).searchParams);
+  if (resource === 'saved-replies') {
+    if (!id && method === 'GET') return savedReplies.listSavedReplies(actor, query);
+    if (!id && method === 'POST')
+      return savedReplies.createSavedReply(actor, await readJson(request));
+    if (id && !action && method === 'GET') return savedReplies.getSavedReply(actor, id);
+    if (id && !action && method === 'PATCH')
+      return savedReplies.updateSavedReply(actor, id, await readJson(request));
+    if (id && !action && method === 'DELETE')
+      return savedReplies.deleteSavedReply(actor, id, await readJson(request));
+    if (id && action === 'uploads' && method === 'POST')
+      return attachments.createSavedReplyUpload(actor, id, await readJson(request));
+    fail();
+  }
   if (resource === 'search' && method === 'GET' && (!id || id === 'senders')) {
     if (!(await rateLimit(`${actor.id}:message-search`, 90, 60)))
       fail('RATE_LIMITED', 429, 'کمی صبر کنید و جستجو را دوباره انجام دهید.');
@@ -137,12 +151,20 @@ export async function dispatch(
     });
   }
   if (resource === 'attachments' && id && action === 'access' && method === 'GET') {
-    const file = await attachments.streamAttachment(actor, id, request.signal);
+    const file = await attachments.streamAttachment(
+      actor,
+      id,
+      request.signal,
+      request.headers.get('range') ?? undefined,
+    );
     return new Response(file.stream, {
+      status: file.status,
       headers: {
         'content-type': file.mime,
         'content-length': String(file.size),
-        'content-disposition': `${file.mime.startsWith('audio/') || file.mime.startsWith('image/') ? 'inline' : 'attachment'}; filename="attachment"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+        'content-disposition': `${/^(audio|image|video)\//.test(file.mime) ? 'inline' : 'attachment'}; filename="attachment"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+        'accept-ranges': 'bytes',
+        ...(file.contentRange ? { 'content-range': file.contentRange } : {}),
         'x-content-type-options': 'nosniff',
         'cache-control': 'private, no-store, no-transform',
       },

@@ -251,6 +251,22 @@ export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
         <DownloadButton file={file} />
       </div>
     );
+  if (file.detectedMime?.startsWith('video/'))
+    return (
+      <div className="video-attachment">
+        <video
+          controls
+          playsInline
+          preload="none"
+          src={url}
+          aria-label={`ویدیو ${file.filename}`}
+        />
+        <div className="attachment-card-meta">
+          <bdi>{file.filename}</bdi>
+          <DownloadButton file={file} />
+        </div>
+      </div>
+    );
   const image = file.detectedMime?.startsWith('image/');
   return (
     <>

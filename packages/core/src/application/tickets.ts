@@ -32,6 +32,7 @@ import {
 import { transaction } from '../infrastructure/transaction';
 import { settings } from './settings';
 import { refreshActor } from './context';
+import { requireSavedReply } from './saved-replies';
 import {
   ticketSummarySelect as ticketSelect,
   ticketRepository,
@@ -567,7 +568,11 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
       if (existing) {
         assertParticipant(actor, existing.ticket);
         if (existing.ticketId !== id || existing.senderId !== actor.id) fail();
-        if (existing.body !== data.body || existing.visibility !== data.visibility)
+        if (
+          existing.savedReplyId !== (data.savedReplyId ?? null) ||
+          (!data.savedReplyId && existing.body !== data.body) ||
+          existing.visibility !== data.visibility
+        )
           fail('IDEMPOTENCY_CONFLICT', 409, 'شناسه پیام برای محتوای دیگری استفاده شده است.');
         return { id: existing.id, version: existing.ticket.version };
       }
@@ -576,6 +581,23 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
     actor = loaded.actor;
     const ticket = loaded.ticket;
     assertParticipant(actor, ticket);
+    const savedReply = data.savedReplyId
+      ? await requireSavedReply(tx, actor, data.savedReplyId, ticket.departmentId)
+      : null;
+    const savedFiles = savedReply
+      ? await tx.attachment.findMany({
+          where: { savedReplyId: savedReply.id, archivedAt: null },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+      : [];
+    if (savedReply && data.savedReplyVersion && savedReply.version !== data.savedReplyVersion)
+      fail('SAVED_REPLY_CHANGED', 409, 'پیام آماده تغییر کرده است؛ دوباره آن را انتخاب کنید.');
+    if (
+      savedReply &&
+      ((!savedReply.body && !savedFiles.length) ||
+        savedFiles.some((file) => file.scanStatus !== 'CLEAN'))
+    )
+      fail('SAVED_REPLY_NOT_READY', 409, 'پیام آماده خالی است یا بررسی فایل‌های آن تمام نشده است.');
     const internal = data.visibility === 'INTERNAL';
     if (internal) assertStaff(actor, ticket);
     const staff = isStaff(actor, ticket);
@@ -590,10 +612,36 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
         ...(data.clientId ? { id: data.clientId } : {}),
         ticketId: id,
         senderId: actor.id,
-        body: data.body,
+        body: savedReply
+          ? savedReply.body ||
+            (savedFiles.every((file) => file.detectedMime?.startsWith('audio/'))
+              ? 'پیام صوتی'
+              : 'فایل پیوست')
+          : data.body,
         visibility: data.visibility,
+        savedReplyId: savedReply?.id,
       },
     });
+    if (savedFiles.length)
+      await tx.attachment.createMany({
+        data: savedFiles.map((file) => ({
+          ticketId: id,
+          messageId: message.id,
+          uploaderId: actor.id,
+          filename: file.filename,
+          objectKey: file.objectKey,
+          declaredMime: file.declaredMime,
+          detectedMime: file.detectedMime,
+          expectedSize: file.expectedSize,
+          size: file.size,
+          checksum: file.checksum,
+          durationSeconds: file.durationSeconds,
+          ...(file.waveform ? { waveform: file.waveform as Prisma.InputJsonValue } : {}),
+          scanStatus: 'CLEAN',
+          scanResult: 'CLEAN',
+          expiresAt: file.expiresAt,
+        })),
+      });
     await update(tx, ticket, {
       ...(!internal && staff && !ticket.firstResponseAt ? { firstResponseAt: new Date() } : {}),
       ...(!internal
@@ -610,7 +658,7 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
       actor,
       ticket,
       internal ? 'INTERNAL_NOTE' : firstPublicMessage ? 'TICKET_CREATED' : 'PUBLIC_REPLY',
-      {},
+      savedReply ? { savedReplyId: savedReply.id, savedReplyVersion: savedReply.version } : {},
       internal,
       message.id,
     );

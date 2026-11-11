@@ -36,7 +36,7 @@ export function Profile({
           <p>اطلاعات شخصی و تنظیمات امنیت حساب شما</p>
         </div>
       </div>
-      {settings && <SettingsPreferences {...settings} />}
+      {settings && <SettingsPreferences {...settings} staff={profile.role === 'STAFF'} />}
       <form
         className="surface form-surface"
         onSubmit={async (e) => {

@@ -1,19 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, ChevronLeft, HelpCircle, Moon, Search } from 'lucide-react';
+import { Bell, Bookmark, ChevronLeft, HelpCircle, Moon, Search } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
 import { UnreadBadge } from './notification-status';
 
 export function SettingsPreferences({
   universityName,
   supportDescription,
+  staff = false,
 }: {
   universityName: string;
   supportDescription: string;
+  staff?: boolean;
 }) {
   return (
     <section className="surface settings-preferences" aria-label="تنظیمات برنامه">
+      {staff && (
+        <Link href="/saved-replies" className="settings-preference-row">
+          <Bookmark size={22} />
+          <div>
+            <strong>پیام‌های آماده</strong>
+            <p>پاسخ‌های پرکاربرد واحد را آماده کنید.</p>
+          </div>
+          <ChevronLeft size={19} />
+        </Link>
+      )}
       <div className="settings-preference-row">
         <Moon size={22} />
         <div>

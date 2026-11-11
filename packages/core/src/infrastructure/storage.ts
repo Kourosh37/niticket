@@ -50,9 +50,9 @@ export async function objectBytes(key: string, max: number) {
 }
 
 /** Backpressure and cancellation propagate to S3; no full-file buffer in the web process. */
-export async function objectStream(key: string, max: number, signal?: AbortSignal) {
+export async function objectStream(key: string, max: number, signal?: AbortSignal, range?: string) {
   const result = await storage().send(
-    new GetObjectCommand({ Bucket: config().S3_BUCKET, Key: key }),
+    new GetObjectCommand({ Bucket: config().S3_BUCKET, Key: key, Range: range }),
     { abortSignal: signal },
   );
   const source = result.Body?.transformToWebStream();

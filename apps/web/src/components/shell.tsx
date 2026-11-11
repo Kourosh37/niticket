@@ -175,7 +175,7 @@ export function Shell({
         href: '/settings',
         label: 'تنظیمات',
         icon: Settings,
-        active: path === '/settings' || path === '/profile',
+        active: path === '/settings' || path === '/profile' || path === '/saved-replies',
       },
     ];
     return (

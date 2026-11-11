@@ -41,11 +41,17 @@ export const versionSchema = z.object({ version: z.number().int().positive() });
 
 export const messageSchema = versionSchema
   .extend({
-    body: z.string().trim().min(1).max(20000),
+    body: z.string().trim().max(20000).default(''),
+    savedReplyId: uuid.optional(),
+    savedReplyVersion: z.number().int().positive().optional(),
     visibility: z.enum(['PUBLIC', 'INTERNAL']).default('PUBLIC'),
     clientId: uuid.optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => (data.savedReplyId ? !data.body : !!data.body), {
+    message: 'متن یا یک پیام آماده انتخاب کنید.',
+  })
+  .refine((data) => !data.savedReplyVersion || !!data.savedReplyId);
 
 export const statusSchema = versionSchema.extend({ status: statuses }).strict();
 
@@ -119,6 +125,8 @@ export const uploadSchema = z
       'audio/mp4',
       'audio/mpeg',
       'audio/wav',
+      'video/mp4',
+      'video/webm',
     ]),
     size: z.number().int().positive(),
   })

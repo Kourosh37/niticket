@@ -91,3 +91,20 @@ export async function uploadAvatar(
     onProgress,
   );
 }
+
+export async function uploadSavedReplyFile(
+  file: File,
+  savedReplyId: string,
+  onProgress: (n: number) => void,
+) {
+  return upload(
+    file,
+    `/api/v1/saved-replies/${savedReplyId}/uploads`,
+    {
+      filename: file.name,
+      mime: uploadMime(file),
+      size: file.size,
+    },
+    onProgress,
+  );
+}

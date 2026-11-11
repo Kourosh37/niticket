@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowRight,
+  Bookmark,
   Info,
   Lock,
   Paperclip,
@@ -50,6 +51,9 @@ const MessageSearch = dynamic(
   {
     loading: () => <p role="status">در حال آماده‌سازی جستجو…</p>,
   },
+);
+const SavedReplyPicker = dynamic(() =>
+  import('./saved-replies').then((module) => module.SavedReplyPicker),
 );
 
 type Detail = Awaited<ReturnType<typeof getTicket>>;
@@ -112,6 +116,13 @@ export function Conversation({
     [newerCursor, setNewerCursor] = useState(initialContext?.newerCursor ?? null),
     [windowKey, setWindowKey] = useState(0),
     [finding, setFinding] = useState(false);
+  const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
+  const savedAttempt = useRef<{
+    id: string;
+    replyId: string;
+    version: number;
+    visibility: string;
+  } | null>(null);
   const browsing = useRef(!!initialContext),
     contextRequest = useRef<AbortController | null>(null);
   const [body, setBody] = useState(''),
@@ -181,7 +192,7 @@ export function Conversation({
     id,
     incoming,
     outgoing,
-    !permissions.readOnly && !searchOpen && !finding && !info,
+    !permissions.readOnly && !searchOpen && !finding && !info && !savedRepliesOpen,
   );
 
   const refresh = useCallback(() => {
@@ -474,6 +485,59 @@ export function Conversation({
     }
   }
 
+  async function sendSavedReply(savedReplyId: string, savedReplyVersion: number) {
+    if (sending.current || recording) return;
+    sending.current = true;
+    setBusy(true);
+    try {
+      if (
+        !savedAttempt.current ||
+        savedAttempt.current.replyId !== savedReplyId ||
+        savedAttempt.current.version !== savedReplyVersion ||
+        savedAttempt.current.visibility !== visibility
+      )
+        savedAttempt.current = {
+          id: crypto.randomUUID(),
+          replyId: savedReplyId,
+          version: savedReplyVersion,
+          visibility,
+        };
+      const payload = {
+        savedReplyId,
+        savedReplyVersion,
+        clientId: savedAttempt.current.id,
+        visibility,
+      };
+      const send = () =>
+        request<{ id: string; version: number }>(`/api/v1/tickets/${id}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ ...payload, version: currentVersion.current }),
+        });
+      let result;
+      try {
+        result = await send();
+      } catch (error) {
+        if (!(error instanceof RequestError) || error.code !== 'CONFLICT') throw error;
+        await fetching.current?.catch(() => {});
+        await refresh();
+        result = await send();
+      }
+      currentVersion.current = Math.max(currentVersion.current, result.version);
+      savedAttempt.current = null;
+      setSavedRepliesOpen(false);
+      if (visibility === 'PUBLIC') window.dispatchEvent(new Event('notifications:changed'));
+      followLatest.current = true;
+      setNewMessages(false);
+      await fetching.current?.catch(() => {});
+      await refresh();
+      if (browsing.current) await latestMessages();
+      else setJumpRequest((value) => value + 1);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  }
+
   const [historyOpen, setHistoryOpen] = useState(false),
     [historyError, setHistoryError] = useState('');
   const historyInFlight = useRef(false);
@@ -747,6 +811,18 @@ export function Conversation({
       {!permissions.readOnly && !searchOpen && (
         <div className="messenger-footer-controls" aria-label="ابزارهای گفتگو">
           {conversationControls}
+          {permissions.staff && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="saved-reply-trigger"
+              disabled={busy || recording || finding || !!pendingMessage}
+              onClick={() => setSavedRepliesOpen(true)}
+            >
+              <Bookmark size={18} />
+              <span>پیام‌های آماده</span>
+            </Button>
+          )}
         </div>
       )}
       {!permissions.readOnly && conversationState}
@@ -840,7 +916,7 @@ export function Conversation({
                 type="file"
                 multiple
                 disabled={busy}
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp3,.wav"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp4,.mp3,.wav"
                 onChange={(event) => {
                   const chosen = Array.from(event.target.files ?? []);
                   event.target.value = '';
@@ -898,6 +974,20 @@ export function Conversation({
             </p>
           )}
         </form>
+      )}
+      {permissions.staff && (
+        <Modal
+          open={savedRepliesOpen}
+          onOpenChange={(open) => {
+            if (!busy) setSavedRepliesOpen(open);
+          }}
+          title="پیام‌های آماده"
+          description="یک پیام را انتخاب کنید و پیش از ارسال ببینید."
+        >
+          {savedRepliesOpen && (
+            <SavedReplyPicker departmentId={ticket.departmentId} onSend={sendSavedReply} />
+          )}
+        </Modal>
       )}
       <Modal
         open={info}
