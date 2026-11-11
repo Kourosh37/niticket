@@ -80,6 +80,38 @@ test('shows the responsible contact photo, compact composer controls and vertica
     .poll(() => photo.evaluate((image) => (image as HTMLImageElement).naturalWidth))
     .toBeGreaterThan(0);
   await expect(page.locator('.messenger-contact p')).toContainText(f.manager.name);
+  const originalViewport = page.viewportSize()!;
+  const photoButton = page.getByRole('button', {
+    name: `نمایش تصویر مسئول واحد، ${f.manager.name}`,
+  });
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 844, height: 390 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await photoButton.focus();
+    await photoButton.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'تصویر مسئول واحد' });
+    const fullPhoto = dialog.getByAltText(`تصویر کامل ${f.manager.name}`);
+    await expect(fullPhoto).toBeVisible();
+    await expect
+      .poll(() => fullPhoto.evaluate((image) => (image as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0);
+    await expect(fullPhoto).toHaveCSS('object-fit', 'contain');
+    expect(
+      await dialog.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        return (
+          box.top >= 0 && box.bottom <= innerHeight && node.scrollHeight <= node.clientHeight + 1
+        );
+      }),
+    ).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(photoButton).toBeFocused();
+  }
+  await page.setViewportSize(originalViewport);
   const textarea = page.getByLabel('پاسخ شما', { exact: true });
   await textarea.fill(Array.from({ length: 30 }, () => 'متن طولانی').join('\n'));
   expect(await textarea.evaluate((node) => getComputedStyle(node).scrollbarWidth)).toBe('none');

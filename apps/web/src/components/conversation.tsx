@@ -25,6 +25,7 @@ import { searchParameters } from '@/lib/search';
 import { ActiveAudio } from './audio-player';
 import { stopAudio } from '@/lib/audio-playback';
 import { Avatar } from './avatar';
+import { AvatarPreview } from './avatar-preview';
 import { ThemeToggle } from './theme-toggle';
 import { HistoryNote } from './history-note';
 import { AttachmentPreview } from './attachment-preview';
@@ -122,6 +123,7 @@ export function Conversation({
     [finding, setFinding] = useState(false);
   const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const savedAttempt = useRef<{
     id: string;
     replyId: string;
@@ -197,7 +199,13 @@ export function Conversation({
     id,
     incoming,
     outgoing,
-    !permissions.readOnly && !searchOpen && !finding && !info && !savedRepliesOpen && !actionsOpen,
+    !permissions.readOnly &&
+      !searchOpen &&
+      !finding &&
+      !info &&
+      !savedRepliesOpen &&
+      !actionsOpen &&
+      !avatarOpen,
   );
 
   const refresh = useCallback(() => {
@@ -627,16 +635,16 @@ export function Conversation({
       >
         <ArrowRight size={24} />
       </Link>
-      <Avatar
-        name={
-          permissions.staff || permissions.readOnly
-            ? counterpart
-            : (data.responsible?.name ?? counterpart)
-        }
-        image={
-          permissions.staff || permissions.readOnly ? ticket.creator.image : data.responsible?.image
-        }
-      />
+      {permissions.staff || permissions.readOnly ? (
+        <Avatar name={counterpart} image={ticket.creator.image} />
+      ) : (
+        <AvatarPreview
+          name={data.responsible?.name ?? counterpart}
+          image={data.responsible?.image}
+          open={avatarOpen}
+          onOpenChange={setAvatarOpen}
+        />
+      )}
       <div className="messenger-contact">
         <h1>{counterpart}</h1>
         <p className="officer-unit">
