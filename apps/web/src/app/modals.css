@@ -1,0 +1,459 @@
+/* Fit the dialog surface to the visual viewport. Long documents retain an accessible
+   inner reader, while forms and lists use sections/pages with fixed controls. */
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(14px, 3vw, 24px);
+}
+.modal-heading {
+  position: relative;
+  flex-shrink: 0;
+}
+.modal-heading > .muted {
+  margin-bottom: 12px;
+}
+.modal-body {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.modal-content,
+.modal-body,
+.modal-body * {
+  scrollbar-width: none;
+}
+.modal-content::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar,
+.modal-body *::-webkit-scrollbar {
+  display: none;
+}
+.modal-body > form,
+.modal-form {
+  margin: 0;
+}
+.modal-body:has(> .modal-form) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-body:has(> .saved-reply-picker) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.saved-reply-picker .saved-reply-selection {
+  display: flex;
+  flex-direction: column;
+}
+.saved-reply-picker .saved-reply-selection > :is(button, h3) {
+  flex-shrink: 0;
+}
+.modal-form-tabs > button[aria-pressed='true'] {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.modal-form-tabs {
+  display: flex;
+  flex-shrink: 0;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 12px;
+  background: var(--background);
+}
+.modal-form-tabs > button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 6px;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.modal-form-tabs > button[aria-selected='true'] {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+.modal-form-tabs > button > span {
+  font-size: 11px;
+  color: var(--primary);
+}
+.modal-form-fields,
+.saved-reply-editor .modal-form-fields {
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: block;
+  overflow: auto;
+}
+.modal-form-panel {
+  display: grid;
+  gap: 12px;
+}
+.modal-form-panel[hidden] {
+  display: none;
+}
+.modal-form-panel .field {
+  margin: 0;
+}
+.modal-form-panel .field-hint {
+  margin-block: 4px 0;
+  font-size: 11px;
+}
+.modal-form-panel label {
+  font-size: 13px;
+}
+.modal-form-panel input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.modal-form-panel textarea {
+  min-height: 44px;
+  padding: 10px 12px;
+}
+.modal-form-panel textarea,
+.saved-reply-editor .modal-form-panel textarea {
+  min-height: 80px;
+  max-height: min(220px, calc(var(--app-viewport-height) * 0.25));
+  resize: none;
+}
+.modal-form-footer {
+  flex-shrink: 0;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.modal-form-footer .saved-reply-actions {
+  margin: 0;
+}
+.modal-form-footer .error-message {
+  margin: 0;
+  font-size: 12px;
+}
+.modal-form:has(.reauthentication-inline) > :is(.modal-form-tabs, .modal-form-fields),
+.modal-form-footer:has(.reauthentication-inline) > :not(.reauthentication-inline) {
+  display: none;
+}
+.modal-form-panel .form-grid {
+  margin: 0;
+}
+.saved-reply-media-files {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.saved-reply-media-files .saved-reply-file {
+  padding-inline: 8px 0;
+  min-width: 0;
+}
+.saved-reply-media-files bdi {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.saved-reply-media-files .button {
+  flex-shrink: 0;
+}
+.modal-body .voice-recorder {
+  margin: 0;
+}
+.modal-body .voice-help {
+  font-size: 11px;
+}
+.modal-pagination {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.modal-paged-content {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.modal-page-items {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.modal-text-page {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  max-height: min(240px, calc(var(--app-viewport-height) - 300px));
+  overflow: auto;
+}
+.saved-reply-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.saved-reply-browser {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+.saved-reply-browser[hidden] {
+  display: none;
+}
+.saved-reply-picker .attachment-thumbnail {
+  height: min(140px, calc(var(--app-viewport-height) - 410px));
+}
+.attachment-preview-dialog .document-text {
+  padding: 12px;
+  overflow: hidden;
+  max-height: none;
+}
+.saved-reply-picker .saved-reply-toolbar {
+  margin: 0;
+}
+.saved-reply-picker .saved-reply-selection {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  gap: 10px;
+  min-height: 0;
+}
+.saved-reply-picker .saved-reply-selection h3 {
+  font-size: 15px;
+}
+.saved-reply-picker .saved-reply-summary {
+  min-width: 0;
+}
+.saved-reply-picker .saved-reply-summary p {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.saved-reply-picker .modal-page-items > li {
+  list-style: none;
+}
+.saved-reply-picker .saved-reply-content {
+  max-height: calc(var(--app-viewport-height) - 320px);
+  min-height: 0;
+  overflow: auto;
+}
+.saved-reply-picker .video-attachment video {
+  max-height: calc(var(--app-viewport-height) - 390px);
+}
+.saved-reply-picker .attachment-card-image {
+  max-height: 160px;
+  object-fit: contain;
+}
+.modal-body:has(.messenger-history[open]) .messenger-details {
+  display: none;
+}
+.modal-body .messenger-history .history-event {
+  margin: 0;
+  padding: 10px 0;
+}
+.modal-body .history-event-title {
+  gap: 8px;
+  font-size: 12px;
+}
+.modal-body .history-note {
+  margin-top: 8px;
+  padding: 8px;
+}
+.modal-body .messenger-history > .button {
+  width: 100%;
+  margin-top: 8px;
+}
+.admin-mobile-drawer .modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.modal-body .chat-actions-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.modal-body .chat-actions-list > :is(button, a) {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+}
+.modal-body .chat-actions-list .nav-content {
+  justify-content: center;
+}
+.modal-body .chat-actions-list .navigation-badge {
+  position: static;
+}
+.modal-content.attachment-preview-dialog {
+  width: min(900px, calc(100% - 24px));
+}
+.attachment-preview-dialog .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+.attachment-preview-body {
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+}
+.attachment-preview-body > img {
+  height: min(65dvh, calc(var(--app-viewport-height) - 190px)) !important;
+  max-height: none !important;
+  width: 100%;
+  object-fit: contain;
+}
+.attachment-preview-dialog .preview-footer {
+  margin: 0;
+  flex-shrink: 0;
+}
+.attachment-preview-dialog .document-preview {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.attachment-preview-dialog .document-preview canvas {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(var(--app-viewport-height) - 245px);
+  object-fit: contain;
+  margin-inline: auto;
+}
+.attachment-preview-dialog .document-text,
+.attachment-preview-dialog .spreadsheet-preview {
+  max-height: calc(var(--app-viewport-height) - 250px);
+  margin: 0;
+}
+.attachment-preview-dialog .preview-pagination {
+  margin: 0;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .modal-form-tabs > button {
+    font-size: 12px;
+  }
+}
+@media (max-height: 560px) {
+  .modal-content {
+    padding: 12px 16px;
+    max-height: calc(var(--app-viewport-height) - 16px);
+  }
+  .modal-title {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .modal-heading > .muted {
+    font-size: 11px;
+    margin-bottom: 8px;
+    padding-inline-end: 40px;
+  }
+  .modal-form {
+    gap: 8px;
+  }
+  .modal-form-tabs > button {
+    min-height: 36px;
+  }
+  .modal-form-panel {
+    gap: 8px;
+  }
+  .modal-form-footer {
+    padding-top: 8px;
+    gap: 6px;
+  }
+  .modal-form-panel .field-hint {
+    display: none;
+  }
+  .modal-form-panel .field {
+    gap: 4px;
+  }
+  .modal-form-panel textarea,
+  .saved-reply-editor .modal-form-panel textarea {
+    min-height: 60px;
+    max-height: 80px;
+  }
+  .modal-content .chat-actions-list > :is(button, a) {
+    flex-direction: row;
+    min-height: 44px;
+    padding: 6px;
+  }
+  .modal-content .chat-actions-list > :is(button, a) > svg {
+    width: 20px;
+  }
+  .modal-body .avatar-editor {
+    margin-block: 0 8px;
+  }
+  .modal-body .messenger-details {
+    margin-block: 0;
+  }
+  .modal-body .messenger-details > div {
+    padding-block: 6px;
+    font-size: 12px;
+  }
+  .admin-mobile-drawer .modal-body > :is(.brand, .sidebar-university, .nav-label) {
+    display: none;
+  }
+  .admin-mobile-drawer .modal-body > nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .admin-mobile-drawer .nav-item {
+    min-height: 44px;
+    padding: 8px;
+    font-size: 12px;
+    gap: 6px;
+  }
+  .admin-mobile-drawer .sidebar-bottom {
+    padding-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .admin-mobile-drawer .account-row {
+    min-width: 0;
+    flex: 1;
+    padding-block: 4px;
+  }
+  .admin-mobile-drawer .account-row .avatar {
+    width: 32px;
+    height: 32px;
+  }
+  .admin-mobile-drawer .logout {
+    width: auto;
+    margin: 0;
+    min-width: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-form-panel {
+    scroll-behavior: auto;
+  }
+}

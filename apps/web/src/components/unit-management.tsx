@@ -7,6 +7,7 @@ import { Plus, Building2, Pencil, History, UserRound, Camera } from 'lucide-reac
 import { Button } from './ui/button';
 import { LiveSearchForm } from './live-search-form';
 import { Modal } from './ui/dialog';
+import { ModalForm } from './ui/modal-form';
 import { Avatar } from './avatar';
 import { AvatarUpload } from './avatar-upload';
 import { UploadProgress } from './upload-progress';
@@ -250,7 +251,59 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
         title="ایجاد واحد و حساب مسئول"
         description="مسئول با شماره موبایل و کد ورود وارد می‌شود."
       >
-        <form
+        <ModalForm
+          disabled={busy}
+          sections={[
+            {
+              title: 'واحد',
+              content: (
+                <>
+                  <div className="field">
+                    <label htmlFor="new-unit-name">نام واحد</label>
+                    <input id="new-unit-name" name="name" required minLength={2} maxLength={100} />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="new-unit-description">توضیحات واحد (اختیاری)</label>
+                    <textarea
+                      id="new-unit-description"
+                      name="description"
+                      maxLength={1000}
+                      rows={2}
+                    />
+                  </div>
+                </>
+              ),
+            },
+            { title: 'مسئول', content: <ResponsibleFields /> },
+            {
+              title: 'تصویر',
+              content: (
+                <div className="field">
+                  <label htmlFor="unit-photo">
+                    <Camera size={15} style={{ display: 'inline' }} /> تصویر پروفایل مسئول (اختیاری)
+                  </label>
+                  <input
+                    id="unit-photo"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && file.size > 2097152) {
+                        setError('حداکثر حجم تصویر ۲ مگابایت است.');
+                        e.target.value = '';
+                        setPhoto(null);
+                        return;
+                      }
+                      setPhoto(file ?? null);
+                    }}
+                  />
+                  <p className="field-hint">
+                    مسئول می‌تواند بعداً تصویر را در پروفایل خود تغییر دهد.
+                  </p>
+                </div>
+              ),
+            },
+          ]}
           onSubmit={(e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
@@ -287,39 +340,6 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
             });
           }}
         >
-          <fieldset className="form-fields" disabled={busy}>
-            <div className="field">
-              <label htmlFor="new-unit-name">نام واحد</label>
-              <input id="new-unit-name" name="name" required minLength={2} maxLength={100} />
-            </div>
-            <div className="field">
-              <label htmlFor="new-unit-description">توضیحات واحد (اختیاری)</label>
-              <textarea id="new-unit-description" name="description" maxLength={1000} rows={2} />
-            </div>
-            <h3 className="form-subheading">حساب مسئول واحد</h3>
-            <ResponsibleFields />
-            <div className="field">
-              <label htmlFor="unit-photo">
-                <Camera size={15} style={{ display: 'inline' }} /> تصویر پروفایل مسئول (اختیاری)
-              </label>
-              <input
-                id="unit-photo"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file && file.size > 2097152) {
-                    setError('حداکثر حجم تصویر ۲ مگابایت است.');
-                    e.target.value = '';
-                    setPhoto(null);
-                    return;
-                  }
-                  setPhoto(file ?? null);
-                }}
-              />
-              <p className="field-hint">مسئول می‌تواند بعداً تصویر را در پروفایل خود تغییر دهد.</p>
-            </div>
-          </fieldset>
           {progress !== null && <UploadProgress percent={progress} label="بارگذاری تصویر مسئول" />}
           {reauthentication.confirmation}
           {error && (
@@ -328,7 +348,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
             </p>
           )}
           <Button disabled={busy}>{busy ? 'در حال ایجاد…' : 'ایجاد واحد و مسئول'}</Button>
-        </form>
+        </ModalForm>
       </Modal>
       <Modal
         open={!!editing}
@@ -338,7 +358,61 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
         title="ویرایش واحد"
       >
         {editing && (
-          <form
+          <ModalForm
+            disabled={busy}
+            sections={[
+              {
+                title: 'اطلاعات',
+                content: (
+                  <>
+                    <div className="field">
+                      <label htmlFor="edit-unit-name">نام واحد</label>
+                      <input
+                        id="edit-unit-name"
+                        name="name"
+                        defaultValue={editing.name}
+                        required
+                        minLength={2}
+                        maxLength={100}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="edit-unit-description">توضیحات</label>
+                      <textarea
+                        id="edit-unit-description"
+                        name="description"
+                        defaultValue={editing.description}
+                        maxLength={1000}
+                        rows={2}
+                      />
+                    </div>
+                  </>
+                ),
+              },
+              {
+                title: 'دسترسی',
+                content: (
+                  <>
+                    <label className="checkbox-field">
+                      <input type="checkbox" name="active" defaultChecked={editing.active} /> واحد
+                      فعال باشد
+                    </label>
+                    <label className="checkbox-field">
+                      <input type="checkbox" name="visible" defaultChecked={editing.visible} /> در
+                      فهرست واحدها نمایش داده شود
+                    </label>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        name="acceptingTickets"
+                        defaultChecked={editing.acceptingTickets}
+                      />{' '}
+                      درخواست جدید بپذیرد
+                    </label>
+                  </>
+                ),
+              },
+            ]}
             onSubmit={(e) => {
               e.preventDefault();
               const f = new FormData(e.currentTarget);
@@ -358,44 +432,6 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
               });
             }}
           >
-            <fieldset className="form-fields" disabled={busy}>
-              <div className="field">
-                <label htmlFor="edit-unit-name">نام واحد</label>
-                <input
-                  id="edit-unit-name"
-                  name="name"
-                  defaultValue={editing.name}
-                  required
-                  minLength={2}
-                  maxLength={100}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="edit-unit-description">توضیحات</label>
-                <textarea
-                  id="edit-unit-description"
-                  name="description"
-                  defaultValue={editing.description}
-                  maxLength={1000}
-                />
-              </div>
-              <label className="checkbox-field">
-                <input type="checkbox" name="active" defaultChecked={editing.active} /> واحد فعال
-                باشد
-              </label>
-              <label className="checkbox-field">
-                <input type="checkbox" name="visible" defaultChecked={editing.visible} /> در فهرست
-                واحدها نمایش داده شود
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  name="acceptingTickets"
-                  defaultChecked={editing.acceptingTickets}
-                />{' '}
-                درخواست جدید بپذیرد
-              </label>
-            </fieldset>
             {reauthentication.confirmation}
             {error && (
               <p role="alert" className="error-message">
@@ -403,7 +439,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
               </p>
             )}
             <Button disabled={busy}>ذخیره واحد</Button>
-          </form>
+          </ModalForm>
         )}
       </Modal>
       <Modal
@@ -415,8 +451,17 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
       >
         {person && (
           <>
-            <AvatarUpload userId={person.id} name={person.name} image={person.image} />
-            <form
+            <ModalForm
+              disabled={busy}
+              sections={[
+                { title: 'اطلاعات حساب', content: <ResponsibleFields person={person} /> },
+                {
+                  title: 'تصویر پروفایل',
+                  content: (
+                    <AvatarUpload userId={person.id} name={person.name} image={person.image} />
+                  ),
+                },
+              ]}
               onSubmit={(e) => {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
@@ -433,9 +478,6 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                 });
               }}
             >
-              <fieldset className="form-fields" disabled={busy}>
-                <ResponsibleFields person={person} />
-              </fieldset>
               {reauthentication.confirmation}
               {error && (
                 <p role="alert" className="error-message">
@@ -443,7 +485,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                 </p>
               )}
               <Button disabled={busy}>ذخیره حساب مسئول</Button>
-            </form>
+            </ModalForm>
           </>
         )}
       </Modal>

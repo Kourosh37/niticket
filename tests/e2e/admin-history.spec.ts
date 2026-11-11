@@ -123,16 +123,26 @@ test('opens a unit history from administration and reads its conversations and p
   await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
   await page.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'اطلاعات گفتگو' })).toBeVisible();
-  await expect(page.locator('.history-event')).toHaveCount(50);
+  const historyPages = page.getByRole('navigation', { name: 'صفحه‌بندی تاریخچه', exact: true });
+
+  async function expectHistorySize(total: number) {
+    await expect(page.locator('.history-event')).toHaveCount(1);
+    await expect(historyPages.getByRole('status')).toHaveText(
+      new RegExp(`${new Intl.NumberFormat('fa-IR').format(total)}$`),
+    );
+  }
+
+  await expectHistorySize(50);
   await page.clock.install();
   await expect(page.getByText('یادداشت خصوصی قابل مشاهده برای مدیر', { exact: true })).toHaveCount(
     0,
   );
   await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
-  await expect(page.locator('.history-event')).toHaveCount(100);
+  await expectHistorySize(100);
   await page.clock.fastForward(15000);
   await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
-  await expect(page.locator('.history-event')).toHaveCount(106);
+  await expectHistorySize(106);
+  await historyPages.getByRole('button', { name: 'آخرین صفحه', exact: true }).click();
   await expect(
     page.getByText('یادداشت خصوصی قابل مشاهده برای مدیر', { exact: true }),
   ).toBeVisible();
@@ -140,6 +150,7 @@ test('opens a unit history from administration and reads its conversations and p
   await expect(page.getByText('متن قابل مشاهده در تاریخچه واحد', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
   await page.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
+  await historyPages.getByRole('button', { name: 'آخرین صفحه', exact: true }).click();
   await expect(
     page.getByText('یادداشت خصوصی قابل مشاهده برای مدیر', { exact: true }),
   ).toBeVisible();
@@ -155,11 +166,12 @@ test('opens a unit history from administration and reads its conversations and p
   await page.goto(`/tickets/${ticket.id}`);
   await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
   await page.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
-  await expect(page.locator('.history-event')).toHaveCount(50);
+  await expectHistorySize(50);
   await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
-  await expect(page.locator('.history-event')).toHaveCount(100);
+  await expectHistorySize(100);
   await page.getByRole('button', { name: 'رویدادهای قبلی', exact: true }).click();
-  await expect(page.locator('.history-event')).toHaveCount(106);
+  await expectHistorySize(106);
+  await historyPages.getByRole('button', { name: 'آخرین صفحه', exact: true }).click();
   const oldEvent = page
     .locator('.history-event')
     .filter({ hasText: 'یادداشت خصوصی قابل مشاهده برای مدیر' });
@@ -170,8 +182,12 @@ test('opens a unit history from administration and reads its conversations and p
     .fill('یادداشت تازه برای رویداد قدیمی');
   await noteDialog.getByRole('button', { name: 'ثبت یادداشت', exact: true }).click();
   await expect(noteDialog).toHaveCount(0);
+  await page
+    .getByRole('navigation', { name: 'صفحه‌بندی یادداشت‌ها', exact: true })
+    .getByRole('button', { name: 'آخرین صفحه', exact: true })
+    .click();
   await expect(page.getByText('یادداشت تازه برای رویداد قدیمی', { exact: true })).toBeVisible();
-  await expect(page.locator('.history-event')).toHaveCount(106);
+  await expectHistorySize(106);
   await page.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
   expect(
     (

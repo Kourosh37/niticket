@@ -7,6 +7,7 @@ import { Search, Pencil } from 'lucide-react';
 import { Button } from './ui/button';
 import { LiveSearchForm } from './live-search-form';
 import { Modal } from './ui/dialog';
+import { ModalForm } from './ui/modal-form';
 import { Avatar } from './avatar';
 import { useReauthentication } from './reauthentication';
 import { request, dateTime } from '@/lib/utils';
@@ -182,7 +183,44 @@ export function AdminUsers({
         title="ویرایش اطلاعات کاربر"
       >
         {editing && (
-          <form
+          <ModalForm
+            disabled={busy}
+            sections={[
+              {
+                title: 'اطلاعات کاربر',
+                content: (
+                  <>
+                    <div className="field">
+                      <label htmlFor="edit-user-name">نام و نام خانوادگی</label>
+                      <input
+                        id="edit-user-name"
+                        name="name"
+                        defaultValue={editing.name}
+                        required
+                        minLength={2}
+                        maxLength={100}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="edit-user-phone">شماره موبایل</label>
+                      <input
+                        id="edit-user-phone"
+                        name="phoneNumber"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        dir="ltr"
+                        defaultValue={editing.phoneNumber ?? ''}
+                        maxLength={40}
+                      />
+                      <p className="field-hint">
+                        تغییر شماره، رمز و نشست‌های قبلی را لغو می‌کند؛ ورود بعدی با کد موبایل است.
+                      </p>
+                    </div>
+                  </>
+                ),
+              },
+            ]}
             onSubmit={async (e) => {
               e.preventDefault();
               const f = new FormData(e.currentTarget);
@@ -193,35 +231,6 @@ export function AdminUsers({
               if (await save(editing.id, changes)) setEditing(null);
             }}
           >
-            <fieldset className="form-fields" disabled={busy}>
-              <div className="field">
-                <label htmlFor="edit-user-name">نام و نام خانوادگی</label>
-                <input
-                  id="edit-user-name"
-                  name="name"
-                  defaultValue={editing.name}
-                  required
-                  minLength={2}
-                  maxLength={100}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="edit-user-phone">شماره موبایل</label>
-                <input
-                  id="edit-user-phone"
-                  name="phoneNumber"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  dir="ltr"
-                  defaultValue={editing.phoneNumber ?? ''}
-                  maxLength={40}
-                />
-                <p className="field-hint">
-                  تغییر شماره، رمز و نشست‌های قبلی را لغو می‌کند؛ ورود بعدی با کد موبایل است.
-                </p>
-              </div>
-            </fieldset>
             {reauthentication.confirmation}
             {error && (
               <p role="alert" className="error-message">
@@ -229,7 +238,7 @@ export function AdminUsers({
               </p>
             )}
             <Button disabled={busy}>ذخیره اطلاعات کاربر</Button>
-          </form>
+          </ModalForm>
         )}
       </Modal>
     </>

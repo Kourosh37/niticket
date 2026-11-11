@@ -9,6 +9,8 @@ import type { listSavedReplies } from '@niticket/core/application/saved-replies'
 import { request, digits } from '@/lib/utils';
 import { uploadSavedReplyFile } from '@/lib/upload';
 import { Modal } from './ui/dialog';
+import { ModalForm } from './ui/modal-form';
+import { PagedItems, PagedText } from './ui/paged-content';
 import { Button } from './ui/button';
 import { AttachmentPreview } from './attachment-preview';
 import { VoiceRecorder } from './voice-recorder';
@@ -80,12 +82,30 @@ function ReplySearch({ value, onChange }: { value: string; onChange: (value: str
 }
 
 function ReplyContent({ reply }: { reply: Reply }) {
+  const [media, setMedia] = useState(!reply.body);
   return (
     <div className="saved-reply-content">
-      {reply.body && <p className="message-body">{reply.body}</p>}
-      {reply.attachments.map((file) => (
-        <AttachmentPreview key={file.id} file={file} />
-      ))}
+      {!!reply.body && !!reply.attachments.length && (
+        <div className="modal-form-tabs" role="group" aria-label="محتوای پیام آماده">
+          <button type="button" aria-pressed={!media} onClick={() => setMedia(false)}>
+            متن پیام
+          </button>
+          <button type="button" aria-pressed={media} onClick={() => setMedia(true)}>
+            پیوست‌ها ({digits(reply.attachments.length)})
+          </button>
+        </div>
+      )}
+      {media ? (
+        <PagedItems
+          items={reply.attachments}
+          pageSize={1}
+          compactSize={1}
+          label="پیوست‌های پیام"
+          renderItem={(file) => <AttachmentPreview key={file.id} file={file} />}
+        />
+      ) : (
+        <PagedText text={reply.body} />
+      )}
     </div>
   );
 }
@@ -188,95 +208,134 @@ function SavedReplyEditor({
       title={initial ? 'ویرایش پیام آماده' : 'پیام آماده جدید'}
       description="متن، صدا و فایل را یک‌بار آماده کنید و در گفتگوهای واحد بفرستید."
     >
-      <form className="saved-reply-editor" onSubmit={submit}>
-        <fieldset disabled={busy}>
-          <div className="field">
-            <label htmlFor={`${fieldId}-title`}>عنوان پیام آماده</label>
-            <input
-              id={`${fieldId}-title`}
-              autoFocus
-              required
-              value={title}
-              maxLength={100}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor={`${fieldId}-body`}>متن پیام آماده</label>
-            <textarea
-              id={`${fieldId}-body`}
-              rows={5}
-              value={body}
-              maxLength={20000}
-              placeholder="متن پیام (اختیاری)…"
-              onChange={(event) => setBody(event.target.value)}
-            />
-          </div>
-          {retained.map((file) => (
-            <div className="saved-reply-file" key={file.id}>
-              <bdi>{file.filename}</bdi>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label={`حذف ${file.filename}`}
-                onClick={() => setRemoved((current) => [...current, file.id])}
-              >
-                <X size={17} />
-              </Button>
-            </div>
-          ))}
-          {files.map((file, index) => (
-            <div className="saved-reply-file" key={index}>
-              <bdi>{file.name}</bdi>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label={`حذف ${file.name}`}
-                onClick={() => setFiles((current) => current.filter((_, item) => item !== index))}
-              >
-                <X size={17} />
-              </Button>
-            </div>
-          ))}
-          <div className="saved-reply-add-media">
-            <label className="button button-outline">
-              <FilePlus size={17} />
-              افزودن فایل
-              <input
-                className="sr-only"
-                type="file"
-                multiple
-                aria-label="پیوست پیام آماده"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp4,.mp3,.wav"
-                onChange={(event) => {
-                  const selected = Array.from(event.target.files ?? []);
-                  event.target.value = '';
-                  if (selected.some((file) => file.size > maxBytes)) {
-                    setError(
-                      `حداکثر حجم هر فایل ${digits(Math.ceil(maxBytes / 1048576))} مگابایت است.`,
-                    );
-                    return;
-                  }
-                  if (retained.length + files.length + selected.length + (voice ? 1 : 0) > 5) {
-                    setError('هر پیام آماده حداکثر ۵ پیوست دارد.');
-                    return;
-                  }
-                  setError('');
-                  setFiles((current) => [...current, ...selected]);
-                }}
-              />
-            </label>
-            <small>عکس، ویدیو، صدا یا سند</small>
-          </div>
-          <VoiceRecorder
-            onFile={setVoice}
-            onRecordingChange={setRecording}
-            maxBytes={maxBytes}
-            maxSeconds={maxSeconds}
-          />
-        </fieldset>
+      <ModalForm
+        className="saved-reply-editor"
+        onSubmit={submit}
+        disabled={busy}
+        lockNavigation={recording}
+        sections={[
+          {
+            title: 'متن پیام',
+            content: (
+              <>
+                <div className="field">
+                  <label htmlFor={`${fieldId}-title`}>عنوان پیام آماده</label>
+                  <input
+                    id={`${fieldId}-title`}
+                    autoFocus
+                    required
+                    value={title}
+                    maxLength={100}
+                    onChange={(event) => setTitle(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`${fieldId}-body`}>متن پیام آماده</label>
+                  <textarea
+                    id={`${fieldId}-body`}
+                    rows={5}
+                    value={body}
+                    maxLength={20000}
+                    placeholder="متن پیام (اختیاری)…"
+                    onChange={(event) => setBody(event.target.value)}
+                  />
+                </div>
+              </>
+            ),
+          },
+          {
+            title: 'فایل‌ها',
+            content: (
+              <>
+                <PagedItems
+                  items={[
+                    ...retained.map((file) => ({
+                      id: file.id,
+                      name: file.filename,
+                      existing: true,
+                    })),
+                    ...files.map((file, index) => ({
+                      id: String(index),
+                      name: file.name,
+                      existing: false,
+                    })),
+                  ]}
+                  pageSize={4}
+                  compactSize={1}
+                  label="پیوست‌های پیام آماده"
+                  disabled={busy}
+                  renderItem={(file) => (
+                    <div className="saved-reply-file" key={file.id}>
+                      <bdi>{file.name}</bdi>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`حذف ${file.name}`}
+                        onClick={() =>
+                          file.existing
+                            ? setRemoved((current) => [...current, file.id])
+                            : setFiles((current) =>
+                                current.filter((_, index) => index !== Number(file.id)),
+                              )
+                        }
+                      >
+                        <X size={17} />
+                      </Button>
+                    </div>
+                  )}
+                />
+                <div className="saved-reply-add-media">
+                  <label className="button button-outline">
+                    <FilePlus size={17} />
+                    افزودن فایل
+                    <input
+                      className="sr-only"
+                      type="file"
+                      multiple
+                      aria-label="پیوست پیام آماده"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp4,.mp3,.wav"
+                      onChange={(event) => {
+                        const selected = Array.from(event.target.files ?? []);
+                        event.target.value = '';
+                        if (selected.some((file) => file.size > maxBytes)) {
+                          setError(
+                            `حداکثر حجم هر فایل ${digits(Math.ceil(maxBytes / 1048576))} مگابایت است.`,
+                          );
+                          return;
+                        }
+                        if (
+                          retained.length + files.length + selected.length + (voice ? 1 : 0) >
+                          5
+                        ) {
+                          setError('هر پیام آماده حداکثر ۵ پیوست دارد.');
+                          return;
+                        }
+                        setError('');
+                        setFiles((current) => [...current, ...selected]);
+                      }}
+                    />
+                  </label>
+                  <small>عکس، ویدیو، صدا یا سند</small>
+                </div>
+              </>
+            ),
+          },
+          {
+            title: 'پیام صوتی',
+            content: (
+              <>
+                <VoiceRecorder
+                  onFile={setVoice}
+                  onRecordingChange={setRecording}
+                  maxBytes={maxBytes}
+                  maxSeconds={maxSeconds}
+                />
+              </>
+            ),
+          },
+        ]}
+      >
         {progress !== null && <UploadProgress percent={progress} filename={filename} />}
         {error && (
           <p role="alert" className="error-message">
@@ -291,7 +350,7 @@ function SavedReplyEditor({
             انصراف
           </Button>
         </div>
-      </form>
+      </ModalForm>
     </Modal>
   );
 }
@@ -527,80 +586,101 @@ export function SavedReplyPicker({
     selected.attachments.every((file) => file.scanStatus === 'CLEAN');
   return (
     <div className="saved-reply-picker">
-      <div className="saved-reply-toolbar">
-        <ReplySearch
-          value={list.query}
-          onChange={(value) => {
-            list.setQuery(value);
-            setSelected(null);
-            setError('');
-          }}
+      <div hidden={!!selected} className="saved-reply-browser">
+        <div className="saved-reply-toolbar">
+          <ReplySearch
+            value={list.query}
+            onChange={(value) => {
+              list.setQuery(value);
+              setSelected(null);
+              setError('');
+            }}
+          />
+          <Link
+            href={`/saved-replies?departmentId=${departmentId}`}
+            className="saved-reply-manage-link"
+          >
+            مدیریت پیام‌ها
+          </Link>
+        </div>
+        {list.loading && <p role="status">در حال دریافت…</p>}
+        {(error || list.error) && (
+          <p role="alert" className="error-message">
+            {error || list.error}
+          </p>
+        )}
+        {!list.loading && !list.error && !list.data.items.length && (
+          <p className="saved-reply-empty">
+            {list.query ? 'پیامی پیدا نشد.' : 'برای این واحد هنوز پیام آماده‌ای ندارید.'}
+          </p>
+        )}
+        <PagedItems
+          key={list.query}
+          items={list.data.items}
+          label="صفحه‌بندی پیام‌های آماده"
+          disabled={busy || list.loading}
+          renderItem={(reply) => (
+            <div key={reply.id}>
+              <button
+                type="button"
+                className="saved-reply-summary"
+                aria-label={`انتخاب ${reply.title}`}
+                disabled={busy || list.loading}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    setSelected(await request<Reply>(`/api/v1/saved-replies/${reply.id}`));
+                  } catch (error) {
+                    setError(error instanceof Error ? error.message : 'پیام دریافت نشد.');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <strong>
+                  <Bookmark size={15} />
+                  {reply.title}
+                </strong>
+                <p>{reply.body || 'پیام دارای پیوست'}</p>
+                {!!reply.attachments.length && (
+                  <small>{digits(reply.attachments.length)} پیوست</small>
+                )}
+              </button>
+            </div>
+          )}
         />
-        <Link
-          href={`/saved-replies?departmentId=${departmentId}`}
-          className="saved-reply-manage-link"
-        >
-          مدیریت پیام‌ها
-        </Link>
+        {list.data.nextCursor && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={list.loading || busy}
+            onClick={() => void list.load(list.data.nextCursor!)}
+          >
+            پیام‌های بیشتر
+          </Button>
+        )}
       </div>
-      {list.loading && <p role="status">در حال دریافت…</p>}
-      {(error || list.error) && (
-        <p role="alert" className="error-message">
-          {error || list.error}
-        </p>
-      )}
-      {!list.loading && !list.error && !list.data.items.length && (
-        <p className="saved-reply-empty">
-          {list.query ? 'پیامی پیدا نشد.' : 'برای این واحد هنوز پیام آماده‌ای ندارید.'}
-        </p>
-      )}
-      <ul className="saved-reply-list">
-        {list.data.items.map((reply) => (
-          <li key={reply.id}>
-            <button
-              type="button"
-              className="saved-reply-summary"
-              aria-label={`انتخاب ${reply.title}`}
-              aria-pressed={selected?.id === reply.id}
-              disabled={busy || list.loading}
-              onClick={async () => {
-                setBusy(true);
-                setError('');
-                try {
-                  setSelected(await request<Reply>(`/api/v1/saved-replies/${reply.id}`));
-                } catch (error) {
-                  setError(error instanceof Error ? error.message : 'پیام دریافت نشد.');
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <strong>
-                <Bookmark size={15} />
-                {reply.title}
-              </strong>
-              <p>{reply.body || 'پیام دارای پیوست'}</p>
-              {!!reply.attachments.length && (
-                <small>{digits(reply.attachments.length)} پیوست</small>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {list.data.nextCursor && (
-        <Button
-          type="button"
-          variant="outline"
-          disabled={list.loading || busy}
-          onClick={() => void list.load(list.data.nextCursor!)}
-        >
-          پیام‌های بیشتر
-        </Button>
-      )}
       {selected && (
         <section className="saved-reply-selection" aria-label="پیش‌نمایش پیام آماده">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              setSelected(null);
+              setError('');
+            }}
+          >
+            <ArrowRight size={16} /> بازگشت به پیام‌ها
+          </Button>
           <h3>{selected.title}</h3>
           <ReplyContent reply={selected} />
+          {error && (
+            <p role="alert" className="error-message">
+              {error}
+            </p>
+          )}
           {!ready && (
             <p className="muted">
               پیش از ارسال، همه پیوست‌ها باید تأیید شوند. پیام خالی یا فایل ردشده را در بخش مدیریت

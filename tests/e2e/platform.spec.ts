@@ -295,9 +295,11 @@ test('three roles complete a ticket with private history notes, file previews an
   const name = `واحد مرورگر ${Date.now()}`,
     officerPhone = `+989${randomInt(100000000, 999999999)}`;
   await a.getByLabel('نام واحد', { exact: true }).fill(name);
+  await a.getByRole('tab', { name: 'مسئول', exact: true }).click();
   await a.getByLabel('نام و نام خانوادگی مسئول', { exact: true }).fill('مسئول آزمون مرورگر');
   await a.getByLabel('شماره موبایل مسئول', { exact: true }).fill(officerPhone);
   await expect(a.getByRole('textbox', { name: /شناسه|آیدی|ایدی/ })).toHaveCount(0);
+  await a.getByRole('tab', { name: 'تصویر', exact: true }).click();
   await a.getByLabel('تصویر پروفایل مسئول (اختیاری)').setInputFiles('tests/fixtures/photo.png');
   await a.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }).click();
   await expect(a.getByRole('dialog', { name: 'ایجاد واحد و حساب مسئول' })).toHaveCount(0, {
@@ -472,6 +474,7 @@ test('three roles complete a ticket with private history notes, file previews an
   await u.getByLabel('یادداشت متنی (اختیاری)').fill('PRIVATE_HISTORY_BROWSER');
   await expect(u.getByLabel('یادداشت متنی (اختیاری)')).toHaveValue('PRIVATE_HISTORY_BROWSER');
   const noteDialog = u.getByRole('dialog', { name: 'یادداشت برای این رویداد', exact: true });
+  await noteDialog.getByRole('tab', { name: 'پیام صوتی', exact: true }).click();
   await noteDialog.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
   await u.waitForTimeout(1100);
   await noteDialog.getByRole('button', { name: 'پایان ضبط', exact: true }).click();

@@ -6,6 +6,7 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist';
 import { FileText, ImageIcon, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
+import { PagedText } from './ui/paged-content';
 import { AudioPlayer } from './audio-player';
 import { DownloadButton } from './downloads';
 import { formatFileSize } from '@/lib/downloads';
@@ -203,7 +204,9 @@ function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
               ? 'نمایش محتوای متنی فایل'
               : 'نمایش متنی سند ورد؛ برای قالب‌بندی اصلی، فایل را دریافت کنید.'}
           </p>
-          <div className="document-text">{text}</div>
+          <div className="document-text">
+            <PagedText text={text} />
+          </div>
         </>
       )}
       {rows.length > 0 && (
@@ -313,6 +316,7 @@ export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
         onOpenChange={setOpen}
         title="پیش‌نمایش فایل"
         description={file.filename}
+        className="attachment-preview-dialog"
       >
         <div className="attachment-preview-body">
           {image ? (

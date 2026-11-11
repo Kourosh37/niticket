@@ -33,6 +33,7 @@ import { Button } from './ui/button';
 import dynamic from 'next/dynamic';
 import type { TimelineHandle } from './message-timeline';
 import { Modal } from './ui/dialog';
+import { PagedItems, PagedText } from './ui/paged-content';
 import { UploadProgress } from './upload-progress';
 import { VoiceRecorder } from './voice-recorder';
 import { date, dateTime, digits, request, RequestError } from '@/lib/utils';
@@ -1124,32 +1125,48 @@ export function Conversation({
             {!loadingHistory && !historyError && !activities.length && (
               <p className="muted">هنوز رویدادی برای این گفتگو ثبت نشده است.</p>
             )}
-            {activities.map((activity) => (
-              <article className="history-event" key={activity.id}>
-                <div className="history-event-title">
-                  <strong>{activityNames[activity.type] ?? 'گفتگو به‌روزرسانی شد'}</strong>
-                  <time>{dateTime(activity.createdAt)}</time>
-                </div>
-                {activity.notes.map((note) => (
-                  <div key={note.id} className="history-note">
-                    <strong>{note.author.name}</strong>
-                    <p className="message-body">{note.body}</p>
-                    {note.attachments.map((file) => (
-                      <AttachmentPreview key={file.id} file={file} />
-                    ))}
+            <PagedItems
+              items={activities}
+              pageSize={1}
+              compactSize={1}
+              label="صفحه‌بندی تاریخچه"
+              renderItem={(activity) => (
+                <article className="history-event" key={activity.id}>
+                  <div className="history-event-title">
+                    <strong>{activityNames[activity.type] ?? 'گفتگو به‌روزرسانی شد'}</strong>
+                    <time>{dateTime(activity.createdAt)}</time>
                   </div>
-                ))}
-                {permissions.staff && (
-                  <HistoryNote
-                    ticketId={id}
-                    activityId={activity.id}
-                    maxSeconds={maxSeconds}
-                    maxBytes={maxBytes}
-                    onSaved={() => void refreshActivity(activity.id)}
+                  <PagedItems
+                    items={activity.notes}
+                    pageSize={1}
+                    compactSize={1}
+                    label="صفحه‌بندی یادداشت‌ها"
+                    renderItem={(note) => (
+                      <div key={note.id} className="history-note">
+                        <strong>{note.author.name}</strong>
+                        <PagedText text={note.body} />
+                        <PagedItems
+                          items={note.attachments}
+                          pageSize={1}
+                          compactSize={1}
+                          label="پیوست‌های یادداشت"
+                          renderItem={(file) => <AttachmentPreview key={file.id} file={file} />}
+                        />
+                      </div>
+                    )}
                   />
-                )}
-              </article>
-            ))}
+                  {permissions.staff && (
+                    <HistoryNote
+                      ticketId={id}
+                      activityId={activity.id}
+                      maxSeconds={maxSeconds}
+                      maxBytes={maxBytes}
+                      onSaved={() => void refreshActivity(activity.id)}
+                    />
+                  )}
+                </article>
+              )}
+            />
             {activityCursor && (
               <Button
                 type="button"

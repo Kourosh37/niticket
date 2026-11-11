@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StickyNote, Lock } from 'lucide-react';
 import { Modal } from './ui/dialog';
+import { ModalForm } from './ui/modal-form';
 import { Button } from './ui/button';
 import { VoiceRecorder } from './voice-recorder';
 import { UploadProgress } from './upload-progress';
@@ -46,7 +47,43 @@ export function HistoryNote({
         title="یادداشت برای این رویداد"
         description="اختیاری؛ فقط مسئولان مجاز واحد و مدیر سامانه آن را می‌بینند."
       >
-        <form
+        <ModalForm
+          disabled={busy}
+          lockNavigation={recording}
+          sections={[
+            {
+              title: 'یادداشت',
+              content: (
+                <div className="field">
+                  <label htmlFor={`note-${activityId}`}>یادداشت متنی (اختیاری)</label>
+                  <textarea
+                    id={`note-${activityId}`}
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    maxLength={4000}
+                    disabled={busy || !!pending}
+                    placeholder="جزئیات تکمیلی این مرحله از رسیدگی…"
+                  />
+                  <p className="field-hint">
+                    <Lock size={12} style={{ display: 'inline' }} /> این یادداشت برای کاربر نمایش
+                    داده نمی‌شود.
+                  </p>
+                </div>
+              ),
+            },
+            {
+              title: 'پیام صوتی',
+              content: (
+                <VoiceRecorder
+                  key={key}
+                  onFile={setVoice}
+                  onRecordingChange={setRecording}
+                  maxSeconds={maxSeconds}
+                  maxBytes={maxBytes}
+                />
+              ),
+            },
+          ]}
           onSubmit={async (e) => {
             e.preventDefault();
             if (busy || recording) return;
@@ -84,26 +121,6 @@ export function HistoryNote({
             }
           }}
         >
-          <label htmlFor={`note-${activityId}`}>یادداشت متنی (اختیاری)</label>
-          <textarea
-            id={`note-${activityId}`}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={4000}
-            disabled={busy || !!pending}
-            placeholder="جزئیات تکمیلی این مرحله از رسیدگی…"
-          />
-          <VoiceRecorder
-            key={key}
-            onFile={setVoice}
-            onRecordingChange={setRecording}
-            maxSeconds={maxSeconds}
-            maxBytes={maxBytes}
-          />
-          <p className="field-hint">
-            <Lock size={12} style={{ display: 'inline' }} /> این یادداشت برای کاربر نمایش داده
-            نمی‌شود.
-          </p>
           {percent !== null && <UploadProgress percent={percent} label="بارگذاری وویس یادداشت" />}
           {error && (
             <p role="alert" className="error-message">
@@ -115,7 +132,7 @@ export function HistoryNote({
               {busy ? 'در حال ذخیره…' : pending ? 'تلاش دوباره برای وویس' : 'ثبت یادداشت'}
             </Button>
           </div>
-        </form>
+        </ModalForm>
       </Modal>
     </>
   );

@@ -67,7 +67,7 @@ export function Modal({
               <X size={18} />
             </Dialog.Close>
           </div>
-          {children}
+          <div className="modal-body">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

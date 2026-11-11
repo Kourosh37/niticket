@@ -52,6 +52,7 @@ test('manages a minimal media library, searches and sends a complete saved reply
   await editor
     .getByLabel('متن پیام آماده', { exact: true })
     .fill('متن پاسخ آماده همراه عکس، سند، ویدیو و صدا');
+  await editor.getByRole('tab', { name: 'فایل‌ها', exact: true }).click();
   await editor
     .getByLabel('پیوست پیام آماده', { exact: true })
     .setInputFiles([
@@ -59,6 +60,7 @@ test('manages a minimal media library, searches and sends a complete saved reply
       'tests/fixtures/document.pdf',
       'tests/fixtures/video.webm',
     ]);
+  await editor.getByRole('tab', { name: 'پیام صوتی', exact: true }).click();
   await editor.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
   await page.waitForTimeout(1100);
   await editor.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
@@ -103,6 +105,15 @@ test('manages a minimal media library, searches and sends a complete saved reply
   await expect(picker.getByLabel('پیش‌نمایش پیام آماده', { exact: true })).toContainText(
     reply.body,
   );
+  await picker.getByRole('button', { name: /^پیوست‌ها/ }).click();
+  const attachmentPages = picker.getByRole('navigation', { name: 'پیوست‌های پیام', exact: true });
+  for (
+    let index = 0;
+    index < reply.attachments.length && !(await picker.locator('video').count());
+    index++
+  ) {
+    await attachmentPages.getByRole('button', { name: 'صفحه بعدی', exact: true }).click();
+  }
   await expect(picker.locator('video')).toHaveAttribute('preload', 'none');
   await picker.getByRole('button', { name: 'ارسال پیام آماده', exact: true }).click();
   await expect(picker).toHaveCount(0);
