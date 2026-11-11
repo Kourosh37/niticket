@@ -185,18 +185,28 @@ export const MessageTimeline = memo(function MessageTimeline({
   onVisibleMessages?: (ids: string[]) => void;
 }) {
   const virtualizer = useRef<VirtuosoHandle | null>(null);
+  const initialPositioning = useRef(!focusId);
   const scroller = useRef<HTMLElement | null>(null),
     following = useRef(!focusId),
-    geometry = useRef({ height: 0, viewport: 0 }),
+    geometry = useRef({ height: 0, viewport: 0, top: 0 }),
     previousTail = useRef(messages.at(-1)?.id);
+  const setFollowing = useCallback(
+    (value: boolean) => {
+      if (following.current === value) return;
+      following.current = value;
+      onBottomChange(value);
+    },
+    [onBottomChange],
+  );
   const followEnd = useCallback(() => {
     const area = scroller.current;
     if (area && following.current && !focusId) area.scrollTop = area.scrollHeight;
   }, [focusId]);
   const jumpToLatest = useCallback(() => {
-    following.current = true;
+    initialPositioning.current = false;
+    setFollowing(true);
     followEnd();
-  }, [followEnd]);
+  }, [followEnd, setFollowing]);
   // Native follow scrolls have no delayed scrollToIndex retries that could
   // override an upward user scroll after the new batch is painted.
   useLayoutEffect(() => {
@@ -225,7 +235,8 @@ export const MessageTimeline = memo(function MessageTimeline({
     () => ({
       jumpToLatest,
       preserveAnchor: () => {
-        following.current = false;
+        initialPositioning.current = false;
+        setFollowing(false);
         const area = scroller.current;
         if (!area) return;
         const top = area.getBoundingClientRect().top;
@@ -239,7 +250,7 @@ export const MessageTimeline = memo(function MessageTimeline({
           };
       },
     }),
-    [jumpToLatest],
+    [jumpToLatest, setFollowing],
   );
   useLayoutEffect(() => {
     if (!anchor.current) return;
@@ -280,19 +291,28 @@ export const MessageTimeline = memo(function MessageTimeline({
       }}
       onWheelCapture={(event) => {
         anchor.current = null;
-        if (event.deltaY < 0) following.current = false;
+        initialPositioning.current = false;
+        if (event.deltaY < 0) setFollowing(false);
+        else if (event.deltaY > 0) {
+          const area = event.currentTarget;
+          if (area.scrollHeight - area.clientHeight - area.scrollTop <= 1) setFollowing(true);
+        }
       }}
       onKeyDownCapture={(event) => {
-        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key))
+        if (
+          ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)
+        ) {
+          initialPositioning.current = false;
           anchor.current = null;
-        if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) following.current = false;
+        }
+        if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) setFollowing(false);
         if (
           event.target === event.currentTarget &&
           event.ctrlKey &&
           (event.key === 'Home' || event.key === 'End')
         ) {
           event.preventDefault();
-          following.current = event.key === 'End';
+          setFollowing(event.key === 'End');
           // Native jumps can be overwritten by Virtuoso's pending prepend measurements.
           // Its indexed API keeps this explicit keyboard destination through those updates.
           virtualizer.current?.scrollToIndex({
@@ -304,7 +324,12 @@ export const MessageTimeline = memo(function MessageTimeline({
       }}
       onTouchMoveCapture={() => {
         anchor.current = null;
-        following.current = false;
+        initialPositioning.current = false;
+        setFollowing(false);
+      }}
+      onTouchEndCapture={(event) => {
+        const area = event.currentTarget;
+        if (area.scrollHeight - area.clientHeight - area.scrollTop <= 1) setFollowing(true);
       }}
       onScrollCapture={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -313,15 +338,30 @@ export const MessageTimeline = memo(function MessageTimeline({
           viewport = area.clientHeight;
         const resized =
           height !== geometry.current.height || viewport !== geometry.current.viewport;
-        // A measured row or composer resize can temporarily move the bottom
-        // while following. Only a scroll within unchanged geometry pauses it;
-        // upward input above already pauses immediately, including during resize.
-        following.current =
-          height - area.scrollTop - viewport <= 100 || (resized && following.current);
-        geometry.current = { height, viewport };
+        const gap = height - area.scrollTop - viewport;
+        const movingUp = area.scrollTop < geometry.current.top;
+        // Keep measurement tolerance only while already following. After an upward
+        // gesture, the reader must actually return to the end to enable it again.
+        // Allow Virtuoso to place the initial rows above the footer before any
+        // reader input, without treating its corrections as a manual scroll.
+        setFollowing(
+          (initialPositioning.current && gap <= 100) ||
+            (gap <= 1 && !movingUp) ||
+            (following.current && (gap <= 100 || resized)),
+        );
+        geometry.current = { height, viewport, top: area.scrollTop };
       }}
-      onPointerDownCapture={() => {
+      onPointerDownCapture={(event) => {
         anchor.current = null;
+        if (event.target === event.currentTarget || event.button === 1) {
+          initialPositioning.current = false;
+          setFollowing(false);
+        }
+      }}
+      onPointerUpCapture={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const area = event.currentTarget;
+        if (area.scrollHeight - area.clientHeight - area.scrollTop <= 1) setFollowing(true);
       }}
       className="messenger-scroll"
       aria-label="پیام‌های گفتگو"
@@ -345,8 +385,6 @@ export const MessageTimeline = memo(function MessageTimeline({
       }
       defaultItemHeight={126}
       increaseViewportBy={{ top: 350, bottom: 350 }}
-      atBottomThreshold={100}
-      atBottomStateChange={onBottomChange}
       followOutput={false}
       computeItemKey={(_, message) => message.id}
       itemContent={(index, message) => {
