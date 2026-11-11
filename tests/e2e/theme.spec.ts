@@ -201,6 +201,13 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   }
   await palette(page, true);
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText('بررسی پالت گفتگو', { exact: true })).toBeInViewport();
+  await expect(page.getByText('پاسخ واحد برای بررسی پالت', { exact: true })).toBeInViewport();
+  await expect(page.locator('[data-testid="virtuoso-item-list"]')).toHaveCSS(
+    'visibility',
+    'visible',
+  );
+  await expect(page.getByText('بررسی پالت گفتگو', { exact: true })).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/theme-chat-dark.png' });
   await page.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -210,6 +217,13 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await page.goto(`/tickets/${ticket.id}`);
   await palette(page, false);
+  await expect(page.locator('[data-testid="virtuoso-item-list"]')).toHaveCSS(
+    'visibility',
+    'visible',
+  );
+  await expect(page.getByText('بررسی پالت گفتگو', { exact: true })).toBeVisible();
+  await expect(page.getByText('بررسی پالت گفتگو', { exact: true })).toBeInViewport();
+  await expect(page.getByText('پاسخ واحد برای بررسی پالت', { exact: true })).toBeInViewport();
   await lightLayers(page, [
     ['.messenger-chat', 'background'],
     ['.messenger-bubble:not(.bubble-own)', 'surface'],
@@ -245,8 +259,10 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     await palette(page, true);
     await page.getByRole('switch', { name: 'حالت تاریک' }).click();
     await palette(page, false);
-    if (path === '/admin/departments')
+    if (path === '/admin/departments') {
+      await expect(page.locator('.admin-card').first()).toBeVisible();
       await page.screenshot({ path: '.local/ui-preview/theme-admin-light.png' });
+    }
     await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
