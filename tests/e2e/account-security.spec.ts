@@ -22,7 +22,7 @@ async function login(page: Page, phoneNumber: string, password: string) {
   await expect(page).toHaveURL(origin + '/');
 }
 
-test('manages devices from the profile, resumes stale-session verification and logs out other devices immediately', async ({
+test('manages devices from an older valid login and logs out other devices immediately', async ({
   browser,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
@@ -61,11 +61,8 @@ test('manages devices from the profile, resumes stale-session verification and l
   page.on('dialog', (dialog) => dialog.accept());
   await otherCard.getByRole('button', { name: 'خروج از دستگاه', exact: true }).click();
   const proof = section.getByRole('group', { name: 'تأیید هویت برای ادامه عملیات' });
-  await expect(proof).toBeVisible();
-  await proof.getByRole('button', { name: 'تأیید با رمز', exact: true }).click();
-  await proof.getByLabel('رمز عبور فعلی برای تأیید').fill(f.password);
-  await proof.getByRole('button', { name: 'تأیید و ادامه عملیات', exact: true }).click();
   await expect(otherCard).toHaveCount(0);
+  await expect(proof).toHaveCount(0);
   expect((await other.request.get('/api/v1/users/me')).status()).toBe(401);
   expect((await current.request.get('/api/v1/users/me')).status()).toBe(200);
   for (let index = 0; index < 2; index++)

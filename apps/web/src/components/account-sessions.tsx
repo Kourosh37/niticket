@@ -6,7 +6,6 @@ import { Monitor, Smartphone, Tablet, RefreshCw } from 'lucide-react';
 import type { listSessions } from '@niticket/core/application/sessions';
 import { request, dateTime } from '@/lib/utils';
 import { Button } from './ui/button';
-import { useReauthentication } from './reauthentication';
 
 type Data = Awaited<ReturnType<typeof listSessions>>;
 type Session = Data['current'];
@@ -57,8 +56,7 @@ function Device({
 }
 
 export function AccountSessions() {
-  const router = useRouter(),
-    proof = useReauthentication();
+  const router = useRouter();
   const [data, setData] = useState<Data | null>(null),
     [cursor, setCursor] = useState<string | undefined>(),
     [previous, setPrevious] = useState<(string | undefined)[]>([]);
@@ -120,10 +118,11 @@ export function AccountSessions() {
         router.refresh();
         return;
       }
-      const result = await proof.run(() =>
-        request<{ revoked: number }>(`/api/v1/users/me/sessions${id ? `/${id}` : ''}`, {
+      const result = await request<{ revoked: number }>(
+        `/api/v1/users/me/sessions${id ? `/${id}` : ''}`,
+        {
           method: 'DELETE',
-        }),
+        },
       );
       setSuccess(result.revoked ? 'دسترسی دستگاه‌های انتخاب‌شده لغو شد.' : 'نشست دیگری فعال نیست.');
       setPrevious([]);
@@ -223,7 +222,6 @@ export function AccountSessions() {
           )}
         </>
       )}
-      {proof.confirmation}
       {error && (
         <p role="alert" className="error-message">
           {error}

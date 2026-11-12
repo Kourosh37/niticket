@@ -4,7 +4,7 @@ import { fail } from '../domain/errors';
 import { sessionDevice } from '../domain/session-device';
 import { transaction } from '../infrastructure/transaction';
 import { uuid } from '../validation';
-import { refreshActor, requireFresh } from './context';
+import { refreshActor } from './context';
 
 const sessionSelect = {
   id: true,
@@ -54,7 +54,7 @@ export async function revokeSessions(actor: Actor, sessionId?: string) {
   if (sessionId) uuid.parse(sessionId);
   if (sessionId === actor.sessionId)
     fail('VALIDATION', 400, 'برای خروج از این دستگاه، از گزینهٔ خروج استفاده کنید.');
-  await requireFresh(actor);
+  // Revoking access to the caller's own devices is available throughout a valid login.
   return transaction(async (tx) => {
     await refreshActor(tx, actor);
     if (

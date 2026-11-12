@@ -5,13 +5,13 @@ import { fixtures } from '../helpers/fixtures';
 import { config } from '@niticket/core/infrastructure/config';
 import { actorFromHeaders } from '@niticket/core/application/context';
 import { listSessions, revokeSessions } from '@niticket/core/application/sessions';
-import { reauthenticate } from '@niticket/core/application/credentials';
 import {
   listUsers,
   departmentChoices,
   conversationChoices,
 } from '@niticket/core/application/administration';
 import { POST } from '../../apps/web/src/app/api/auth/[...all]/route';
+import { DELETE } from '../../apps/web/src/app/api/v1/[...path]/route';
 
 const desktop =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36';
@@ -86,7 +86,7 @@ it('shows only the owner’s paginated active sessions and never returns authent
   });
 });
 
-it('requires fresh verification, revokes one or all other devices and preserves the current and foreign sessions', async () => {
+it('revokes one or all owned devices from an older valid login and preserves the current and foreign sessions', async () => {
   const f = await fixtures(),
     current = await login(f.student.phoneNumber!, f.password),
     other = await login(f.student.phoneNumber!, f.password, mobile),
@@ -100,10 +100,6 @@ it('requires fresh verification, revokes one or all other devices and preserves 
     where: { id: current.actor.sessionId },
     data: { createdAt: current.actor.sessionCreatedAt },
   });
-  await expect(revokeSessions(current.actor, other.actor.sessionId)).rejects.toMatchObject({
-    code: 'REAUTH_REQUIRED',
-  });
-  await reauthenticate(current.actor, { password: f.password });
   await expect(revokeSessions(current.actor, other.actor.sessionId)).resolves.toEqual({
     revoked: 1,
   });
@@ -131,6 +127,59 @@ it('requires fresh verification, revokes one or all other devices and preserves 
     }),
   ).toBe(2);
 });
+
+it.each(['student', 'manager', 'admin'] as const)(
+  'allows %s to revoke an owned session through HTTP after the freshness window while enforcing origin and ownership',
+  async (role) => {
+    const f = await fixtures();
+    const current = await login(f[role].phoneNumber!, f.password);
+    const target = await login(f[role].phoneNumber!, f.password, mobile);
+    const untouched = await login(f[role].phoneNumber!, f.password);
+    const foreign = await login(f.outsider.phoneNumber!, f.password);
+    await db.session.update({
+      where: { id: current.actor.sessionId },
+      data: { createdAt: new Date(Date.now() - 86400000) },
+    });
+
+    async function remove(id: string, origin: string | null = config().APP_ORIGIN) {
+      const headers = new Headers(current.headers);
+      if (origin) headers.set('origin', origin);
+      return DELETE(
+        new Request(`${config().APP_ORIGIN}/api/v1/users/me/sessions/${id}`, {
+          method: 'DELETE',
+          headers,
+        }),
+        { params: Promise.resolve({ path: ['users', 'me', 'sessions', id] }) },
+      );
+    }
+
+    expect((await remove(target.actor.sessionId, 'https://foreign.example')).status).toBe(403);
+    expect((await remove(target.actor.sessionId, null)).status).toBe(403);
+    expect(await db.session.findUnique({ where: { id: target.actor.sessionId } })).not.toBeNull();
+    expect((await remove(foreign.actor.sessionId)).status).toBe(404);
+    expect((await remove(current.actor.sessionId)).status).toBe(400);
+    const response = await remove(target.actor.sessionId);
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toEqual({ revoked: 1 });
+    await expect(actorFromHeaders(target.headers)).rejects.toMatchObject({ status: 401 });
+    for (const session of [current, untouched, foreign])
+      await expect(actorFromHeaders(session.headers)).resolves.toMatchObject({
+        id: session.actor.id,
+      });
+    // A deleted login cannot revoke another session, even if its in-memory actor was loaded earlier.
+    await expect(revokeSessions(target.actor, untouched.actor.sessionId)).rejects.toMatchObject({
+      status: 401,
+    });
+    await db.session.update({
+      where: { id: current.actor.sessionId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    expect((await remove(untouched.actor.sessionId)).status).toBe(401);
+    expect(
+      await db.session.findUnique({ where: { id: untouched.actor.sessionId } }),
+    ).not.toBeNull();
+  },
+);
 
 it('tracks recent activity without refreshing auth timestamps or writing on every read', async () => {
   const f = await fixtures(),
