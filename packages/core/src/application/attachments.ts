@@ -285,21 +285,33 @@ export async function completeUpload(actor: Actor, id: string) {
   if (!a || a.uploaderId !== actor.id) fail();
   await authorize(actor, a, true);
   if (a.scanStatus !== 'PENDING') return { id, scanStatus: a.scanStatus };
-  if (a.expiresAt < new Date()) fail('VALIDATION', 400, 'مهلت بارگذاری تمام شده است.');
+  if (a.expiresAt <= new Date()) fail('UPLOAD_EXPIRED', 409, 'مهلت بارگذاری تمام شده است.');
   // Honor the size approved when this intent was created, with an absolute safety cap.
   const limit = a.avatarOwnerId ? 2097152 : 52428800;
-  const head = await headObject(a.objectKey);
+  let head: Awaited<ReturnType<typeof headObject>>;
+  try {
+    head = await headObject(a.objectKey);
+  } catch (error) {
+    const current = await db.attachment.findUniqueOrThrow({ where: { id } });
+    if (current.scanStatus !== 'PENDING') return { id, scanStatus: current.scanStatus };
+    if (current.expiresAt <= new Date()) fail('UPLOAD_EXPIRED', 409, 'مهلت بارگذاری تمام شده است.');
+    throw error;
+  }
   if (head.ContentLength !== a.expectedSize || head.ContentLength > limit)
     fail('VALIDATION', 400, 'حجم فایل بارگذاری‌شده معتبر نیست.');
-  await transaction(async (tx) => {
+  return transaction(async (tx) => {
     actor = await refreshActor(tx, actor);
     if (a.ticketId) {
       const t = await tx.ticket.findUniqueOrThrow({ where: { id: a.ticketId } });
       assertParticipant(actor, t);
     } else if (a.savedReplyId) await requireSavedReply(tx, actor, a.savedReplyId);
     else if (!actor.isAdmin && actor.id !== a.avatarOwnerId) fail();
+    const current = await tx.attachment.findUniqueOrThrow({ where: { id } });
+    if (current.scanStatus !== 'PENDING') return { id, scanStatus: current.scanStatus };
+    const now = new Date();
+    if (current.expiresAt <= now) fail('UPLOAD_EXPIRED', 409, 'مهلت بارگذاری تمام شده است.');
     const changed = await tx.attachment.updateMany({
-      where: { id, scanStatus: 'PENDING' },
+      where: { id, scanStatus: 'PENDING', expiresAt: { gt: now } },
       data: { scanStatus: 'QUARANTINED' },
     });
     if (changed.count && a.ticketId)
@@ -309,8 +321,12 @@ export async function completeUpload(actor: Actor, id: string) {
         data: { type: 'SCAN_ATTACHMENT', payload: { attachmentId: id } },
       });
     if (changed.count) await attachmentChanged(tx, a);
+    const result = await tx.attachment.findUniqueOrThrow({
+      where: { id },
+      select: { id: true, scanStatus: true },
+    });
+    return result;
   });
-  return { id, scanStatus: 'QUARANTINED' };
 }
 
 export async function uploadStatus(actor: Actor, id: string) {

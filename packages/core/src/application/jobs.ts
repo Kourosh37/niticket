@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto';
 import { settings } from './settings';
 import { transaction } from '../infrastructure/transaction';
 import { imageThumbnail } from '../infrastructure/thumbnail';
+import { expireUploads, deleteExpiredUpload } from './upload-lifecycle';
 
 export const eventPayload = z.object({
   ticketId: z.string(),
@@ -319,6 +320,8 @@ export function startJobs() {
       if (event.processedAt) return;
       if (event.type === 'TICKET_NOTIFICATION') await processNotification(event.id, event.payload);
       else if (event.type === 'SCAN_ATTACHMENT') await processScan(event.id, event.payload);
+      else if (event.type === 'DELETE_PENDING_OBJECT')
+        await deleteExpiredUpload(event.id, event.payload);
       else if (event.type === 'REALTIME_INVALIDATION')
         await publishRealtimeEvent(event.id, event.payload);
       else throw new Error('Unknown event type');
@@ -349,17 +352,7 @@ export function startJobs() {
         await cleanupExpiredAuth();
         lastAuthCleanup = Date.now();
       }
-      const expired = await db.attachment.findMany({
-        where: { scanStatus: 'PENDING', expiresAt: { lt: new Date() } },
-        take: 25,
-      });
-      for (const a of expired) {
-        await deleteObject(a.objectKey);
-        await db.attachment.update({
-          where: { id: a.id },
-          data: { scanStatus: 'REJECTED', scanResult: 'EXPIRED' },
-        });
-      }
+      await expireUploads();
     } catch (error) {
       log.error(
         { operation: 'outbox_dispatch', category: error instanceof Error ? error.name : 'unknown' },
