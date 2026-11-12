@@ -378,6 +378,7 @@ bun audit --prod --audit-level=high
 [کنترل دسترسی](packages/core/src/domain/authorization.ts) ·
 [API](packages/core/src/http/router.ts) ·
 [پردازش صف](packages/core/src/application/jobs.ts) ·
+[معماری و نگهداری کش](docs/caching.md) ·
 [تنظیمات](.env.example)
 
 </div>
