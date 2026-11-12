@@ -26,6 +26,24 @@ services:
     restart: unless-stopped
     healthcheck: { test: [CMD, redis-cli, ping], interval: 5s, retries: 20 }
     mem_limit: 512m
+  cache:
+    image: redis:7-alpine
+    command:
+      [
+        redis-server,
+        --maxmemory,
+        64mb,
+        --maxmemory-policy,
+        allkeys-lfu,
+        --save,
+        '',
+        --appendonly,
+        'no',
+      ]
+    networks: [data]
+    healthcheck: { test: [CMD, redis-cli, ping], interval: 5s, retries: 10 }
+    restart: unless-stopped
+    mem_limit: 128m
   migrate:
     build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: tools }
     env_file: .env.production
@@ -41,6 +59,7 @@ services:
       {
         DATABASE_URL: '${RUNTIME_DATABASE_URL:?required}',
         REDIS_URL: 'redis://redis:6379',
+        CACHE_REDIS_URL: 'redis://cache:6379',
         HOSTNAME: 0.0.0.0,
         ADMIN_PHONE: '${ADMIN_PHONE:?required}',
         SYNC_ROOT_ADMIN_ON_STARTUP: 'true',
@@ -75,6 +94,7 @@ services:
       {
         DATABASE_URL: '${RUNTIME_DATABASE_URL:?required}',
         REDIS_URL: 'redis://redis:6379',
+        CACHE_REDIS_URL: 'redis://cache:6379',
         CLAMAV_HOST: clamav,
       }
     networks: [data, egress]

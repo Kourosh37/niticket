@@ -4,6 +4,7 @@ import { config } from './config';
 import { redis } from './redis';
 import { afterCommit } from './after-commit';
 import { log } from './log';
+import { invalidateLocalReads, invalidateSharedReads, tagsForChange } from './read-cache';
 import {
   realtimeChangeSchema,
   realtimeEnvelopeSchema,
@@ -25,6 +26,7 @@ export function realtimeNamespace() {
 
 export async function publishRealtimeEvent(id: string, payload: unknown) {
   const change = realtimeChangeSchema.parse(payload);
+  await invalidateSharedReads(tagsForChange(change));
   await redis().publish(`${realtimeNamespace()}:changes`, JSON.stringify({ id, change }));
   await db.outboxEvent.updateMany({
     where: { id, type: 'REALTIME_INVALIDATION', processedAt: null },
@@ -38,6 +40,7 @@ export async function enqueueRealtime(tx: Prisma.TransactionClient, input: Realt
     data: { type: 'REALTIME_INVALIDATION', payload: change },
   });
   afterCommit(() => {
+    invalidateLocalReads(tagsForChange(change));
     const publication = publishRealtimeEvent(event.id, change)
       .then(() => redis().publish(`${realtimeNamespace()}:work`, 'wake'))
       .catch((error: unknown) => {
@@ -86,7 +89,10 @@ export async function subscribeRealtime(listener: Listener) {
       } catch {
         return;
       }
-      if (parsed.success) for (const current of [...listeners]) current.change(parsed.data);
+      if (parsed.success) {
+        invalidateLocalReads(tagsForChange(parsed.data.change));
+        for (const current of [...listeners]) current.change(parsed.data);
+      }
     });
     client.on('close', () => {
       // EventSource will reconnect and clients reconcile against HTTP revisions.

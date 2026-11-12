@@ -8,6 +8,8 @@ export const realtimeTopics = [
   'attachments',
   'saved-replies',
   'access',
+  'catalog',
+  'settings',
 ] as const;
 
 const topics = z.array(z.enum(realtimeTopics)).min(1).max(realtimeTopics.length);

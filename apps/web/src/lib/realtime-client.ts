@@ -6,6 +6,8 @@ export const topics = [
   'attachments',
   'saved-replies',
   'access',
+  'catalog',
+  'settings',
 ] as const;
 
 export type Topic = (typeof topics)[number];

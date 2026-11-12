@@ -7,6 +7,7 @@ import { config } from '../infrastructure/config';
 import { rateLimit } from '../infrastructure/redis';
 import { log } from '../infrastructure/log';
 import type { Actor } from '../domain/authorization';
+import { withReadCache } from '../infrastructure/read-cache';
 
 export async function readJson(request: Request, max = 65536): Promise<unknown> {
   if (!request.headers.get('content-type')?.startsWith('application/json'))
@@ -85,7 +86,8 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
       ))
     )
       fail('RATE_LIMITED', 429, 'تعداد درخواست‌ها زیاد است. کمی بعد تلاش کنید.');
-    const result = await fn(actor);
+    const bypass = /no-cache|no-store|max-age=0/i.test(request.headers.get('cache-control') ?? '');
+    const result = await withReadCache(bypass, () => fn(actor));
     const response =
       result instanceof Response ? result : Response.json({ data: result, requestId });
     response.headers.set('x-request-id', requestId);
