@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { realtime } from '../lib/realtime-client';
 import { clientCache } from '../lib/client-cache';
 import { clearMediaCache } from '../lib/media-cache';
+// Register persisted-draft cleanup even when this document opens on a settings page.
+import '../lib/conversation-memory';
 
 export function RealtimeProvider({
   children,

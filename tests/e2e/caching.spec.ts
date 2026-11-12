@@ -224,3 +224,41 @@ test('invalidates warm unit choices when catalog metadata changes', async ({ pag
     await db.$disconnect();
   }
 });
+
+test('removes persisted drafts when signing out from a freshly loaded settings document', async ({
+  page,
+}) => {
+  const { fixtures } = await import('../helpers/fixtures');
+  const { db } = await import('@niticket/database');
+  const f = await fixtures();
+  const ticket = await db.ticket.create({
+    data: { creatorId: f.student.id, departmentId: f.department.id, subject: 'draft logout' },
+  });
+  try {
+    await login(page.context(), f.student.phoneNumber, f.password);
+    await page.goto(`/tickets/${ticket.id}`);
+    await page.getByLabel('پاسخ شما', { exact: true }).fill('پیش‌نویس محرمانه');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            Object.keys(sessionStorage).filter((key) => key.startsWith('niticket:draft:')).length,
+        ),
+      )
+      .toBe(1);
+    // A hard navigation starts fresh modules without loading the conversation component.
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'خروج از حساب', exact: true }).click();
+    await expect(page).toHaveURL(origin + '/login');
+    expect(
+      await page.evaluate(
+        () => Object.keys(sessionStorage).filter((key) => key.startsWith('niticket:draft:')).length,
+      ),
+    ).toBe(0);
+    await login(page.context(), f.student.phoneNumber, f.password);
+    await page.goto(`/tickets/${ticket.id}`);
+    await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveValue('');
+  } finally {
+    await db.$disconnect();
+  }
+});
