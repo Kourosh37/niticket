@@ -258,7 +258,8 @@ it('searches and paginates unit choices beyond the initial page without exposing
   expect((await conversationChoices(actor, { departmentId: chosen.id })).items[0].id).toBe(
     chosen.id,
   );
-  await db.department.update({ where: { id: chosen.id }, data: { visible: false } });
+  const { saveDepartment } = await import('@niticket/core/application/administration');
+  await saveDepartment(await f.actor(f.admin.id), { visible: false }, chosen.id);
   expect((await conversationChoices(actor, { departmentId: chosen.id })).items).toHaveLength(0);
   expect(
     (await conversationChoices(actor, { q: name })).items.some((row) => row.id === chosen.id),

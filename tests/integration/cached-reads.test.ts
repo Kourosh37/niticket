@@ -31,6 +31,11 @@ it('reuses unit reads, isolates personalized choices and invalidates committed c
   const f = await fixtures(),
     student = await f.actor(f.student.id),
     outsider = await f.actor(f.outsider.id);
+  // Keep this fixture inside the bounded catalog even in a reused test database.
+  await db.department.update({
+    where: { id: f.department.id },
+    data: { displayOrder: -2147483647 },
+  });
   const query = vi.spyOn(db.department, 'findMany');
   try {
     const first = await departmentChoices(student);
@@ -68,7 +73,11 @@ it('refreshes saved-reply lists and actor-scoped report aggregates after domain 
     body: 'Original',
   });
   expect((await listSavedReplies(staff, filter)).items[0].body).toBe('Original');
-  await updateSavedReply(staff, reply.id, { version: reply.version, body: 'Updated' });
+  await updateSavedReply(staff, reply.id, {
+    version: reply.version,
+    title: reply.title,
+    body: 'Updated',
+  });
   expect((await listSavedReplies(staff, filter)).items[0].body).toBe('Updated');
   expect((await reports(student)).total).toBe(0);
   await openConversation(student, filter);

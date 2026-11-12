@@ -2,7 +2,7 @@ import { afterAll, expect, it } from 'vitest';
 import { db } from '@niticket/database';
 import { fixtures } from '../helpers/fixtures';
 import { getTicket } from '@niticket/core/application/tickets';
-import { saveDepartment } from '@niticket/core/application/administration';
+import { saveDepartment, saveMember, updateUser } from '@niticket/core/application/administration';
 
 afterAll(() => db.$disconnect());
 
@@ -52,13 +52,15 @@ it('shows the active unit manager contact to participants and excludes inactive 
   await expect(getTicket(await f.actor(f.outsider.id), ticket.id)).rejects.toMatchObject({
     status: 404,
   });
-  await db.departmentMembership.updateMany({
-    where: { userId: f.manager.id },
-    data: { active: false },
+  const admin = await f.actor(f.admin.id);
+  await saveMember(admin, f.department.id, {
+    userId: f.manager.id,
+    role: 'MANAGER',
+    active: false,
   });
   expect((await getTicket(actor, ticket.id, undefined, undefined, false)).responsible?.id).toBe(
     f.agent.id,
   );
-  await db.user.update({ where: { id: f.agent.id }, data: { active: false } });
+  await updateUser(admin, f.agent.id, { active: false });
   expect((await getTicket(actor, ticket.id, undefined, undefined, false)).responsible).toBeNull();
 });
