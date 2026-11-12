@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { approveSavedReplyFiles } from '../helpers/approve-saved-reply';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -92,6 +93,12 @@ for (const kind of ['text', 'file', 'voice'] as const) {
       animations: 'disabled',
     });
     await confirm.click();
+    if (kind !== 'text') {
+      await expect(
+        editor.getByRole('button', { name: 'در حال بررسی پیوست‌ها…', exact: true }),
+      ).toBeDisabled();
+      await approveSavedReplyFiles(title, 1);
+    }
     await expect(editor).toHaveCount(0, { timeout: 30000 });
     const saved = await db.savedReply.findFirstOrThrow({
       where: { title },

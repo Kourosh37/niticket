@@ -225,6 +225,19 @@
 .modal-form-actions > .button > svg {
   flex-shrink: 0;
 }
+.modal-form-spinner {
+  animation: modal-form-spin 900ms linear infinite;
+}
+@keyframes modal-form-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-form-spinner {
+    animation: none;
+  }
+}
 .modal-form-panel:not([hidden]) {
   animation: modal-step-enter 140ms ease-out;
 }

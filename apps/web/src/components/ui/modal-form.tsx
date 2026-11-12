@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useId, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { digits } from '@/lib/utils';
 import { Button } from './button';
 
@@ -176,7 +176,11 @@ export function ModalForm({
                 if (event.detail > 1) event.preventDefault();
               }}
             >
-              <Check size={16} />
+              {disabled ? (
+                <LoaderCircle className="modal-form-spinner" size={16} />
+              ) : (
+                <Check size={16} />
+              )}
               {disabled ? busyLabel : submitLabel}
             </Button>
           ) : (

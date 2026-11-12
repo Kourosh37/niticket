@@ -8,6 +8,7 @@ import { ArrowRight, Bookmark, FilePlus, Plus, Search, Send, Trash2, X } from 'l
 import type { listSavedReplies } from '@niticket/core/application/saved-replies';
 import { request, digits } from '@/lib/utils';
 import { uploadSavedReplyFile } from '@/lib/upload';
+import { waitForAttachmentApproval } from '@/lib/attachment-approval';
 import { Modal } from './ui/dialog';
 import { ModalForm } from './ui/modal-form';
 import { PagedItems, PagedText } from './ui/paged-content';
@@ -150,6 +151,10 @@ function SavedReplyEditor({
     [error, setError] = useState(''),
     [progress, setProgress] = useState<number | null>(null),
     [filename, setFilename] = useState('');
+  const [phase, setPhase] = useState<'saving' | 'uploading' | 'checking'>('saving');
+  const [approved, setApproved] = useState({ count: 0, total: 0 });
+  const operation = useRef<AbortController | null>(null);
+  useEffect(() => () => operation.current?.abort(), []);
   const saved = useRef(initial),
     clientId = useRef(crypto.randomUUID()),
     submitting = useRef(false);
@@ -167,12 +172,16 @@ function SavedReplyEditor({
       return;
     }
     submitting.current = true;
+    const controller = new AbortController();
+    operation.current = controller;
     setBusy(true);
+    setPhase('saving');
     setError('');
     try {
       const reply = saved.current
         ? await request<Reply>(`/api/v1/saved-replies/${saved.current.id}`, {
             method: 'PATCH',
+            signal: controller.signal,
             body: JSON.stringify({
               title,
               body,
@@ -182,32 +191,78 @@ function SavedReplyEditor({
           })
         : await request<Reply>('/api/v1/saved-replies', {
             method: 'POST',
+            signal: controller.signal,
             body: JSON.stringify({ title, body, departmentId, clientId: clientId.current }),
           });
+      controller.signal.throwIfAborted();
       saved.current = reply;
       setExisting(reply.attachments);
       setRemoved([]);
       for (const file of files) {
+        setPhase('uploading');
         setFilename(file.name);
         setProgress(0);
         await uploadSavedReplyFile(file, reply.id, setProgress);
-        const current = await request<Reply>(`/api/v1/saved-replies/${reply.id}`);
+        controller.signal.throwIfAborted();
+        const current = await request<Reply>(`/api/v1/saved-replies/${reply.id}`, {
+          signal: controller.signal,
+        });
+        controller.signal.throwIfAborted();
         saved.current = current;
         setExisting(current.attachments);
         setFiles((current) => current.filter((item) => item !== file));
       }
       if (voice) {
+        setPhase('uploading');
         setFilename('پیام صوتی');
         setProgress(0);
         await uploadSavedReplyFile(voice, reply.id, setProgress);
+        controller.signal.throwIfAborted();
+        const current = await request<Reply>(`/api/v1/saved-replies/${reply.id}`, {
+          signal: controller.signal,
+        });
+        controller.signal.throwIfAborted();
+        saved.current = current;
+        setExisting(current.attachments);
         setVoice(null);
       }
+      setProgress(null);
+      setPhase('checking');
+      const current = await request<Reply>(`/api/v1/saved-replies/${reply.id}`, {
+        signal: controller.signal,
+      });
+      saved.current = current;
+      setExisting(current.attachments);
+      await waitForAttachmentApproval(
+        current.attachments.map((file) => file.id),
+        {
+          signal: controller.signal,
+          onProgress: (count, total) => setApproved({ count, total }),
+        },
+      );
+      controller.signal.throwIfAborted();
       onSaved();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'ذخیره انجام نشد. دوباره تلاش کنید.');
+      // An upload intent increments the reply version even if its completion
+      // response is lost. Reconcile our own unchanged draft so the idempotent
+      // upload can resume on retry, without overwriting another editor's changes.
+      if (!controller.signal.aborted && saved.current) {
+        try {
+          const latest = await request<Reply>(`/api/v1/saved-replies/${saved.current.id}`, {
+            signal: controller.signal,
+          });
+          if (latest.title === title.trim() && latest.body === body.trim()) saved.current = latest;
+        } catch {
+          // Keep the original upload/approval error if refreshing also fails.
+        }
+      }
+      if (!controller.signal.aborted)
+        setError(error instanceof Error ? error.message : 'ذخیره انجام نشد. دوباره تلاش کنید.');
     } finally {
-      setBusy(false);
-      setProgress(null);
+      if (!controller.signal.aborted) {
+        setBusy(false);
+        setProgress(null);
+      }
       submitting.current = false;
     }
   }
@@ -227,6 +282,13 @@ function SavedReplyEditor({
         disabled={busy}
         lockNavigation={recording}
         submitLabel="ذخیره پیام آماده"
+        busyLabel={
+          phase === 'checking'
+            ? 'در حال بررسی پیوست‌ها…'
+            : phase === 'uploading'
+              ? 'در حال بارگذاری فایل‌ها…'
+              : 'در حال ذخیره پیام…'
+        }
         onCancel={onClose}
         sections={[
           {
@@ -351,6 +413,12 @@ function SavedReplyEditor({
           },
         ]}
       >
+        {busy && phase === 'checking' && (
+          <p role="status" className="field-hint">
+            بررسی امنیتی و آماده‌سازی فایل‌ها؛ {digits(approved.count)} از {digits(approved.total)}{' '}
+            پیوست تأیید شده است.
+          </p>
+        )}
         {progress !== null && <UploadProgress percent={progress} filename={filename} />}
         {error && (
           <p role="alert" className="error-message">

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { goToModalStep } from '../helpers/modal-steps';
+import { approveSavedReplyFiles } from '../helpers/approve-saved-reply';
 
 try {
   loadEnvFile('.env');
@@ -16,6 +17,108 @@ const origin = 'http://localhost:3001';
 
 test.use({ actionTimeout: 15000 });
 
+test('keeps PDF saving busy until approval, preserves a rejected draft and sends the replacement immediately', async ({
+  page,
+}) => {
+  const { fixtures } = await import('../helpers/fixtures');
+  const { db } = await import('@niticket/database');
+  const { processScan } = await import('@niticket/core/application/jobs');
+  const f = await fixtures();
+  const ticket = await db.ticket.create({
+    data: {
+      creatorId: f.student.id,
+      departmentId: f.department.id,
+      subject: 'تأیید ضمیمه پیام آماده',
+    },
+  });
+  expect(
+    (
+      await page.request.post('/api/auth/sign-in/phone-number', {
+        headers: { origin },
+        data: { phoneNumber: f.agent.phoneNumber, password: f.password },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.goto('/saved-replies');
+  await page.getByRole('button', { name: 'پیام جدید', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'پیام آماده جدید', exact: true });
+  const title = `تأیید سند ${randomUUID()}`;
+  await editor.getByLabel('عنوان پیام آماده', { exact: true }).fill(title);
+  await goToModalStep(editor, 'فایل‌ها');
+  await editor.getByLabel('پیوست پیام آماده', { exact: true }).setInputFiles({
+    name: 'invalid.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('This is not a PDF document'),
+  });
+  await goToModalStep(editor, 'پیام صوتی');
+  await page.route(
+    '**/api/v1/uploads/*/complete',
+    async (route) => {
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      await route.fulfill({
+        status: 503,
+        json: { error: { message: 'پاسخ نهایی بارگذاری دریافت نشد' } },
+      });
+    },
+    { times: 1 },
+  );
+  await editor.getByRole('button', { name: 'ذخیره پیام آماده', exact: true }).click();
+  await expect(editor.getByRole('alert')).toContainText('پاسخ نهایی بارگذاری دریافت نشد');
+  await editor.getByRole('button', { name: 'ذخیره پیام آماده', exact: true }).click();
+  const checking = editor.getByRole('button', { name: 'در حال بررسی پیوست‌ها…', exact: true });
+  await expect(checking).toBeDisabled();
+  await expect(checking).toHaveAttribute('aria-busy', 'true');
+  await expect(editor.getByRole('status').filter({ hasText: 'بررسی امنیتی' })).toContainText(
+    '۰ از ۱',
+  );
+  await expect(editor.getByRole('button', { name: 'انصراف', exact: true })).toBeDisabled();
+  await expect
+    .poll(() =>
+      db.attachment.count({ where: { savedReply: { title }, scanStatus: 'QUARANTINED' } }),
+    )
+    .toBe(1);
+  const invalid = await db.attachment.findFirstOrThrow({ where: { savedReply: { title } } });
+  const event = await db.outboxEvent.findFirstOrThrow({
+    where: { type: 'SCAN_ATTACHMENT', payload: { path: ['attachmentId'], equals: invalid.id } },
+  });
+  await processScan(event.id, event.payload);
+  expect((await db.attachment.findUniqueOrThrow({ where: { id: invalid.id } })).scanStatus).toBe(
+    'REJECTED',
+  );
+  await expect(editor.getByRole('alert')).toContainText('invalid.pdf');
+  await expect(editor.getByRole('button', { name: 'ذخیره پیام آماده', exact: true })).toBeEnabled();
+  await goToModalStep(editor, 'فایل‌ها');
+  await editor.getByRole('button', { name: 'حذف invalid.pdf', exact: true }).click();
+  await editor
+    .getByLabel('پیوست پیام آماده', { exact: true })
+    .setInputFiles('tests/fixtures/persian.pdf');
+  await goToModalStep(editor, 'متن پیام');
+  await expect(editor.getByLabel('عنوان پیام آماده', { exact: true })).toHaveValue(title);
+  await goToModalStep(editor, 'پیام صوتی');
+  await editor.getByRole('button', { name: 'ذخیره پیام آماده', exact: true }).click();
+  await expect(checking).toBeDisabled();
+  await approveSavedReplyFiles(title, 1);
+  await expect(editor).toHaveCount(0);
+  const reply = await db.savedReply.findFirstOrThrow({ where: { title } });
+  expect(
+    await db.attachment.count({
+      where: { savedReplyId: reply.id, archivedAt: null, scanStatus: 'CLEAN' },
+    }),
+  ).toBe(1);
+  await page.goto(`/tickets/${ticket.id}`);
+  await page.getByRole('button', { name: 'پیام‌های آماده', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'پیام‌های آماده', exact: true });
+  await picker.getByRole('button', { name: `انتخاب ${title}`, exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'ارسال پیام آماده', exact: true })).toBeEnabled();
+  await picker.getByRole('button', { name: 'ارسال پیام آماده', exact: true }).click();
+  await expect(picker).toHaveCount(0);
+  await expect
+    .poll(() => db.message.count({ where: { ticketId: ticket.id, savedReplyId: reply.id } }))
+    .toBe(1);
+  await db.$disconnect();
+});
+
 test('manages a minimal media library, searches and sends a complete saved reply without losing the current draft', async ({
   page,
   browser,
@@ -23,8 +126,6 @@ test('manages a minimal media library, searches and sends a complete saved reply
   test.setTimeout(180000);
   const { fixtures } = await import('../helpers/fixtures');
   const { db } = await import('@niticket/database');
-  const { processScan } = await import('@niticket/core/application/jobs');
-  const { scanInContainer } = await import('../helpers/scan-in-container');
   const f = await fixtures();
   const ticket = await db.ticket.create({
     data: {
@@ -67,22 +168,17 @@ test('manages a minimal media library, searches and sends a complete saved reply
   await editor.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
   await expect(editor.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'ذخیره پیام آماده', exact: true }).click();
+  const checking = editor.getByRole('button', { name: 'در حال بررسی پیوست‌ها…', exact: true });
+  await expect(checking).toBeDisabled();
+  await expect(checking).toHaveAttribute('aria-busy', 'true');
+  await approveSavedReplyFiles(title, 4);
   await expect(editor).toHaveCount(0, { timeout: 30000 });
   const reply = await db.savedReply.findFirstOrThrow({
     where: { title },
     include: { attachments: true },
   });
   expect(reply.attachments).toHaveLength(4);
-  for (const attachment of reply.attachments) {
-    const event = await db.outboxEvent.findFirstOrThrow({
-      where: {
-        type: 'SCAN_ATTACHMENT',
-        payload: { path: ['attachmentId'], equals: attachment.id },
-      },
-    });
-    if (/^(audio|video)\//.test(attachment.declaredMime)) await scanInContainer(event.id);
-    else await processScan(event.id, event.payload);
-  }
+  expect(reply.attachments.every((file) => file.scanStatus === 'CLEAN')).toBe(true);
   await page
     .getByRole('searchbox', { name: 'جستجو در پیام‌های آماده', exact: true })
     .fill('پیدا نمی‌شود');
