@@ -11,6 +11,13 @@ import {
   type RealtimeEnvelope,
 } from '../domain/realtime';
 
+const publications = new Set<Promise<unknown>>();
+
+/** Drain post-commit work before CLI/worker shutdown; failed events remain in the outbox. */
+export async function drainRealtime() {
+  while (publications.size) await Promise.allSettled([...publications]);
+}
+
 export function realtimeNamespace() {
   const c = config();
   return `niticket:${c.QUEUE_NAME}:${new URL(c.DATABASE_URL).pathname}:realtime`;
@@ -31,7 +38,7 @@ export async function enqueueRealtime(tx: Prisma.TransactionClient, input: Realt
     data: { type: 'REALTIME_INVALIDATION', payload: change },
   });
   afterCommit(() => {
-    void publishRealtimeEvent(event.id, change)
+    const publication = publishRealtimeEvent(event.id, change)
       .then(() => redis().publish(`${realtimeNamespace()}:work`, 'wake'))
       .catch((error: unknown) => {
         log.warn(
@@ -42,6 +49,8 @@ export async function enqueueRealtime(tx: Prisma.TransactionClient, input: Realt
           'Realtime delivery deferred to outbox',
         );
       });
+    publications.add(publication);
+    void publication.finally(() => publications.delete(publication));
   });
   return event.id;
 }

@@ -6,11 +6,23 @@ export async function scanInContainer(eventId: string) {
   if (!internal.pathname.endsWith('_test')) throw new Error('Test database required');
   internal.hostname = 'postgres';
   const code =
-    "import {processScan} from './packages/core/src/application/jobs.ts';import {db} from './packages/database/src/index.ts';let raw='';for await(const chunk of process.stdin)raw+=chunk;const e=await db.outboxEvent.findUniqueOrThrow({where:{id:JSON.parse(raw).eventId}});await processScan(e.id,e.payload);await db.$disconnect();";
+    "import {processScan} from './packages/core/src/application/jobs.ts';import {drainRealtime} from './packages/core/src/infrastructure/realtime.ts';import {redis} from './packages/core/src/infrastructure/redis.ts';import {db} from './packages/database/src/index.ts';try{let raw='';for await(const chunk of process.stdin)raw+=chunk;const e=await db.outboxEvent.findUniqueOrThrow({where:{id:JSON.parse(raw).eventId}});await processScan(e.id,e.payload);}finally{await drainRealtime();redis().disconnect();await db.$disconnect();}";
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       'docker',
-      ['compose', 'exec', '-T', '-e', 'DATABASE_URL', 'worker', 'bun', '-e', code],
+      [
+        'compose',
+        'exec',
+        '-T',
+        '-e',
+        'DATABASE_URL',
+        '-e',
+        'QUEUE_NAME=niticket-test',
+        'worker',
+        'bun',
+        '-e',
+        code,
+      ],
       {
         env: { ...process.env, DATABASE_URL: internal.toString() },
         stdio: ['pipe', 'ignore', 'inherit'],

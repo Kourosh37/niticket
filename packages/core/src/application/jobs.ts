@@ -315,10 +315,16 @@ export function startJobs() {
       'Background job failed',
     ),
   );
-  let dispatching = false;
+  let dispatching = false,
+    dispatchAgain = false,
+    closing = false;
   let lastAuthCleanup = 0;
   const dispatch = async () => {
-    if (dispatching) return;
+    if (closing) return;
+    if (dispatching) {
+      dispatchAgain = true;
+      return;
+    }
     dispatching = true;
     try {
       await dispatchOutbox(queue);
@@ -345,6 +351,10 @@ export function startJobs() {
       );
     } finally {
       dispatching = false;
+      if (dispatchAgain && !closing) {
+        dispatchAgain = false;
+        void dispatch();
+      }
     }
   };
   const timer = setInterval(() => void dispatch(), 5000);
@@ -358,6 +368,7 @@ export function startJobs() {
   return {
     queue,
     close: async () => {
+      closing = true;
       clearInterval(timer);
       wake.disconnect();
       while (dispatching) await new Promise((r) => setTimeout(r, 100));

@@ -8,6 +8,7 @@ try {
   /* CI injects environment. */
 }
 const edge = existsSync('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe');
+process.env.QUEUE_NAME = 'niticket-test';
 
 export default defineConfig({
   testDir: 'tests/e2e',

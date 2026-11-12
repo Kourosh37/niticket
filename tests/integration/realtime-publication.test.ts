@@ -1,4 +1,4 @@
-import { afterAll, expect, it } from 'vitest';
+import { afterAll, expect, it, vi } from 'vitest';
 import { db } from '@niticket/database';
 import { transaction } from '@niticket/core/infrastructure/transaction';
 import {
@@ -6,14 +6,35 @@ import {
   publishRealtimeEvent,
   realtimeNamespace,
   subscribeRealtime,
+  drainRealtime,
 } from '@niticket/core/infrastructure/realtime';
 import { redis } from '@niticket/core/infrastructure/redis';
 import { fixtures } from '../helpers/fixtures';
 import type { RealtimeEnvelope } from '@niticket/core/domain/realtime';
 
 afterAll(async () => {
+  await drainRealtime();
   await db.$disconnect();
   redis().disconnect();
+});
+
+it('retains a failed fast publication for durable retry and drains background work before shutdown', async () => {
+  const f = await fixtures();
+  await drainRealtime();
+  const failure = vi.spyOn(redis(), 'publish').mockRejectedValueOnce(new Error('Simulated outage'));
+  let id: string;
+  const payload = { scope: 'user', userId: f.student.id, topics: ['inbox'] } as const;
+  try {
+    id = await transaction((tx) => enqueueRealtime(tx, { ...payload, topics: ['inbox'] }));
+    await drainRealtime();
+    expect((await db.outboxEvent.findUniqueOrThrow({ where: { id } })).processedAt).toBeNull();
+  } finally {
+    failure.mockRestore();
+  }
+  await publishRealtimeEvent(id!, payload);
+  expect(
+    (await db.outboxEvent.findUniqueOrThrow({ where: { id: id! } })).processedAt,
+  ).not.toBeNull();
 });
 
 it('publishes committed invalidations immediately across Redis and durably records their delivery', async () => {
