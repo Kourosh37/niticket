@@ -5,9 +5,11 @@ import { LoaderCircle, Mic, Pause, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { digits } from '@/lib/utils';
 import { AudioPlayer, audioTime } from './audio-player';
-import { pauseAudio } from '@/lib/audio-playback';
+import { stopAudio } from '@/lib/audio-playback';
+import { waitForMicrophone } from '@/lib/microphone';
 
 type Session = {
+  abort: AbortController;
   media?: MediaRecorder;
   stream?: MediaStream;
   context?: AudioContext;
@@ -29,10 +31,12 @@ function elapsedSeconds(session: Session) {
 }
 
 function release(session: Session) {
+  session.abort.abort();
   const stream = session.stream;
   session.stream = undefined;
   stream?.getTracks().forEach((track) => {
     track.onended = null;
+    track.onmute = null;
     track.stop();
   });
   const context = session.context;
@@ -41,15 +45,23 @@ function release(session: Session) {
 }
 
 async function prepareMeter(session: Session, stream: MediaStream) {
-  if (typeof AudioContext === 'undefined') return;
+  // A normal AudioContext opens the default speaker even if nothing connects to
+  // its destination. That can switch a headset/device route and mute its input.
+  // Never open a physical playback device just to draw a waveform.
+  if (typeof AudioContext === 'undefined' || !('sinkId' in AudioContext.prototype)) return;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const rate = stream.getAudioTracks()[0]?.getSettings?.().sampleRate;
-    const context = new AudioContext({
+    const options: AudioContextOptions & { sinkId: { type: 'none' } } = {
       ...(rate ? { sampleRate: rate } : {}),
       latencyHint: 'interactive',
-    });
+      sinkId: { type: 'none' },
+    };
+    const context = new AudioContext(options);
     session.context = context;
+    const sink = (context as AudioContext & { sinkId?: string | { type: string } }).sinkId;
+    if (!sink || typeof sink === 'string' || sink.type !== 'none')
+      throw new Error('Silent audio analysis unavailable');
     const analyser = context.createAnalyser();
     analyser.fftSize = 256;
     context.createMediaStreamSource(stream).connect(analyser);
@@ -170,6 +182,7 @@ export function VoiceRecorder({
       return;
     }
     const current: Session = {
+      abort: new AbortController(),
       chunks: [],
       levels: [],
       bytes: 0,
@@ -182,7 +195,7 @@ export function VoiceRecorder({
     setState('starting');
     recordingCallback.current?.(true);
     callback.current(null);
-    pauseAudio();
+    stopAudio();
     try {
       const format = [
         'audio/webm;codecs=opus',
@@ -211,8 +224,10 @@ export function VoiceRecorder({
         release(current);
         return;
       }
-      if (stream.getAudioTracks().some((track) => track.readyState === 'ended'))
-        throw new Error('Microphone disconnected');
+      const tracks = stream.getAudioTracks();
+      if (!tracks.length) throw new Error('Microphone disconnected');
+      await Promise.all(tracks.map((track) => waitForMicrophone(track, current.abort.signal)));
+      if (session.current !== current) return;
       const media = new MediaRecorder(stream, { mimeType: format });
       current.media = media;
       media.onstart = () => {
@@ -235,6 +250,11 @@ export function VoiceRecorder({
         stop();
       };
       stream.getAudioTracks().forEach((track) => {
+        track.onmute = () => {
+          if (session.current !== current || current.stopping) return;
+          current.failure = 'ورودی میکروفون قطع شد و ضبط ناقص است. دوباره ضبط کنید.';
+          stop();
+        };
         track.onended = () => {
           if (session.current !== current || current.stopping) return;
           current.failure = 'اتصال میکروفون قطع شد. لطفاً دوباره ضبط کنید.';
@@ -243,6 +263,8 @@ export function VoiceRecorder({
       });
       media.onstop = () => {
         if (session.current !== current) return;
+        if (!current.stopping && !current.failure)
+          current.failure = 'ضبط صدا ناخواسته قطع شد. دوباره ضبط کنید.';
         const duration = elapsedSeconds(current);
         session.current = null;
         release(current);
@@ -286,6 +308,8 @@ export function VoiceRecorder({
       };
       setSeconds(0);
       setWave([]);
+      if (tracks.some((track) => track.muted || !track.enabled || track.readyState === 'ended'))
+        throw new Error('Microphone disconnected');
       // Nothing may initialize or reconfigure the audio graph after this point.
       media.start(250);
     } catch (cause) {
@@ -296,7 +320,9 @@ export function VoiceRecorder({
       setError(
         cause instanceof Error && cause.message === 'unsupported'
           ? 'قالب صوتی سازگار پیدا نشد. فایل صوتی را پیوست کنید.'
-          : 'دسترسی به میکروفون برقرار نشد. مجوز مرورگر و اتصال امن را بررسی کنید.',
+          : cause instanceof Error && cause.message.startsWith('Microphone ')
+            ? 'ورودی میکروفون آماده نشد. اتصال و بی‌صدا نبودن میکروفون را بررسی کنید.'
+            : 'دسترسی به میکروفون برقرار نشد. مجوز مرورگر و اتصال امن را بررسی کنید.',
       );
       setState('idle');
     }

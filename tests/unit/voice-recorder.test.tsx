@@ -39,9 +39,15 @@ class Recorder {
 
 let clock = 0;
 const track = {
+  enabled: true,
+  muted: false,
+  readyState: 'live',
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
   stop: vi.fn(),
   getSettings: () => ({ sampleRate: 48000 }),
   onended: null as (() => void) | null,
+  onmute: null as (() => void) | null,
 };
 const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
 const getUserMedia = vi.fn();
@@ -54,6 +60,10 @@ beforeEach(() => {
   Recorder.deferStart = false;
   track.stop.mockClear();
   track.onended = null;
+  track.onmute = null;
+  track.enabled = true;
+  track.muted = false;
+  track.readyState = 'live';
   getUserMedia.mockReset().mockResolvedValue(stream);
   vi.stubGlobal('MediaRecorder', Recorder);
   vi.stubGlobal('AudioContext', undefined);
@@ -130,7 +140,7 @@ it('excludes paused time and automatically finalizes once at the duration limit'
   expect(screen.getByLabelText('مدت ضبط').textContent).toBe('۰۰:۰۵');
 });
 
-it.each(['empty', 'oversized', 'interrupted', 'error'])(
+it.each(['empty', 'oversized', 'interrupted', 'muted', 'unexpected-stop', 'error'])(
   'does not offer a %s recording for sending and allows a clean retry',
   async (failure) => {
     const { media, onFile, button } = await begin(60, 12);
@@ -140,6 +150,12 @@ it.each(['empty', 'oversized', 'interrupted', 'error'])(
         media.data('partial');
         track.onended?.();
       }
+      if (failure === 'muted') {
+        media.data('sound');
+        track.muted = true;
+        track.onmute?.();
+      }
+      if (failure === 'unexpected-stop') media.data('sound');
       if (failure === 'error') {
         media.data('partial');
         media.onerror?.();
@@ -147,7 +163,10 @@ it.each(['empty', 'oversized', 'interrupted', 'error'])(
     });
     if (failure === 'empty') fireEvent.click(button);
     act(() => media.finish());
+    track.muted = false;
     expect(screen.getByRole('alert')).toBeTruthy();
+    if (failure === 'muted')
+      expect(screen.getByRole('alert').textContent).toContain('ورودی میکروفون قطع شد');
     expect(screen.queryByLabelText('پیش‌شنوی پیام صوتی')).toBeNull();
     expect(onFile.mock.calls.every(([file]) => file === null)).toBe(true);
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'ضبط پیام صوتی' })));
@@ -163,6 +182,9 @@ it('records even when waveform initialization fails', async () => {
   vi.stubGlobal(
     'AudioContext',
     class {
+      get sinkId() {
+        return { type: 'none' };
+      }
       constructor() {
         throw new Error('unavailable');
       }
@@ -176,6 +198,25 @@ it('records even when waveform initialization fails', async () => {
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
+it('never opens a default output device when silent audio analysis is unsupported', async () => {
+  const created = vi.fn();
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      constructor() {
+        created();
+        throw new Error('Physical output opened');
+      }
+    },
+  );
+  const { media, button, onFile } = await begin();
+  expect(created).not.toHaveBeenCalled();
+  act(() => media.data('complete'));
+  fireEvent.click(button);
+  act(() => media.finish());
+  expect(onFile.mock.lastCall![0].size).toBe(8);
+});
+
 it('settles the matching-rate audio graph before creating a recorder and does not gate speech with call processing', async () => {
   let resume!: () => void;
   let running = false;
@@ -185,6 +226,9 @@ it('settles the matching-rate audio graph before creating a recorder and does no
     'AudioContext',
     class {
       state = 'suspended';
+      get sinkId() {
+        return { type: 'none' };
+      }
       constructor(options: AudioContextOptions) {
         constructor(options);
       }
@@ -211,7 +255,11 @@ it('settles the matching-rate audio graph before creating a recorder and does no
   expect(screen.getByRole('button', { name: 'اتصال به میکروفون' }).hasAttribute('disabled')).toBe(
     true,
   );
-  expect(constructor).toHaveBeenCalledWith({ sampleRate: 48000, latencyHint: 'interactive' });
+  expect(constructor).toHaveBeenCalledWith({
+    sampleRate: 48000,
+    latencyHint: 'interactive',
+    sinkId: { type: 'none' },
+  });
   expect(getUserMedia).toHaveBeenCalledWith({
     audio: {
       channelCount: { ideal: 1 },
@@ -231,6 +279,7 @@ it('settles the matching-rate audio graph before creating a recorder and does no
 it('closes a suspended meter before starting capture and ignores a late resume', async () => {
   let resume!: () => void;
   const context = {
+    sinkId: { type: 'none' },
     state: 'suspended',
     createAnalyser: () => ({ fftSize: 0 }),
     createMediaStreamSource: () => ({ connect: vi.fn() }),
@@ -245,6 +294,9 @@ it('closes a suspended meter before starting capture and ignores a late resume',
   vi.stubGlobal(
     'AudioContext',
     class {
+      get sinkId() {
+        return { type: 'none' };
+      }
       constructor() {
         return context;
       }
@@ -263,6 +315,7 @@ it('closes a suspended meter before starting capture and ignores a late resume',
 it('does not start recording when unmounted during audio graph initialization', async () => {
   let resume!: () => void;
   const context = {
+    sinkId: { type: 'none' },
     state: 'suspended',
     createAnalyser: () => ({ fftSize: 0 }),
     createMediaStreamSource: () => ({ connect: vi.fn() }),
@@ -277,6 +330,9 @@ it('does not start recording when unmounted during audio graph initialization', 
   vi.stubGlobal(
     'AudioContext',
     class {
+      get sinkId() {
+        return { type: 'none' };
+      }
       constructor() {
         return context;
       }
