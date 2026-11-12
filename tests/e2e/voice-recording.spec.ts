@@ -187,3 +187,111 @@ test('finalizes automatically at the configured duration limit and produces an a
     await db.$disconnect();
   }
 });
+
+test('settles the audio device before capture and preserves every short window of the first two seconds', async ({
+  page,
+}, testInfo) => {
+  const { fixtures } = await import('../helpers/fixtures');
+  const { db } = await import('@niticket/database');
+  const f = await fixtures();
+  const ticket = await db.ticket.create({
+    data: { creatorId: f.student.id, departmentId: f.department.id, subject: 'شروع پیوسته صدا' },
+  });
+  expect(
+    (
+      await page.request.post('/api/auth/sign-in/phone-number', {
+        headers: { origin: 'http://localhost:3001' },
+        data: { phoneNumber: f.student.phoneNumber, password: f.password },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.addInitScript(() => {
+    const NativeContext = AudioContext;
+    const events: { type: string; at: number }[] = [];
+    Object.assign(window, { initializationEvents: events });
+    window.AudioContext = class extends NativeContext {
+      constructor(options?: AudioContextOptions) {
+        super(options);
+        events.push({ type: 'context', at: performance.now() });
+      }
+      async resume() {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await super.resume();
+        events.push({ type: 'meter-ready', at: performance.now() });
+      }
+    };
+    navigator.mediaDevices.getUserMedia = async () => {
+      const context = new NativeContext();
+      await context.resume();
+      const tone = context.createOscillator();
+      const destination = context.createMediaStreamDestination();
+      tone.connect(destination);
+      tone.start();
+      return destination.stream;
+    };
+    const NativeRecorder = MediaRecorder;
+    window.MediaRecorder = class extends NativeRecorder {
+      start(timeslice?: number) {
+        events.push({ type: 'capture', at: performance.now() });
+        super.start(timeslice);
+      }
+    };
+    const create = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => {
+      if (blob instanceof Blob && blob.type.startsWith('audio/'))
+        Object.assign(window, { recordedVoice: blob });
+      return create(blob);
+    };
+  });
+  await page.goto(`/tickets/${ticket.id}`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'پایان ضبط', exact: true })).toBeVisible();
+    await expect(page.getByLabel('مدت ضبط')).toHaveText('۰۰:۰۳');
+    await page.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
+    await expect(page.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toBeVisible();
+    const decoded = await page.evaluate(async () => {
+      const context = new AudioContext();
+      try {
+        const audio = await context.decodeAudioData(
+          await (window as unknown as { recordedVoice: Blob }).recordedVoice.arrayBuffer(),
+        );
+        const samples = audio.getChannelData(0),
+          rate = audio.sampleRate;
+        const levels = [];
+        for (let start = 0.08; start < 2.5; start += 0.04) {
+          const part = samples.slice(Math.floor(start * rate), Math.floor((start + 0.04) * rate));
+          levels.push(Math.sqrt(part.reduce((sum, value) => sum + value * value, 0) / part.length));
+        }
+        let quietSamples = 0,
+          longestQuiet = 0;
+        for (const value of samples.slice(Math.floor(0.08 * rate), Math.floor(2.5 * rate))) {
+          quietSamples = Math.abs(value) < 0.01 ? quietSamples + 1 : 0;
+          longestQuiet = Math.max(longestQuiet, quietSamples);
+        }
+        return {
+          levels,
+          silenceMilliseconds: (longestQuiet / rate) * 1000,
+          duration: audio.duration,
+          events: (window as unknown as { initializationEvents: { type: string; at: number }[] })
+            .initializationEvents,
+        };
+      } finally {
+        await context.close();
+      }
+    });
+    await testInfo.attach(`continuous-start-${attempt}`, {
+      body: JSON.stringify(decoded),
+      contentType: 'application/json',
+    });
+    expect(decoded.duration).toBeGreaterThan(2.8);
+    expect(Math.min(...decoded.levels)).toBeGreaterThan(0.1);
+    // Absolute RMS alone can miss a brief gap straddling two analysis windows.
+    expect(Math.min(...decoded.levels)).toBeGreaterThan(Math.max(...decoded.levels) * 0.85);
+    expect(decoded.silenceMilliseconds).toBeLessThan(5);
+    const capture = decoded.events.map((event) => event.type).lastIndexOf('capture');
+    expect(decoded.events[capture - 1].type).toBe('meter-ready');
+    await page.getByRole('button', { name: 'حذف صدای ضبط‌شده', exact: true }).click();
+  }
+  await db.$disconnect();
+});

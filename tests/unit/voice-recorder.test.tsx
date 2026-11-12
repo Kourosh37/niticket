@@ -38,7 +38,11 @@ class Recorder {
 }
 
 let clock = 0;
-const track = { stop: vi.fn(), onended: null as (() => void) | null };
+const track = {
+  stop: vi.fn(),
+  getSettings: () => ({ sampleRate: 48000 }),
+  onended: null as (() => void) | null,
+};
 const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
 const getUserMedia = vi.fn();
 
@@ -170,6 +174,121 @@ it('records even when waveform initialization fails', async () => {
   act(() => media.finish());
   expect(onFile.mock.lastCall![0].size).toBe(8);
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('settles the matching-rate audio graph before creating a recorder and does not gate speech with call processing', async () => {
+  let resume!: () => void;
+  let running = false;
+  const constructor = vi.fn();
+  const close = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      state = 'suspended';
+      constructor(options: AudioContextOptions) {
+        constructor(options);
+      }
+      createAnalyser() {
+        return { fftSize: 0 };
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn() };
+      }
+      resume() {
+        return new Promise<void>((resolve) => {
+          resume = () => {
+            this.state = 'running';
+            running = true;
+            resolve();
+          };
+        });
+      }
+      close = close;
+    },
+  );
+  const { unmount } = await begin();
+  expect(Recorder.instances).toHaveLength(0);
+  expect(screen.getByRole('button', { name: 'اتصال به میکروفون' }).hasAttribute('disabled')).toBe(
+    true,
+  );
+  expect(constructor).toHaveBeenCalledWith({ sampleRate: 48000, latencyHint: 'interactive' });
+  expect(getUserMedia).toHaveBeenCalledWith({
+    audio: {
+      channelCount: { ideal: 1 },
+      echoCancellation: { ideal: false },
+      noiseSuppression: { ideal: false },
+      autoGainControl: { ideal: false },
+    },
+  });
+  await act(async () => resume());
+  expect(running).toBe(true);
+  expect(Recorder.instances).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'پایان ضبط' })).toBeTruthy();
+  unmount();
+  expect(close).toHaveBeenCalledOnce();
+});
+
+it('closes a suspended meter before starting capture and ignores a late resume', async () => {
+  let resume!: () => void;
+  const context = {
+    state: 'suspended',
+    createAnalyser: () => ({ fftSize: 0 }),
+    createMediaStreamSource: () => ({ connect: vi.fn() }),
+    resume: () =>
+      new Promise<void>((resolve) => {
+        resume = resolve;
+      }),
+    close: vi.fn(async () => {
+      context.state = 'closed';
+    }),
+  };
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      constructor() {
+        return context;
+      }
+    },
+  );
+  await begin();
+  await act(() => vi.advanceTimersByTimeAsync(1000));
+  expect(context.close).toHaveBeenCalledOnce();
+  expect(Recorder.instances).toHaveLength(1);
+  expect(context.state).toBe('closed');
+  await act(async () => resume());
+  expect(Recorder.instances).toHaveLength(1);
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('does not start recording when unmounted during audio graph initialization', async () => {
+  let resume!: () => void;
+  const context = {
+    state: 'suspended',
+    createAnalyser: () => ({ fftSize: 0 }),
+    createMediaStreamSource: () => ({ connect: vi.fn() }),
+    resume: () =>
+      new Promise<void>((resolve) => {
+        resume = resolve;
+      }),
+    close: vi.fn(async () => {
+      context.state = 'closed';
+    }),
+  };
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      constructor() {
+        return context;
+      }
+    },
+  );
+  const { unmount, onFile } = await begin();
+  unmount();
+  await act(async () => resume());
+  expect(Recorder.instances).toHaveLength(0);
+  expect(context.close).toHaveBeenCalledOnce();
+  expect(track.stop).toHaveBeenCalledOnce();
+  expect(onFile.mock.calls.every(([file]) => file === null)).toBe(true);
 });
 
 it('waits for the real recorder start event before showing a recording timer', async () => {

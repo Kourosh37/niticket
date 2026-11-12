@@ -5,6 +5,7 @@ import { LoaderCircle, Mic, Pause, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { digits } from '@/lib/utils';
 import { AudioPlayer, audioTime } from './audio-player';
+import { pauseAudio } from '@/lib/audio-playback';
 
 type Session = {
   media?: MediaRecorder;
@@ -28,12 +29,48 @@ function elapsedSeconds(session: Session) {
 }
 
 function release(session: Session) {
-  session.stream?.getTracks().forEach((track) => {
+  const stream = session.stream;
+  session.stream = undefined;
+  stream?.getTracks().forEach((track) => {
     track.onended = null;
     track.stop();
   });
-  if (session.context && session.context.state !== 'closed')
-    void session.context.close().catch(() => {});
+  const context = session.context;
+  session.context = undefined;
+  if (context && context.state !== 'closed') void context.close().catch(() => {});
+}
+
+async function prepareMeter(session: Session, stream: MediaStream) {
+  if (typeof AudioContext === 'undefined') return;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const rate = stream.getAudioTracks()[0]?.getSettings?.().sampleRate;
+    const context = new AudioContext({
+      ...(rate ? { sampleRate: rate } : {}),
+      latencyHint: 'interactive',
+    });
+    session.context = context;
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    context.createMediaStreamSource(stream).connect(analyser);
+    await Promise.race([
+      context.resume(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Audio meter unavailable')), 1000);
+      }),
+    ]);
+    if (context.state !== 'running') throw new Error('Audio meter unavailable');
+    session.analyser = analyser;
+  } catch {
+    // The optional meter must settle or close before recording starts: opening or
+    // resuming an audio device during capture can interrupt its first seconds.
+    session.analyser = undefined;
+    if (session.context && session.context.state !== 'closed')
+      await session.context.close().catch(() => {});
+    session.context = undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function VoiceRecorder({
@@ -145,6 +182,7 @@ export function VoiceRecorder({
     setState('starting');
     recordingCallback.current?.(true);
     callback.current(null);
+    pauseAudio();
     try {
       const format = [
         'audio/webm;codecs=opus',
@@ -153,12 +191,28 @@ export function VoiceRecorder({
         'audio/webm',
       ].find((type) => MediaRecorder.isTypeSupported(type));
       if (!format) throw new Error('unsupported');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Voice messages are recordings, not calls: adaptive call processing can
+      // gate quiet speech while its echo canceller and gain control settle.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: { ideal: 1 },
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false },
+        },
+      });
       current.stream = stream;
       if (session.current !== current) {
         release(current);
         return;
       }
+      await prepareMeter(current, stream);
+      if (session.current !== current) {
+        release(current);
+        return;
+      }
+      if (stream.getAudioTracks().some((track) => track.readyState === 'ended'))
+        throw new Error('Microphone disconnected');
       const media = new MediaRecorder(stream, { mimeType: format });
       current.media = media;
       media.onstart = () => {
@@ -232,20 +286,8 @@ export function VoiceRecorder({
       };
       setSeconds(0);
       setWave([]);
-      // Recording must not wait for the optional visualization's AudioContext.
+      // Nothing may initialize or reconfigure the audio graph after this point.
       media.start(250);
-      try {
-        if (typeof AudioContext !== 'undefined') {
-          const context = new AudioContext();
-          current.context = context;
-          current.analyser = context.createAnalyser();
-          current.analyser.fftSize = 256;
-          context.createMediaStreamSource(stream).connect(current.analyser);
-          void context.resume().catch(() => {});
-        }
-      } catch {
-        // A waveform failure must never interrupt a valid recording.
-      }
     } catch (cause) {
       release(current);
       if (session.current !== current) return;
