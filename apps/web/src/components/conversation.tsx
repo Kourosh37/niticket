@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { realtime } from '@/lib/realtime-client';
 import { useRealtimeSync } from '@/lib/use-realtime-sync';
+import { clientCache } from '@/lib/client-cache';
+import { clearTicketDraft, readDraft, saveDraft } from '@/lib/conversation-memory';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ArrowDown,
@@ -119,6 +121,11 @@ export function Conversation({
   const [data, setData] = useState(detail),
     [messages, setMessages] = useState(detail.messages),
     [olderCursor, setOlderCursor] = useState(detail.nextMessageCursor);
+  const [memoryReady, setMemoryReady] = useState(false);
+  const [restorePosition, setRestorePosition] = useState<
+    { id: string; offset: number } | undefined
+  >();
+  const lastDetail = useRef(detail);
   const [searchOpen, setSearchOpen] = useState(false),
     [searchSelection, setSearchSelection] = useState<SearchSelection | null>(null),
     [focusId, setFocusId] = useState(initialContext?.focusId ?? null),
@@ -229,6 +236,7 @@ export function Conversation({
         .then((result) => {
           if (!result.detail) return;
           const latest = result.detail;
+          lastDetail.current = latest;
           revision.current = result.revision;
           if (!mounted.current) return;
           currentVersion.current = Math.max(currentVersion.current, latest.ticket.version);
@@ -255,6 +263,7 @@ export function Conversation({
             error instanceof RequestError &&
             [403, 404].includes(error.status ?? 0)
           ) {
+            clearTicketDraft(id);
             router.replace('/');
             router.refresh();
           }
@@ -272,6 +281,111 @@ export function Conversation({
     fetching.current = task;
     return task;
   }, [id, router]);
+
+  useEffect(() => {
+    let active = true;
+    const draft = readDraft(id, permissions.staff);
+    if (draft) {
+      setBody(draft.body);
+      setVisibility(draft.visibility);
+    }
+    type Snapshot = {
+      messages: ChatMessage[];
+      older: string | null;
+      scope: string;
+      position?: { id: string; offset: number };
+    };
+    const snapshot = clientCache.peek<Snapshot>(`ui-chat:${id}`);
+    const scope = `${permissions.staff}:${permissions.readOnly}`;
+    const restore = async () => {
+      try {
+        if (snapshot && !initialContext) {
+          await refresh(); // Reauthorize before showing a private retained page.
+          const fresh = lastDetail.current;
+          if (
+            active &&
+            snapshot.scope === `${fresh.permissions.staff}:${fresh.permissions.readOnly}` &&
+            snapshot.scope === scope
+          ) {
+            setMessages(mergeMessages(snapshot.messages, fresh.messages));
+            const tail = snapshot.messages.at(-1)?.id;
+            const gap = tail && !fresh.messages.some((message) => message.id === tail);
+            setOlderCursor(
+              gap && fresh.nextMessageCursor ? fresh.nextMessageCursor : snapshot.older,
+            );
+            setRestorePosition(snapshot.position);
+            followLatest.current = !snapshot.position;
+            setWindowKey((value) => value + 1);
+          }
+        }
+      } catch {
+        /* The normal sync path handles revoked or unavailable conversations. */
+      }
+      if (active) setMemoryReady(true);
+    };
+    void restore();
+    return () => {
+      active = false;
+    };
+  }, [id, permissions.staff, permissions.readOnly, initialContext, refresh]);
+
+  useEffect(() => {
+    if (!memoryReady) return;
+    if (clientCache.scope === actorId) saveDraft(id, body, visibility);
+  }, [memoryReady, id, actorId, body, visibility]);
+
+  useEffect(() => {
+    if (!memoryReady || initialContext) return;
+    const save = () => {
+      if (clientCache.scope !== actorId || messages.length > 400 || browsing.current) return;
+      const area = document.querySelector<HTMLElement>('.messenger-scroll');
+      const top = area?.getBoundingClientRect().top ?? 0;
+      const row = area
+        ? [...area.querySelectorAll<HTMLElement>('[data-message-id]')].find(
+            (node) => node.getBoundingClientRect().bottom > top,
+          )
+        : undefined;
+      const position =
+        !followLatest.current && row
+          ? { id: row.dataset.messageId!, offset: row.getBoundingClientRect().top - top }
+          : undefined;
+      clientCache.remember(
+        `ui-chat:${id}`,
+        {
+          messages,
+          older: olderCursor,
+          scope: `${permissions.staff}:${permissions.readOnly}`,
+          position,
+        },
+        ['ui-snapshot', 'catalog'],
+        120000,
+      );
+    };
+    const area = document.querySelector<HTMLElement>('.messenger-scroll');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(save, 200);
+    };
+    schedule();
+    area?.addEventListener('scroll', schedule);
+    window.addEventListener('pagehide', save);
+    return () => {
+      clearTimeout(timer);
+      save();
+      area?.removeEventListener('scroll', schedule);
+      window.removeEventListener('pagehide', save);
+    };
+  }, [
+    memoryReady,
+    initialContext,
+    id,
+    actorId,
+    messages,
+    olderCursor,
+    permissions.staff,
+    permissions.readOnly,
+  ]);
 
   useEffect(() => {
     return realtime.subscribe((signal) => {
@@ -364,6 +478,7 @@ export function Conversation({
   }
 
   async function latestMessages() {
+    setRestorePosition(undefined);
     contextRequest.current?.abort();
     const abort = new AbortController();
     contextRequest.current = abort;
@@ -495,6 +610,7 @@ export function Conversation({
         savedId = result.id;
         currentVersion.current = Math.max(currentVersion.current, result.version);
         setPendingMessage(savedId);
+        clearTicketDraft(id);
         setBody('');
         attempt.current = null;
         if (input.current) input.current.style.height = '';
@@ -853,6 +969,7 @@ export function Conversation({
             jumpRequest={jumpRequest}
             focusId={focusId}
             highlightTerms={highlightTerms}
+            restorePosition={restorePosition}
             newer={!!newerCursor}
             loadNewer={loadNewer}
           />

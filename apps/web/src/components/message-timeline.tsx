@@ -166,6 +166,7 @@ export const MessageTimeline = memo(function MessageTimeline({
   loadNewer,
   seenIds,
   onVisibleMessages,
+  restorePosition,
 }: {
   messages: Message[];
   actorId: string;
@@ -183,11 +184,12 @@ export const MessageTimeline = memo(function MessageTimeline({
   loadNewer: () => void;
   seenIds: ReadonlySet<string>;
   onVisibleMessages?: (ids: string[]) => void;
+  restorePosition?: { id: string; offset: number };
 }) {
   const virtualizer = useRef<VirtuosoHandle | null>(null);
-  const initialPositioning = useRef(!focusId);
+  const initialPositioning = useRef(!focusId && !restorePosition);
   const scroller = useRef<HTMLElement | null>(null),
-    following = useRef(!focusId),
+    following = useRef(!focusId && !restorePosition),
     geometry = useRef({ height: 0, viewport: 0, top: 0 }),
     previousTail = useRef(messages.at(-1)?.id);
   const setFollowing = useCallback(
@@ -225,7 +227,7 @@ export const MessageTimeline = memo(function MessageTimeline({
     if (list) observer.observe(list);
     return () => observer.disconnect();
   }, [followEnd, hasMessages]);
-  const anchor = useRef<{ id: string; offset: number } | null>(null);
+  const anchor = useRef<{ id: string; offset: number } | null>(restorePosition ?? null);
   useEffect(() => {
     if (scroller.current && onVisibleMessages)
       return observeVisibleMessages(scroller.current, onVisibleMessages);
@@ -379,9 +381,18 @@ export const MessageTimeline = memo(function MessageTimeline({
               ),
               align: 'center',
             }
-          : messages.length
-            ? { index: 'LAST', align: 'end' }
-            : 0
+          : restorePosition
+            ? {
+                index: Math.max(
+                  0,
+                  messages.findIndex((message) => message.id === restorePosition.id),
+                ),
+                align: 'start',
+                offset: -restorePosition.offset,
+              }
+            : messages.length
+              ? { index: 'LAST', align: 'end' }
+              : 0
       }
       defaultItemHeight={126}
       increaseViewportBy={{ top: 350, bottom: 350 }}
