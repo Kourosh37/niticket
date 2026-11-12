@@ -45,7 +45,7 @@ type Props = {
 
 export function Shell(props: Props) {
   return (
-    <RealtimeProvider key={props.user.id}>
+    <RealtimeProvider key={props.user.id} userId={props.user.id}>
       <ShellContent {...props} />
     </RealtimeProvider>
   );

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { clientCache, queryPolicy } from './client-cache';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -40,9 +41,31 @@ export const priorityNames: Record<string, string> = {
 };
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const method = options.method ?? 'GET';
+  const policy = method === 'GET' ? queryPolicy(path) : undefined;
+  if (policy && options.cache !== 'no-store')
+    return clientCache.load(
+      policy.key,
+      policy.tags,
+      policy.ttl,
+      (signal) => fetchRequest<T>(path, { ...options, signal }),
+      options.signal ?? undefined,
+    );
+  const data = await fetchRequest<T>(path, options);
+  if (!['GET', 'HEAD'].includes(method)) {
+    clientCache.changed({ kind: 'ready' });
+    clientCache.freshUntil = Date.now() + 2000;
+  }
+  return data;
+}
+
+async function fetchRequest<T>(path: string, options: RequestInit): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  if (clientCache.freshUntil > Date.now()) headers.set('cache-control', 'no-cache');
   const response = await fetch(path, {
     ...options,
-    headers: { 'content-type': 'application/json', ...options.headers },
+    headers,
   });
   checkSession(response);
   const result = await response.json();
@@ -67,6 +90,7 @@ export class RequestError extends Error {
 
 export function checkSession(response: Response) {
   if (response.status === 401) {
+    clientCache.clear();
     if (typeof window !== 'undefined') window.location.replace('/login');
     throw new RequestError('', 'UNAUTHENTICATED', 401);
   }

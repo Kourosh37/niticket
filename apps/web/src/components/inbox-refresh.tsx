@@ -27,6 +27,6 @@ export function InboxRefresh() {
       revision.current = result.revision;
       router.refresh();
     }
-  }, ['inbox']);
+  }, ['inbox', 'catalog']);
   return null;
 }

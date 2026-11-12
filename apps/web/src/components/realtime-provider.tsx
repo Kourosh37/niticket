@@ -1,16 +1,32 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { realtime } from '../lib/realtime-client';
+import { clientCache } from '../lib/client-cache';
 
-export function RealtimeProvider({ children }: { children: React.ReactNode }) {
+export function RealtimeProvider({
+  children,
+  userId,
+}: {
+  children: React.ReactNode;
+  userId: string;
+}) {
+  useLayoutEffect(() => {
+    clientCache.activate(userId);
+    return () => clientCache.clear();
+  }, [userId]);
   const router = useRouter();
   useEffect(() => realtime.start(), []);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = realtime.subscribe((signal) => {
-      if (signal.kind === 'change' && signal.topics.includes('access') && !timer)
+      clientCache.changed(signal);
+      if (
+        signal.kind === 'change' &&
+        signal.topics.some((topic) => ['access', 'catalog', 'settings'].includes(topic)) &&
+        !timer
+      )
         timer = setTimeout(() => {
           timer = undefined;
           router.refresh();

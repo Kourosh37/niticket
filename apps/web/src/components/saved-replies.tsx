@@ -64,7 +64,7 @@ function useReplyList(departmentId: string, initial?: ReplyList) {
       controller.current?.abort();
     };
   }, [load]);
-  useRealtimeSync(() => load(), ['saved-replies'], {
+  useRealtimeSync(() => load(), ['saved-replies', 'catalog'], {
     initial: false,
     liveMs: 120000,
     fallbackMs: 30000,

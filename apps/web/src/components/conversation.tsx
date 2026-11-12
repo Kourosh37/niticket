@@ -275,7 +275,11 @@ export function Conversation({
 
   useEffect(() => {
     return realtime.subscribe((signal) => {
-      if (signal.kind === 'ready' || (signal.kind === 'change' && signal.topics.includes('access')))
+      if (
+        signal.kind === 'ready' ||
+        (signal.kind === 'change' &&
+          signal.topics.some((topic) => ['access', 'catalog'].includes(topic)))
+      )
         forceSync.current = true;
     });
   }, []);
@@ -284,7 +288,7 @@ export function Conversation({
       if (busy) return false;
       return refresh();
     },
-    ['conversation', 'attachments'],
+    ['conversation', 'attachments', 'catalog'],
     { ticketId: id },
   );
 
