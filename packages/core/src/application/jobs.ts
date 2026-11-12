@@ -22,6 +22,7 @@ import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { settings } from './settings';
 import { transaction } from '../infrastructure/transaction';
+import { imageThumbnail } from '../infrastructure/thumbnail';
 
 export const eventPayload = z.object({
   ticketId: z.string(),
@@ -147,6 +148,19 @@ export async function processScan(eventId: string, payload: unknown) {
     // Promote the exact scanned bytes to a new key: a replayed presigned PUT cannot replace approved content.
     const cleanKey = `clean/${randomUUID()}`;
     await putObject(cleanKey, cleanBytes, detected.mime);
+    let thumbnail: Buffer | undefined;
+    if (detected.mime.startsWith('image/') && !attachment.avatarOwnerId) {
+      try {
+        thumbnail = await imageThumbnail(cleanBytes);
+      } catch {
+        log.warn(
+          { operation: 'thumbnail', category: 'DECODE_UNAVAILABLE' },
+          'Using the approved original image',
+        );
+      }
+    }
+    const thumbnailKey = thumbnail ? `${cleanKey}.thumbnail.webp` : null;
+    if (thumbnailKey && thumbnail) await putObject(thumbnailKey, thumbnail, 'image/webp');
     await transaction(async (tx) => {
       const changed = await tx.attachment.updateMany({
         where: { id: attachmentId, scanStatus: 'QUARANTINED' },
@@ -155,6 +169,8 @@ export async function processScan(eventId: string, payload: unknown) {
           detectedMime: detected.mime,
           checksum: detected.checksum,
           size: cleanBytes.length,
+          thumbnailKey,
+          thumbnailSize: thumbnail?.length ?? null,
           ...(audio ? { durationSeconds: audio.durationSeconds, waveform: audio.waveform } : {}),
           ...(video ? { durationSeconds: video.durationSeconds } : {}),
           scanStatus: 'CLEAN',

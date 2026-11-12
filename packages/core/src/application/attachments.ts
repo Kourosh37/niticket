@@ -377,9 +377,16 @@ async function authorizedDownload(actor: Actor, id: string) {
   return a;
 }
 
-function contentTag(a: Attachment) {
+function contentTag(a: Attachment, thumbnail = false) {
   return `"${createHash('sha256')
-    .update([a.id, a.objectKey, a.checksum, a.size ?? a.expectedSize].join(':'))
+    .update(
+      [
+        a.id,
+        thumbnail ? (a.thumbnailKey ?? a.objectKey) : a.objectKey,
+        a.checksum,
+        thumbnail ? (a.thumbnailSize ?? a.size ?? a.expectedSize) : (a.size ?? a.expectedSize),
+      ].join(':'),
+    )
     .digest('hex')}"`;
 }
 
@@ -409,17 +416,19 @@ export async function streamAttachment(
   id: string,
   signal?: AbortSignal,
   rangeHeader?: string,
-  conditional: { ifNoneMatch?: string; ifRange?: string; head?: boolean } = {},
+  conditional: { ifNoneMatch?: string; ifRange?: string; head?: boolean; thumbnail?: boolean } = {},
 ) {
   const a = await authorizedDownload(actor, id);
-  const etag = contentTag(a);
-  const total = a.size ?? a.expectedSize;
+  if (conditional.thumbnail && !a.detectedMime?.startsWith('image/')) fail();
+  const derivative = conditional.thumbnail && !!a.thumbnailKey;
+  const etag = contentTag(a, conditional.thumbnail);
+  const total = derivative ? a.thumbnailSize! : (a.size ?? a.expectedSize);
   const range = byteRange(
     !conditional.head && acceptsRange(conditional.ifRange, etag) ? rangeHeader : undefined,
     total,
   );
   const metadata = {
-    mime: a.detectedMime ?? 'application/octet-stream',
+    mime: derivative ? 'image/webp' : (a.detectedMime ?? 'application/octet-stream'),
     filename: a.filename,
     etag,
   };
@@ -432,7 +441,7 @@ export async function streamAttachment(
   const { objectStream } = await import('../infrastructure/storage');
   return {
     ...(await objectStream(
-      a.objectKey,
+      derivative ? a.thumbnailKey! : a.objectKey,
       52428800,
       signal,
       range ? `bytes=${range.start}-${range.end}` : undefined,

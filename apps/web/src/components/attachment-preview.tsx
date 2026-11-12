@@ -71,7 +71,7 @@ export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
             onClick={() => setOpen(true)}
           >
             <Image
-              src={url}
+              src={`/api/v1/attachments/${file.id}/thumbnail`}
               unoptimized
               alt={file.filename}
               loading="lazy"

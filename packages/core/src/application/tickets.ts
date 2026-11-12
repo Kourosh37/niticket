@@ -642,6 +642,8 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
           expectedSize: file.expectedSize,
           size: file.size,
           checksum: file.checksum,
+          thumbnailKey: file.thumbnailKey,
+          thumbnailSize: file.thumbnailSize,
           durationSeconds: file.durationSeconds,
           ...(file.waveform ? { waveform: file.waveform as Prisma.InputJsonValue } : {}),
           scanStatus: 'CLEAN',

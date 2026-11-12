@@ -157,7 +157,12 @@ export async function dispatch(
   }
   if (resource === 'attachments' && id && action === 'metadata' && method === 'GET')
     return attachments.attachmentMetadata(actor, id);
-  if (resource === 'attachments' && id && action === 'access' && method === 'GET') {
+  if (
+    resource === 'attachments' &&
+    id &&
+    ['access', 'thumbnail'].includes(action) &&
+    method === 'GET'
+  ) {
     const file = await attachments.streamAttachment(
       actor,
       id,
@@ -167,6 +172,7 @@ export async function dispatch(
         ifNoneMatch: request.headers.get('if-none-match') ?? undefined,
         ifRange: request.headers.get('if-range') ?? undefined,
         head: request.method === 'HEAD',
+        thumbnail: action === 'thumbnail',
       },
     );
     return fileResponse(file);

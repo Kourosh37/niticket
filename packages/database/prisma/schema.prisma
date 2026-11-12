@@ -297,6 +297,8 @@ model Attachment {
   expectedSize    Int
   size            Int?
   checksum        String?
+  thumbnailKey    String?
+  thumbnailSize   Int?
   durationSeconds Float?
   waveform        Json?
   scanStatus      ScanStatus    @default(PENDING)
