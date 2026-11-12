@@ -77,4 +77,14 @@ it('promotes scanned images with private reusable thumbnails and falls back for 
   });
   expect(legacy.mime).toBe('image/png');
   expect((await new Response(legacy.stream).arrayBuffer()).byteLength).toBe(bytes.length);
+  for (const data of [
+    { thumbnailKey: 'clean/incomplete.webp', thumbnailSize: null },
+    { thumbnailKey: null, thumbnailSize: 10 },
+    { thumbnailKey: 'clean/empty.webp', thumbnailSize: 0 },
+  ])
+    await expect(db.attachment.update({ where: { id: upload.id }, data })).rejects.toThrow();
+  expect(await db.attachment.findUniqueOrThrow({ where: { id: upload.id } })).toMatchObject({
+    thumbnailKey: null,
+    thumbnailSize: null,
+  });
 });
