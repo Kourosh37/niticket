@@ -1,5 +1,6 @@
 import { afterAll, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import Redis from 'ioredis';
 import { config } from '@niticket/core/infrastructure/config';
 import {
   cachedRead,
@@ -72,4 +73,28 @@ it('cannot resurrect entries after epoch eviction or a concurrent invalidation',
   resolve(3);
   await pending;
   expect(readCacheState().flights).toBe(0);
+});
+
+it('bypasses failed shared invalidation and rotates its epoch before reusing Redis after recovery', async () => {
+  await ready();
+  const key = randomUUID(),
+    tag = randomUUID();
+  expect(await cachedRead(key, [tag], 30000, async () => 1)).toBe(1);
+  const pipe = vi.spyOn(Redis.prototype, 'pipeline').mockReturnValueOnce({
+    set() {
+      return this;
+    },
+    exec: async () => [[new Error('simulated cache timeout'), null]],
+  } as unknown as ReturnType<Redis['pipeline']>);
+  await invalidateSharedReads([tag]);
+  pipe.mockRestore();
+  expect(await cachedRead(key, [tag], 30000, async () => 2)).toBe(2);
+  const now = Date.now();
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 5001);
+  try {
+    expect(await cachedRead(key, [tag], 30000, async () => 3)).toBe(3);
+    expect(await cachedRead(key, [tag], 30000, async () => 4)).toBe(3);
+  } finally {
+    clock.mockRestore();
+  }
 });

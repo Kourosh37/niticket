@@ -11,7 +11,10 @@ const local = new BoundedCache<string>({ entries: 256, bytes: 8 * 1024 * 1024 })
 const flights = new Map<string, Promise<unknown>>();
 let generation = 0,
   client: Redis | undefined,
-  unavailableUntil = 0;
+  unavailableUntil = 0,
+  sharedEpoch = 0,
+  validatedEpoch = -1;
+let resetFlight: Promise<boolean> | undefined;
 const MAX_ENTRY = 256 * 1024;
 const STORE = `for i=2,#KEYS do if (redis.call('GET',KEYS[i]) or '0') ~= ARGV[i] then return 0 end end
 redis.call('SET',KEYS[1],ARGV[1],'PX',ARGV[#KEYS+1]); return 1`;
@@ -51,11 +54,40 @@ function connection() {
     client.on('ready', () => {
       // Changes published while this optional connection was down cannot be replayed.
       local.clear();
-      void client
-        ?.set(`${cacheNamespace()}:tag:__all`, randomUUID(), 'PX', 86400000)
-        .catch(() => {});
+      generation++;
+      sharedEpoch++;
+      void validateSharedEpoch(client!);
     });
   return client.status === 'ready' ? client : undefined;
+}
+
+function sharedFailure() {
+  unavailableUntil = Date.now() + 5000;
+  sharedEpoch++;
+  generation++;
+  local.clear();
+}
+
+async function validateSharedEpoch(shared: Redis) {
+  if (validatedEpoch === sharedEpoch) return true;
+  if (resetFlight) return resetFlight;
+  const epoch = sharedEpoch;
+  const task = shared
+    .set(`${cacheNamespace()}:tag:__all`, randomUUID(), 'PX', 86400000)
+    .then(() => {
+      validatedEpoch = epoch;
+      return epoch === sharedEpoch;
+    })
+    .catch(() => {
+      sharedFailure();
+      return false;
+    });
+  resetFlight = task;
+  try {
+    return await task;
+  } finally {
+    if (resetFlight === task) resetFlight = undefined;
+  }
 }
 
 // Tagged nodes preserve Date/BigInt/undefined without interpreting user metadata as tags.
@@ -110,9 +142,26 @@ export function invalidateLocalReads(tags: string[]) {
 
 export async function invalidateSharedReads(tags: string[]) {
   invalidateLocalReads(tags);
-  const shared = connection();
+  let shared = connection();
+  const pending = client;
+  if (!shared && pending && unavailableUntil <= Date.now()) {
+    // A one-shot publisher must not exit before its new optional connection can invalidate.
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        pending.off('ready', done);
+        pending.off('error', done);
+        resolve();
+      };
+      const timer = setTimeout(done, 300);
+      pending.once('ready', done);
+      pending.once('error', done);
+    });
+    shared = connection();
+  }
   if (!shared) return;
   try {
+    if (!(await validateSharedEpoch(shared))) return;
     const pipe = shared.pipeline();
     for (const tag of new Set(tags)) {
       const key = `${cacheNamespace()}:tag:${tag}`;
@@ -121,7 +170,7 @@ export async function invalidateSharedReads(tags: string[]) {
     const results = await pipe.exec();
     if (!results || results.some(([error]) => error)) throw new Error('Cache invalidation failed');
   } catch {
-    unavailableUntil = Date.now() + 5000;
+    sharedFailure();
   }
 }
 
@@ -136,6 +185,7 @@ export async function cachedRead<T>(
   const sharedConfigured = !!config().CACHE_REDIS_URL;
   const shared = connection();
   if (sharedConfigured && !shared) return load();
+  if (shared && !(await validateSharedEpoch(shared))) return load();
   const started = generation;
   const tagKeys = ['__all', ...new Set(tags)].sort().map((tag) => `${cacheNamespace()}:tag:${tag}`);
   let versions: string[] = [];
@@ -154,7 +204,7 @@ export async function cachedRead<T>(
       } else versions = current as string[];
     }
   } catch {
-    unavailableUntil = Date.now() + 5000;
+    sharedFailure();
     return load();
   }
   const hash = createHash('sha256')
@@ -182,6 +232,7 @@ export async function cachedRead<T>(
         }
       } catch {
         /* Corrupt/failed optional cache falls back to the database. */
+        sharedFailure();
       }
     }
     const result = await load();
@@ -202,7 +253,7 @@ export async function cachedRead<T>(
           );
           if (Number(saved) === 1) local.set(id, value, lifetime, size, tags);
         } catch {
-          unavailableUntil = Date.now() + 5000;
+          sharedFailure();
         }
       } else local.set(id, value, lifetime, size, tags);
     }
@@ -221,6 +272,9 @@ export function closeReadCache() {
   client = undefined;
   local.clear();
   generation++;
+  sharedEpoch++;
+  resetFlight = undefined;
+  unavailableUntil = 0;
 }
 
 export function readCacheState() {

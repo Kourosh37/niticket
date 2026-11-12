@@ -25,7 +25,7 @@ Server TTLs include small downward jitter. Values exceeding a budget bypass stor
 
 `CACHE_REDIS_URL` is optional. Leave it empty to use bounded process-local caching. Docker Compose configures a separate `cache` service; local host processes can use `redis://127.0.0.1:6380`. Production exposes no host cache port. This Redis is disposable and has no persistence. Never point it at the operational Redis used for sessions, OTP, rate limits and BullMQ: those records must not be evicted to make space for cached results.
 
-When a configured cache is unavailable, reads go directly to PostgreSQL. The cache is not a readiness dependency. Short command deadlines and a failure cooldown limit latency. Reconnection rotates a global epoch because changes during an outage cannot be replayed. Background scripts which create a cache connection must call `closeReadCache()` before exiting.
+When a configured cache is unavailable, reads go directly to PostgreSQL. The cache is not a readiness dependency. Short command deadlines and a failure cooldown limit latency. Reconnection and recovery from command failures rotate a global epoch before allowing cache hits, because changes during an outage cannot be replayed. A one-shot publisher waits at most 300ms for a new optional connection so it can invalidate before exiting. Background scripts which create a cache connection must call `closeReadCache()` before exiting.
 
 Namespaces include database pathname and queue name, separating test and application data. Keys include current actor identity and active membership roles; raw query text is hashed. No credentials or signed upload URLs are stored. Cached DTO serialization preserves dates, big integers and undefined values without treating user JSON as serialization markers.
 
