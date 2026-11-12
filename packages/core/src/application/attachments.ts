@@ -22,6 +22,33 @@ import { byteRange } from '../domain/byte-range';
 import { attachmentChanged } from './realtime-events';
 import { acceptsRange, matchesETag } from '../domain/http-cache';
 
+function memoLookup<T>(load: (id: string) => Promise<T>) {
+  const pending = new Map<string, Promise<T>>();
+  return (id: string) => {
+    let value = pending.get(id);
+    if (!value) {
+      value = load(id);
+      pending.set(id, value);
+    }
+    return value;
+  };
+}
+
+/** A fresh lookup set for one HTTP batch; never shared between requests. */
+function attachmentAccess(actor: Actor) {
+  return {
+    user: memoLookup((id) =>
+      db.user.findUnique({ where: { id }, select: { active: true, role: true } }),
+    ),
+    ticket: memoLookup((id) => db.ticket.findUnique({ where: { id } })),
+    message: memoLookup((id) => db.message.findUnique({ where: { id } })),
+    note: memoLookup((id) =>
+      db.activityNote.findUnique({ where: { id }, include: { activity: true } }),
+    ),
+    reply: memoLookup((id) => requireSavedReply(db, actor, id)),
+  };
+}
+
 async function findUploadRetry(
   tx: Prisma.TransactionClient,
   actor: Actor,
@@ -76,29 +103,27 @@ async function authorize(
     archivedAt?: Date | null;
   },
   write = false,
+  reads = attachmentAccess(actor),
 ) {
   if (a.savedReplyId) {
     if (a.archivedAt) fail();
-    await requireSavedReply(db, actor, a.savedReplyId);
+    await reads.reply(a.savedReplyId);
     return null;
   }
   if (a.avatarOwnerId) {
-    const user = await db.user.findUnique({
-      where: { id: a.avatarOwnerId },
-      select: { active: true, role: true },
-    });
+    const user = await reads.user(a.avatarOwnerId);
     if (!user?.active || user.role !== 'STAFF') fail();
     if (write && !(actor.isAdmin || (actor.id === a.avatarOwnerId && userRole(actor) === 'STAFF')))
       fail('FORBIDDEN', 403, 'اجازه تغییر تصویر این حساب را ندارید.');
     return null;
   }
   if (!a.ticketId) fail();
-  const ticket = await db.ticket.findUnique({ where: { id: a.ticketId } });
+  const ticket = await reads.ticket(a.ticketId);
   if (!ticket) fail();
   if (write) assertParticipant(actor, ticket);
   else assertRead(actor, ticket);
   if (a.messageId) {
-    const message = await db.message.findUnique({ where: { id: a.messageId } });
+    const message = await reads.message(a.messageId);
     if (
       !message ||
       message.ticketId !== ticket.id ||
@@ -108,10 +133,7 @@ async function authorize(
       fail();
   }
   if (a.noteId) {
-    const note = await db.activityNote.findUnique({
-      where: { id: a.noteId },
-      include: { activity: true },
-    });
+    const note = await reads.note(a.noteId);
     if (
       !note ||
       note.activity.ticketId !== ticket.id ||
@@ -303,8 +325,12 @@ export async function uploadStatus(actor: Actor, id: string) {
     a.avatarOwnerId !== actor.id
   )
     fail();
+  return statusOf(a);
+}
+
+function statusOf(a: Attachment) {
   return {
-    id,
+    id: a.id,
     filename: a.filename,
     scanStatus: a.scanStatus,
     detectedMime: a.detectedMime,
@@ -316,10 +342,23 @@ export async function uploadStatus(actor: Actor, id: string) {
 
 export async function uploadStatuses(actor: Actor, input: unknown) {
   const ids = z.array(uuid).min(1).max(50).parse(input);
+  const rows = await db.attachment.findMany({ where: { id: { in: [...new Set(ids)] } } });
+  const reads = attachmentAccess(actor);
+  const byId = new Map(rows.map((row) => [row.id, row]));
   const results = await Promise.all(
     [...new Set(ids)].map(async (id) => {
       try {
-        return await uploadStatus(actor, id);
+        const file = byId.get(id);
+        if (!file) return null;
+        await authorize(actor, file, false, reads);
+        if (
+          file.avatarOwnerId &&
+          !actor.isAdmin &&
+          file.uploaderId !== actor.id &&
+          file.avatarOwnerId !== actor.id
+        )
+          return null;
+        return statusOf(file);
       } catch (error) {
         // A revoked or inaccessible attachment must not reveal its existence or block other items.
         if (error instanceof AppError && [403, 404].includes(error.status)) return null;
