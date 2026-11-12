@@ -97,7 +97,7 @@ async function perform(job: Job) {
   try {
     const response = await fetch(`/api/v1/attachments/${job.file.id}/access`, {
       signal: job.controller.signal,
-      cache: 'no-store',
+      cache: 'no-cache',
     });
     checkSession(response);
     if (!response.ok) {

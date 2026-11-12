@@ -20,6 +20,7 @@ import { AppError } from '../domain/errors';
 import { requireSavedReply } from './saved-replies';
 import { byteRange } from '../domain/byte-range';
 import { attachmentChanged } from './realtime-events';
+import { acceptsRange, matchesETag } from '../domain/http-cache';
 
 async function findUploadRetry(
   tx: Prisma.TransactionClient,
@@ -337,16 +338,56 @@ async function authorizedDownload(actor: Actor, id: string) {
   return a;
 }
 
+function contentTag(a: Attachment) {
+  return `"${createHash('sha256')
+    .update([a.id, a.objectKey, a.checksum, a.size ?? a.expectedSize].join(':'))
+    .digest('hex')}"`;
+}
+
+export async function attachmentMetadata(actor: Actor, id: string) {
+  const file = await authorizedDownload(actor, id);
+  return {
+    id: file.id,
+    version: contentTag(file),
+    size: file.size ?? file.expectedSize,
+    mime: file.detectedMime,
+  };
+}
+
+export async function avatarAttachment(actor: Actor, userId: string, version?: string) {
+  uuid.parse(userId);
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { active: true, role: true, avatarAttachmentId: true },
+  });
+  if (!user?.active || user.role !== 'STAFF' || !user.avatarAttachmentId) fail();
+  if (version !== undefined && uuid.parse(version) !== user.avatarAttachmentId) fail();
+  return user.avatarAttachmentId;
+}
+
 export async function streamAttachment(
   actor: Actor,
   id: string,
   signal?: AbortSignal,
   rangeHeader?: string,
+  conditional: { ifNoneMatch?: string; ifRange?: string; head?: boolean } = {},
 ) {
   const a = await authorizedDownload(actor, id);
+  const etag = contentTag(a);
   const total = a.size ?? a.expectedSize;
-  const range = byteRange(rangeHeader, total);
-  const metadata = { mime: a.detectedMime ?? 'application/octet-stream', filename: a.filename };
+  const range = byteRange(
+    !conditional.head && acceptsRange(conditional.ifRange, etag) ? rangeHeader : undefined,
+    total,
+  );
+  const metadata = {
+    mime: a.detectedMime ?? 'application/octet-stream',
+    filename: a.filename,
+    etag,
+  };
+  if (matchesETag(conditional.ifNoneMatch, etag))
+    return { ...metadata, stream: null, size: 0, status: 304, contentRange: undefined };
+  if (conditional.head)
+    return { ...metadata, stream: null, size: total, status: 200, contentRange: undefined };
   if (range === null)
     return { ...metadata, stream: null, size: 0, status: 416, contentRange: `bytes */${total}` };
   const { objectStream } = await import('../infrastructure/storage');
@@ -373,11 +414,5 @@ export async function downloadAttachment(actor: Actor, id: string) {
 }
 
 export async function downloadAvatar(actor: Actor, userId: string) {
-  uuid.parse(userId);
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { active: true, role: true, avatarAttachmentId: true },
-  });
-  if (!user?.active || user.role !== 'STAFF' || !user.avatarAttachmentId) fail();
-  return downloadAttachment(actor, user.avatarAttachmentId);
+  return downloadAttachment(actor, await avatarAttachment(actor, userId));
 }

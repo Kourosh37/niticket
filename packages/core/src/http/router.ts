@@ -15,6 +15,7 @@ import { searchMessages, searchSenders } from '../application/message-search';
 import { rateLimit } from '../infrastructure/redis';
 import { getMessageReceipts, markMessagesSeen } from '../application/message-receipts';
 import * as savedReplies from '../application/saved-replies';
+import { fileResponse } from './file-response';
 
 export async function dispatch(
   request: Request,
@@ -22,7 +23,9 @@ export async function dispatch(
   actor: Actor,
 ): Promise<unknown> {
   const [resource, id, action] = segments;
-  const method = request.method;
+  const method = request.method === 'HEAD' ? 'GET' : request.method;
+  if (request.method === 'HEAD' && !['avatars', 'attachments'].includes(resource))
+    fail('METHOD_NOT_ALLOWED', 405);
   const query = Object.fromEntries(new URL(request.url).searchParams);
   if (resource === 'saved-replies') {
     if (!id && method === 'GET') return savedReplies.listSavedReplies(actor, query);
@@ -141,34 +144,29 @@ export async function dispatch(
   if (resource === 'avatars' && id === 'intents' && method === 'POST')
     return attachments.createAvatarUpload(actor, await readJson(request));
   if (resource === 'avatars' && id && method === 'GET') {
-    const file = await attachments.downloadAvatar(actor, id);
-    return new Response(new Uint8Array(file.bytes), {
-      headers: {
-        'content-type': file.mime,
-        'cache-control': 'private, no-store',
-        'x-content-type-options': 'nosniff',
-      },
-    });
+    const attachmentId = await attachments.avatarAttachment(actor, id, query.v);
+    return fileResponse(
+      await attachments.streamAttachment(actor, attachmentId, request.signal, undefined, {
+        ifNoneMatch: request.headers.get('if-none-match') ?? undefined,
+        head: request.method === 'HEAD',
+      }),
+    );
   }
+  if (resource === 'attachments' && id && action === 'metadata' && method === 'GET')
+    return attachments.attachmentMetadata(actor, id);
   if (resource === 'attachments' && id && action === 'access' && method === 'GET') {
     const file = await attachments.streamAttachment(
       actor,
       id,
       request.signal,
       request.headers.get('range') ?? undefined,
-    );
-    return new Response(file.stream, {
-      status: file.status,
-      headers: {
-        'content-type': file.mime,
-        'content-length': String(file.size),
-        'content-disposition': `${/^(audio|image|video)\//.test(file.mime) ? 'inline' : 'attachment'}; filename="attachment"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
-        'accept-ranges': 'bytes',
-        ...(file.contentRange ? { 'content-range': file.contentRange } : {}),
-        'x-content-type-options': 'nosniff',
-        'cache-control': 'private, no-store, no-transform',
+      {
+        ifNoneMatch: request.headers.get('if-none-match') ?? undefined,
+        ifRange: request.headers.get('if-range') ?? undefined,
+        head: request.method === 'HEAD',
       },
-    });
+    );
+    return fileResponse(file);
   }
   if (resource === 'admin') {
     assertAdmin(actor);

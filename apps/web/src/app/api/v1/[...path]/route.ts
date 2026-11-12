@@ -10,4 +10,4 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
   return api(request, (actor) => dispatch(request, path, actor));
 }
 
-export { handle as GET, handle as POST, handle as PATCH, handle as DELETE };
+export { handle as GET, handle as HEAD, handle as POST, handle as PATCH, handle as DELETE };

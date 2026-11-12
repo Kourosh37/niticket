@@ -62,6 +62,7 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
     assertOrigin(request);
     const actor = await actorFromHeaders(request.headers);
     const path = new URL(request.url).pathname;
+    const reading = ['GET', 'HEAD'].includes(request.method);
     const streaming = request.method === 'GET' && path === '/api/v1/events';
     const syncing =
       request.method === 'GET' &&
@@ -71,17 +72,11 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
           '/api/v1/notifications/count',
           '/api/v1/uploads/statuses',
         ].includes(path));
-    const bucket = streaming
-      ? 'stream'
-      : syncing
-        ? 'sync'
-        : request.method === 'GET'
-          ? 'read'
-          : 'write';
+    const bucket = streaming ? 'stream' : syncing ? 'sync' : reading ? 'read' : 'write';
     if (
       !(await rateLimit(
         `${actor.id}:${bucket}`,
-        streaming ? 30 : syncing ? 600 : request.method === 'GET' ? 180 : 40,
+        streaming ? 30 : syncing ? 600 : reading ? 180 : 40,
         60,
       ))
     )
@@ -91,11 +86,18 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
     const response =
       result instanceof Response ? result : Response.json({ data: result, requestId });
     response.headers.set('x-request-id', requestId);
+    const privateFile =
+      reading &&
+      /^\/api\/v1\/(avatars\/[^/]+|attachments\/[^/]+\/(access|thumbnail))$/.test(path) &&
+      [200, 206, 304].includes(response.status) &&
+      response.headers.has('etag');
     response.headers.set(
       'cache-control',
       response.headers.get('content-type')?.startsWith('text/event-stream')
         ? 'no-store, no-transform'
-        : 'no-store',
+        : privateFile
+          ? 'private, no-cache, no-transform'
+          : 'no-store',
     );
     return response;
   } catch (error) {
