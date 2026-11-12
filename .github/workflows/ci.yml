@@ -18,7 +18,7 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ runner.arch }}-bun-
       - run: bun scripts/init-env.mjs
       - run: bun install --frozen-lockfile
-      - run: docker compose up -d --wait --wait-timeout 180 --build postgres redis minio clamav
+      - run: docker compose up -d --wait --wait-timeout 180 --build postgres redis cache minio clamav
       - run: bun run db:generate
       - run: bun run db:migrate
       - run: bun --env-file=.env scripts/init-storage.ts

@@ -8,7 +8,7 @@ const schema = z.object({
     .regex(/^[a-z0-9-]+$/)
     .default('niticket'),
   REDIS_URL: z.url(),
-  CACHE_REDIS_URL: z.url().optional(),
+  CACHE_REDIS_URL: z.preprocess((value) => (value === '' ? undefined : value), z.url().optional()),
   BETTER_AUTH_SECRET: z
     .string()
     .min(32)

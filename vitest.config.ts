@@ -32,7 +32,11 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        test: { name: 'unit', include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'] },
+        test: {
+          name: 'unit',
+          include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
+          env: { CACHE_REDIS_URL: '' },
+        },
       },
       {
         extends: true,
@@ -44,6 +48,7 @@ export default defineConfig({
           env: {
             DATABASE_URL: testUrl.toString(),
             QUEUE_NAME: 'niticket-test',
+            CACHE_REDIS_URL: '',
             ADMIN_PHONE: `+989${randomInt(100000000, 999999999)}`,
           },
         },

@@ -9,6 +9,7 @@ try {
 }
 const edge = existsSync('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe');
 process.env.QUEUE_NAME = 'niticket-test';
+process.env.CACHE_REDIS_URL ||= 'redis://127.0.0.1:6380';
 
 export default defineConfig({
   testDir: 'tests/e2e',

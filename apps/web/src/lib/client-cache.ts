@@ -38,6 +38,7 @@ export class ClientCache {
     for (const flight of this.pending.values()) flight.controller.abort();
     this.pending.clear();
     this.scope = null;
+    this.freshUntil = 0;
   }
 
   invalidate(tags: string[]) {
@@ -130,6 +131,7 @@ export class ClientCache {
   }
 
   changed(signal: RealtimeSignal) {
+    if (signal.kind === 'change') this.freshUntil = Date.now() + 2000;
     if (signal.kind === 'change' && signal.topics.includes('access')) {
       this.epoch++;
       this.data.clear();
