@@ -450,7 +450,11 @@ export async function getProfile(actor: Actor) {
 
 export async function updateProfile(actor: Actor, input: unknown) {
   const data = profileSchema.parse(input);
-  await db.user.update({ where: { id: actor.id }, data });
+  await transaction(async (tx) => {
+    actor = await refreshActor(tx, actor);
+    await tx.user.update({ where: { id: actor.id }, data });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['access'] });
+  });
   return getProfile(actor);
 }
 

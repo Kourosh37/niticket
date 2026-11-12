@@ -60,10 +60,27 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
   try {
     assertOrigin(request);
     const actor = await actorFromHeaders(request.headers);
+    const path = new URL(request.url).pathname;
+    const streaming = request.method === 'GET' && path === '/api/v1/events';
+    const syncing =
+      request.method === 'GET' &&
+      (/^\/api\/v1\/tickets\/[^/]+\/(sync|receipts)$/.test(path) ||
+        [
+          '/api/v1/inbox/revision',
+          '/api/v1/notifications/count',
+          '/api/v1/uploads/statuses',
+        ].includes(path));
+    const bucket = streaming
+      ? 'stream'
+      : syncing
+        ? 'sync'
+        : request.method === 'GET'
+          ? 'read'
+          : 'write';
     if (
       !(await rateLimit(
-        `${actor.id}:${request.method === 'GET' ? 'read' : 'write'}`,
-        request.method === 'GET' ? 180 : 40,
+        `${actor.id}:${bucket}`,
+        streaming ? 30 : syncing ? 600 : request.method === 'GET' ? 180 : 40,
         60,
       ))
     )

@@ -11,8 +11,77 @@ import {
 import { realtimeChangeSchema } from '@niticket/core/domain/realtime';
 import { revokeSessions } from '@niticket/core/application/sessions';
 import { randomUUID } from 'node:crypto';
+import {
+  createSavedReply,
+  updateSavedReply,
+  deleteSavedReply,
+} from '@niticket/core/application/saved-replies';
+import { attachmentChanged } from '@niticket/core/application/realtime-events';
+import { transaction } from '@niticket/core/infrastructure/transaction';
+import { drainRealtime } from '@niticket/core/infrastructure/realtime';
 
-afterAll(() => db.$disconnect());
+afterAll(async () => {
+  await drainRealtime();
+  await db.$disconnect();
+});
+
+it('routes saved-reply mutations and private attachment changes only to their authorized audiences', async () => {
+  const f = await fixtures(),
+    student = await f.actor(f.student.id),
+    staff = await f.actor(f.agent.id);
+  const reply = await createSavedReply(staff, {
+    departmentId: f.department.id,
+    clientId: randomUUID(),
+    title: 'Private template',
+    body: 'Private body',
+  });
+  await updateSavedReply(staff, reply.id, {
+    title: 'Updated template',
+    body: 'Private body',
+    version: 1,
+  });
+  await deleteSavedReply(staff, reply.id, { version: 2 });
+  const events = await db.outboxEvent.findMany({
+    where: {
+      type: 'REALTIME_INVALIDATION',
+      payload: { path: ['departmentId'], equals: f.department.id },
+    },
+  });
+  const changes = events.map((event) => realtimeChangeSchema.parse(event.payload));
+  expect(changes).toHaveLength(3);
+  expect((await authorizedUpdate(staff, changes)).topics).toEqual(['saved-replies']);
+  expect((await authorizedUpdate(student, changes)).topics).toEqual([]);
+  expect((await authorizedUpdate(await f.actor(f.outsider.id), changes)).topics).toEqual([]);
+  const ticket = await openConversation(student, { departmentId: f.department.id });
+  const message = await addMessage(staff, ticket.id, {
+    version: 1,
+    body: 'Private file',
+    visibility: 'INTERNAL',
+  });
+  await transaction((tx) =>
+    attachmentChanged(tx, {
+      uploaderId: staff.id,
+      ticketId: ticket.id,
+      messageId: message.id,
+      noteId: null,
+      savedReplyId: null,
+      avatarOwnerId: null,
+    }),
+  );
+  const attachments = (
+    await db.outboxEvent.findMany({
+      where: { type: 'REALTIME_INVALIDATION', payload: { path: ['ticketId'], equals: ticket.id } },
+    })
+  )
+    .map((event) => realtimeChangeSchema.parse(event.payload))
+    .filter((change) => change.topics.includes('attachments'));
+  expect(attachments).toHaveLength(1);
+  expect((await authorizedUpdate(student, attachments)).topics).toEqual([]);
+  expect((await authorizedUpdate(staff, attachments)).topics).toEqual([
+    'conversation',
+    'attachments',
+  ]);
+});
 
 it('commits public and private invalidations with the correct audiences and never includes message content', async () => {
   const f = await fixtures(),

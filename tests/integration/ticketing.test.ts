@@ -41,7 +41,14 @@ describe('PostgreSQL ticket use cases and authorization', () => {
     expect(await db.activity.count({ where: { ticketId: id } })).toBe(1);
     expect(await db.auditLog.count({ where: { resourceId: id } })).toBe(1);
     expect(
-      await db.outboxEvent.count({ where: { payload: { path: ['ticketId'], equals: id } } }),
+      await db.outboxEvent.count({
+        where: { type: 'TICKET_NOTIFICATION', payload: { path: ['ticketId'], equals: id } },
+      }),
+    ).toBe(1);
+    expect(
+      await db.outboxEvent.count({
+        where: { type: 'REALTIME_INVALIDATION', payload: { path: ['ticketId'], equals: id } },
+      }),
     ).toBe(1);
   });
   it('rolls back invalid categories and denies requester urgent priority', async () => {

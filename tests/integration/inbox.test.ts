@@ -187,8 +187,15 @@ it('opens one persistent unit chat concurrently without a title, initial message
   const id = chats[0].id;
   expect(await db.message.count({ where: { ticketId: id } })).toBe(0);
   expect(
-    await db.outboxEvent.count({ where: { payload: { path: ['ticketId'], equals: id } } }),
+    await db.outboxEvent.count({
+      where: { type: 'TICKET_NOTIFICATION', payload: { path: ['ticketId'], equals: id } },
+    }),
   ).toBe(0);
+  expect(
+    await db.outboxEvent.count({
+      where: { type: 'REALTIME_INVALIDATION', payload: { path: ['ticketId'], equals: id } },
+    }),
+  ).toBe(1);
   await expect(
     openConversation(await f.actor(f.agent.id), { departmentId: f.destination.id }),
   ).rejects.toThrow();
@@ -210,7 +217,7 @@ it('opens one persistent unit chat concurrently without a title, initial message
     openConversation(await f.actor(f.outsider.id), { departmentId: f.destination.id }),
   ).rejects.toThrow();
   const notification = await db.outboxEvent.findFirstOrThrow({
-    where: { payload: { path: ['ticketId'], equals: id } },
+    where: { type: 'TICKET_NOTIFICATION', payload: { path: ['ticketId'], equals: id } },
   });
   expect(notification.payload).toMatchObject({ type: 'TICKET_CREATED' });
 });

@@ -23,8 +23,16 @@ export async function acquireRealtimeLease(userId: string, sessionId: string) {
     fail('RATE_LIMITED', 429, 'تعداد اتصال‌های هم‌زمان زیاد است. چند تب دیگر را ببندید.');
   let released = false;
   return {
-    renew: async () =>
-      !released && Number(await redis().eval(RENEW, 2, ...keys, Date.now() + TTL, id)) === 1,
+    renew: async () => {
+      if (released) return false;
+      const renewed = Number(await redis().eval(RENEW, 2, ...keys, Date.now() + TTL, id)) === 1;
+      // Cancellation can race an in-flight renewal. Do not revive its lease.
+      if (released) {
+        await Promise.all(keys.map((key) => redis().zrem(key, id)));
+        return false;
+      }
+      return renewed;
+    },
     release: async () => {
       if (released) return;
       released = true;
