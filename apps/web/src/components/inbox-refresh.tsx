@@ -1,55 +1,32 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { request } from '@/lib/utils';
+import { useRealtimeSync } from '@/lib/use-realtime-sync';
 
 export function InboxRefresh() {
   const router = useRouter();
+  const revision = useRef<string | undefined>(undefined);
+  const abort = useRef<AbortController | null>(null);
   useEffect(() => {
-    let active = true,
-      checking = false,
-      revision: string | undefined;
-    const abort = new AbortController();
-    const refresh = async () => {
-      if (
-        checking ||
-        document.visibilityState !== 'visible' ||
-        document.querySelector('[data-search-active="true"]') ||
-        document.activeElement?.matches('input, select, textarea')
-      )
-        return;
-      checking = true;
-      try {
-        const result = await request<{ revision: string }>('/api/v1/inbox/revision', {
-          signal: abort.signal,
-        });
-        if (active && revision !== result.revision) {
-          if (revision !== undefined) window.dispatchEvent(new Event('notifications:changed'));
-          revision = result.revision;
-          router.refresh();
-        }
-      } catch {
-        /* Retry on the next visible poll. */
-      } finally {
-        checking = false;
-      }
-    };
-    const focus = () => {
-      revision = undefined;
-      void refresh();
-    };
-    void refresh();
-    const timer = setInterval(() => void refresh(), 5000);
-    window.addEventListener('focus', focus);
-    document.addEventListener('visibilitychange', refresh);
-    return () => {
-      active = false;
-      abort.abort();
-      clearInterval(timer);
-      window.removeEventListener('focus', focus);
-      document.removeEventListener('visibilitychange', refresh);
-    };
-  }, [router]);
+    const controller = new AbortController();
+    abort.current = controller;
+    return () => controller.abort();
+  }, []);
+  useRealtimeSync(async () => {
+    if (
+      document.querySelector('[data-search-active="true"]') ||
+      document.activeElement?.matches('input, select, textarea')
+    )
+      return false;
+    const result = await request<{ revision: string }>('/api/v1/inbox/revision', {
+      signal: abort.current?.signal,
+    });
+    if (!abort.current?.signal.aborted && revision.current !== result.revision) {
+      revision.current = result.revision;
+      router.refresh();
+    }
+  }, ['inbox']);
   return null;
 }

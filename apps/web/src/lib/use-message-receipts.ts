@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { request } from './utils';
+import { realtime, matchesSignal } from './realtime-client';
 
 function remember(set: Set<string>, ids: string[]) {
   for (const id of ids) set.add(id);
@@ -71,8 +72,13 @@ export function useMessageReceipts(
     const ids = outgoingKey.split(','),
       abort = new AbortController();
     let inFlight = false;
+    let queued = false;
     const update = () => {
-      if (inFlight || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      if (inFlight) {
+        queued = true;
+        return;
+      }
       const pending = ids.filter((id) => !known.current.has(id));
       if (!pending.length) return;
       inFlight = true;
@@ -94,16 +100,30 @@ export function useMessageReceipts(
         .catch(() => {})
         .finally(() => {
           inFlight = false;
+          if (queued && !abort.signal.aborted) {
+            queued = false;
+            update();
+          }
         });
     };
     const initial = setTimeout(update, 250);
-    const timer = setInterval(update, 5000);
+    let timer: ReturnType<typeof setInterval>;
+    const interval = () => {
+      clearInterval(timer);
+      timer = setInterval(update, realtime.live ? 60000 : 5000);
+    };
+    const unsubscribe = realtime.subscribe((signal) => {
+      if (signal.kind === 'state') interval();
+      if (matchesSignal(signal, ['receipts'], ticketId)) update();
+    });
+    interval();
     window.addEventListener('focus', update);
     window.addEventListener('online', update);
     document.addEventListener('visibilitychange', update);
     return () => {
       clearTimeout(initial);
       clearInterval(timer);
+      unsubscribe();
       abort.abort();
       window.removeEventListener('focus', update);
       window.removeEventListener('online', update);

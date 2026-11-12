@@ -44,9 +44,12 @@ export function SessionGuard() {
     }
 
     void check();
+    const invalid = () => router.replace('/login');
     const interval = setInterval(() => void check(), 30000);
     window.addEventListener('focus', check);
     window.addEventListener('pageshow', check);
+    window.addEventListener('session:check', check);
+    window.addEventListener('session:invalid', invalid);
     document.addEventListener('visibilitychange', check);
     return () => {
       stopped = true;
@@ -55,6 +58,8 @@ export function SessionGuard() {
       clearTimeout(expiry);
       window.removeEventListener('focus', check);
       window.removeEventListener('pageshow', check);
+      window.removeEventListener('session:check', check);
+      window.removeEventListener('session:invalid', invalid);
       document.removeEventListener('visibilitychange', check);
     };
   }, [router]);

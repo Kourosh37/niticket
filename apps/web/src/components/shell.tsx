@@ -29,6 +29,7 @@ import { SessionGuard } from './session-guard';
 import { DownloadScope } from './downloads';
 import { ThemeToggle } from './theme-toggle';
 import { NotificationStatus, ConversationNavigation } from './notification-status';
+import { RealtimeProvider } from './realtime-provider';
 import dynamic from 'next/dynamic';
 
 const MessageSearch = dynamic(() =>
@@ -42,7 +43,15 @@ type Props = {
   children: React.ReactNode;
 };
 
-export function Shell({
+export function Shell(props: Props) {
+  return (
+    <RealtimeProvider key={props.user.id}>
+      <ShellContent {...props} />
+    </RealtimeProvider>
+  );
+}
+
+function ShellContent({
   user,
   children,
   universityName = 'دانشگاه صنعتی نوشیروانی بابل',

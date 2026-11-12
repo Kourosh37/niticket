@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { realtime } from '@/lib/realtime-client';
+import { useRealtimeSync } from '@/lib/use-realtime-sync';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ArrowDown,
@@ -112,6 +115,7 @@ export function Conversation({
   initialTerms?: string[];
   returnTo?: string;
 }) {
+  const router = useRouter();
   const [data, setData] = useState(detail),
     [messages, setMessages] = useState(detail.messages),
     [olderCursor, setOlderCursor] = useState(detail.nextMessageCursor);
@@ -161,6 +165,8 @@ export function Conversation({
     ),
     currentVersion = useRef(detail.ticket.version),
     fetching = useRef<Promise<void> | null>(null),
+    refreshQueued = useRef(false),
+    forceSync = useRef(false),
     latestId = useRef(detail.messages.at(-1)?.id),
     attempt = useRef<{ id: string; body: string; visibility: string } | null>(null);
   const { ticket, permissions } = data;
@@ -210,53 +216,77 @@ export function Conversation({
   );
 
   const refresh = useCallback(() => {
-    if (fetching.current) return fetching.current;
-    const task = request<{ revision: string; detail: Detail | null }>(
-      `/api/v1/tickets/${id}/sync?since=${encodeURIComponent(revision.current)}`,
-    )
-      .then((result) => {
-        if (!result.detail) return;
-        const latest = result.detail;
-        revision.current = result.revision;
-        if (!mounted.current) return;
-        currentVersion.current = Math.max(currentVersion.current, latest.ticket.version);
-        const lastId = latest.messages.at(-1)?.id;
-        if (lastId !== latestId.current && (!followLatest.current || browsing.current))
-          setNewMessages(true);
-        // A long offline interval may exceed one page; allow the missing interval to be loaded.
-        if (
-          !browsing.current &&
-          latest.nextMessageCursor &&
-          (!latestId.current || !latest.messages.some((message) => message.id === latestId.current))
-        )
-          setOlderCursor(latest.nextMessageCursor);
-        latestId.current = lastId;
-        setData(latest);
-        if (!browsing.current) setMessages((previous) => mergeMessages(previous, latest.messages));
-      })
-      .finally(() => {
-        fetching.current = null;
-      });
+    if (fetching.current) {
+      refreshQueued.current = true;
+      return fetching.current;
+    }
+    const fetchLatest = () => {
+      const since = forceSync.current ? '' : revision.current;
+      forceSync.current = false;
+      return request<{ revision: string; detail: Detail | null }>(
+        `/api/v1/tickets/${id}/sync?since=${encodeURIComponent(since)}`,
+      )
+        .then((result) => {
+          if (!result.detail) return;
+          const latest = result.detail;
+          revision.current = result.revision;
+          if (!mounted.current) return;
+          currentVersion.current = Math.max(currentVersion.current, latest.ticket.version);
+          const lastId = latest.messages.at(-1)?.id;
+          if (lastId !== latestId.current && (!followLatest.current || browsing.current))
+            setNewMessages(true);
+          // A long offline interval may exceed one page; allow the missing interval to be loaded.
+          if (
+            !browsing.current &&
+            latest.nextMessageCursor &&
+            (!latestId.current ||
+              !latest.messages.some((message) => message.id === latestId.current))
+          )
+            setOlderCursor(latest.nextMessageCursor);
+          latestId.current = lastId;
+          setData(latest);
+          if (!browsing.current)
+            setMessages((previous) => mergeMessages(previous, latest.messages));
+        })
+        .catch((error: unknown) => {
+          if (since === '') forceSync.current = true;
+          if (
+            mounted.current &&
+            error instanceof RequestError &&
+            [403, 404].includes(error.status ?? 0)
+          ) {
+            router.replace('/');
+            router.refresh();
+          }
+          throw error;
+        });
+    };
+    const task = (async () => {
+      do {
+        refreshQueued.current = false;
+        await fetchLatest();
+      } while (refreshQueued.current && mounted.current);
+    })().finally(() => {
+      fetching.current = null;
+    });
     fetching.current = task;
     return task;
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
-    if (busy || recording) return;
-    const update = () => {
-      if (document.visibilityState === 'visible') void refresh().catch(() => {});
-    };
-    const timer = setInterval(update, 5000);
-    window.addEventListener('focus', update);
-    window.addEventListener('online', update);
-    document.addEventListener('visibilitychange', update);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('focus', update);
-      window.removeEventListener('online', update);
-      document.removeEventListener('visibilitychange', update);
-    };
-  }, [busy, recording, refresh]);
+    return realtime.subscribe((signal) => {
+      if (signal.kind === 'ready' || (signal.kind === 'change' && signal.topics.includes('access')))
+        forceSync.current = true;
+    });
+  }, []);
+  useRealtimeSync(
+    () => {
+      if (busy) return false;
+      return refresh();
+    },
+    ['conversation', 'attachments'],
+    { ticketId: id },
+  );
 
   const loadOlder = useCallback(async () => {
     if (!olderCursor || loadingOlder || finding) return;
@@ -609,15 +639,11 @@ export function Conversation({
     },
     [id],
   );
-  useEffect(() => {
-    if (!info || !historyOpen) return;
-    const initial = setTimeout(() => void fetchHistory(), 0);
-    const timer = setInterval(() => void fetchHistory(), 15000);
-    return () => {
-      clearTimeout(initial);
-      clearInterval(timer);
-    };
-  }, [info, historyOpen, fetchHistory]);
+  useRealtimeSync(() => fetchHistory(), ['conversation', 'attachments'], {
+    ticketId: id,
+    enabled: info && historyOpen,
+    fallbackMs: 15000,
+  });
   const activities = useMemo(
     () => [...new Map(olderActivities.map((activity) => [activity.id, activity])).values()],
     [olderActivities],
