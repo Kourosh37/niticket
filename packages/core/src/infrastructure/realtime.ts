@@ -26,8 +26,10 @@ export function realtimeNamespace() {
 
 export async function publishRealtimeEvent(id: string, payload: unknown) {
   const change = realtimeChangeSchema.parse(payload);
-  await invalidateSharedReads(tagsForChange(change));
+  const invalidated = await invalidateSharedReads(tagsForChange(change));
   await redis().publish(`${realtimeNamespace()}:changes`, JSON.stringify({ id, change }));
+  // Delivery remains immediate, but a failed cache side effect must stay in the durable outbox.
+  if (!invalidated) throw new Error('Shared cache invalidation deferred');
   await db.outboxEvent.updateMany({
     where: { id, type: 'REALTIME_INVALIDATION', processedAt: null },
     data: { processedAt: new Date() },

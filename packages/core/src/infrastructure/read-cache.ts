@@ -142,6 +142,7 @@ export function invalidateLocalReads(tags: string[]) {
 
 export async function invalidateSharedReads(tags: string[]) {
   invalidateLocalReads(tags);
+  if (!config().CACHE_REDIS_URL) return true;
   let shared = connection();
   const pending = client;
   if (!shared && pending && unavailableUntil <= Date.now()) {
@@ -159,9 +160,9 @@ export async function invalidateSharedReads(tags: string[]) {
     });
     shared = connection();
   }
-  if (!shared) return;
+  if (!shared) return false;
   try {
-    if (!(await validateSharedEpoch(shared))) return;
+    if (!(await validateSharedEpoch(shared))) return false;
     const pipe = shared.pipeline();
     for (const tag of new Set(tags)) {
       const key = `${cacheNamespace()}:tag:${tag}`;
@@ -169,8 +170,10 @@ export async function invalidateSharedReads(tags: string[]) {
     }
     const results = await pipe.exec();
     if (!results || results.some(([error]) => error)) throw new Error('Cache invalidation failed');
+    return true;
   } catch {
     sharedFailure();
+    return false;
   }
 }
 
