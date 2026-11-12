@@ -5,10 +5,11 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Bell, ChevronLeft, MessageCircle } from 'lucide-react';
 import { digits, request } from '@/lib/utils';
+import { realtime, matchesSignal } from '@/lib/realtime-client';
 
 const UnreadCount = createContext(0);
 
-/** One bounded poll shared by the dock, inbox and settings; scoped to the signed-in shell. */
+/** Shared unread state with SSE invalidations and a bounded HTTP recovery poll. */
 export function NotificationStatus({ children }: { children: React.ReactNode }) {
   const [count, setCount] = useState(0);
   const path = usePathname();
@@ -17,6 +18,7 @@ export function NotificationStatus({ children }: { children: React.ReactNode }) 
       inFlight = false,
       queued = false;
     const abort = new AbortController();
+    let pushed: ReturnType<typeof setTimeout> | undefined;
     const update = () => {
       if (document.visibilityState === 'hidden') return;
       if (inFlight) {
@@ -38,7 +40,20 @@ export function NotificationStatus({ children }: { children: React.ReactNode }) 
         });
     };
     update();
-    const timer = setInterval(update, 20000);
+    let timer: ReturnType<typeof setInterval>;
+    const interval = () => {
+      clearInterval(timer);
+      timer = setInterval(update, realtime.live ? 60000 : 20000);
+    };
+    const unsubscribe = realtime.subscribe((signal) => {
+      if (signal.kind === 'state') interval();
+      if (matchesSignal(signal, ['notifications']) && !pushed)
+        pushed = setTimeout(() => {
+          pushed = undefined;
+          update();
+        }, 750);
+    });
+    interval();
     document.addEventListener('visibilitychange', update);
     window.addEventListener('notifications:changed', update);
     window.addEventListener('focus', update);
@@ -47,6 +62,8 @@ export function NotificationStatus({ children }: { children: React.ReactNode }) 
       active = false;
       abort.abort();
       clearInterval(timer);
+      clearTimeout(pushed);
+      unsubscribe();
       document.removeEventListener('visibilitychange', update);
       window.removeEventListener('notifications:changed', update);
       window.removeEventListener('focus', update);

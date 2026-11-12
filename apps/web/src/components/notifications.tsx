@@ -7,6 +7,7 @@ import { Bell, CheckCheck } from 'lucide-react';
 import { request, dateTime } from '@/lib/utils';
 import { Button } from './ui/button';
 import type { notifications } from '@niticket/core/application/administration';
+import { useRealtimeSync } from '@/lib/use-realtime-sync';
 
 export function Notifications({
   data,
@@ -19,6 +20,14 @@ export function Notifications({
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  useRealtimeSync(
+    () => {
+      if (pending.current) return false;
+      router.refresh();
+    },
+    ['notifications'],
+    { initial: false, fallbackMs: 20000 },
+  );
 
   async function read(id?: string, refresh = true) {
     if (pending.current) return;
