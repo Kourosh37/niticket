@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Minus, Plus, ScanLine } from 'lucide-react';
 import { Button } from './ui/button';
 import { digits } from '@/lib/utils';
 import { MAX_PREVIEW_BYTES, previewBytes } from '@/lib/preview-bytes';
+import { PDF_ASSETS } from '@/lib/pdf-assets';
 
 export function PdfPreview({ url, size }: { url: string; size?: number | null }) {
   const container = useRef<HTMLDivElement>(null);
@@ -37,7 +38,7 @@ export function PdfPreview({ url, size }: { url: string; size?: number | null })
         const { PDFViewer, EventBus, PDFLinkService, LinkTarget } =
           await import('pdfjs-dist/web/pdf_viewer.mjs');
         if (abort.signal.aborted || !container.current || !viewerElement.current) return;
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        pdfjs.GlobalWorkerOptions.workerSrc = `${PDF_ASSETS}/pdf.worker.min.mjs`;
         const eventBus = new EventBus();
         links = new PDFLinkService({ eventBus, externalLinkTarget: LinkTarget.BLANK });
         const options: ConstructorParameters<typeof PDFViewer>[0] & { abortSignal: AbortSignal } = {
@@ -73,10 +74,10 @@ export function PdfPreview({ url, size }: { url: string; size?: number | null })
         });
         task = pdfjs.getDocument({
           data: new Uint8Array(bytes),
-          cMapUrl: '/pdf-assets/cmaps/',
+          cMapUrl: `${PDF_ASSETS}/cmaps/`,
           cMapPacked: true,
-          standardFontDataUrl: '/pdf-assets/standard_fonts/',
-          wasmUrl: '/pdf-assets/wasm/',
+          standardFontDataUrl: `${PDF_ASSETS}/standard_fonts/`,
+          wasmUrl: `${PDF_ASSETS}/wasm/`,
           // Keep embedded fonts and PDF glyph mappings; never replace PDF text with HTML.
           disableFontFace: false,
           enableXfa: false,
