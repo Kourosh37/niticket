@@ -57,12 +57,25 @@ export function saveDraft(ticket: string, body: string, visibility: Draft['visib
   try {
     const saved = storage();
     if (!saved) return;
-    const keys = Object.keys(saved).filter((item) =>
-      item.startsWith(`${prefix}${clientCache.scope}:`),
-    );
-    // Session storage is bounded independently from the memory LRU.
-    for (const old of keys.slice(0, Math.max(0, keys.length - 31))) saved.removeItem(old);
     saved.setItem(id, encoded);
+    const others: { key: string; updated: number }[] = [];
+    for (const key of Object.keys(saved)) {
+      if (key === id || !key.startsWith(`${prefix}${clientCache.scope}:`)) continue;
+      try {
+        const previous = JSON.parse(saved.getItem(key) ?? 'null') as Draft | null;
+        if (!previous || !Number.isFinite(previous.updated) || !(previous.expires > Date.now())) {
+          saved.removeItem(key);
+          continue;
+        }
+        others.push({ key, updated: previous.updated });
+      } catch {
+        saved.removeItem(key);
+      }
+    }
+    // Updating an existing draft does not consume a new slot. Evict by recency, not key order.
+    others.sort((a, b) => a.updated - b.updated || a.key.localeCompare(b.key));
+    for (const old of others.slice(0, Math.max(0, others.length + 1 - 32)))
+      saved.removeItem(old.key);
   } catch {
     /* A quota failure never prevents composing or sending. */
   }

@@ -46,3 +46,21 @@ it('does not lose composing when session storage is unavailable and bounds retai
   expect(readDraft('quota', false)?.body).toBe('memory fallback');
   vi.restoreAllMocks();
 });
+
+it('keeps every persisted draft when typing at capacity and evicts the oldest only for a new draft', () => {
+  vi.useFakeTimers();
+  clientCache.activate('one');
+  for (let i = 0; i < 32; i++) {
+    vi.setSystemTime(1000 + i);
+    saveDraft(String(i), `draft ${i}`, 'PUBLIC');
+  }
+  const original = Object.keys(sessionStorage).sort();
+  vi.setSystemTime(100000);
+  for (let i = 0; i < 10; i++) saveDraft('0', `updated ${i}`, 'PUBLIC');
+  expect(Object.keys(sessionStorage).sort()).toEqual(original);
+  saveDraft('new', 'another draft', 'PUBLIC');
+  expect(sessionStorage.length).toBe(32);
+  expect(sessionStorage.getItem('niticket:draft:v1:one:1:PUBLIC')).toBeNull();
+  expect(sessionStorage.getItem('niticket:draft:v1:one:0:PUBLIC')).toContain('updated 9');
+  expect(sessionStorage.getItem('niticket:draft:v1:one:new:PUBLIC')).toContain('another draft');
+});
