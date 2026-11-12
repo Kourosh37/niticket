@@ -6,7 +6,7 @@ export async function scanInContainer(eventId: string) {
   if (!internal.pathname.endsWith('_test')) throw new Error('Test database required');
   internal.hostname = 'postgres';
   const code =
-    "import {processScan} from './packages/core/src/application/jobs.ts';import {drainRealtime} from './packages/core/src/infrastructure/realtime.ts';import {redis} from './packages/core/src/infrastructure/redis.ts';import {db} from './packages/database/src/index.ts';try{let raw='';for await(const chunk of process.stdin)raw+=chunk;const e=await db.outboxEvent.findUniqueOrThrow({where:{id:JSON.parse(raw).eventId}});await processScan(e.id,e.payload);}finally{await drainRealtime();redis().disconnect();await db.$disconnect();}";
+    "import {processScan} from './packages/core/src/application/jobs.ts';import {drainRealtime} from './packages/core/src/infrastructure/realtime.ts';import {closeReadCache} from './packages/core/src/infrastructure/read-cache.ts';import {redis} from './packages/core/src/infrastructure/redis.ts';import {db} from './packages/database/src/index.ts';try{let raw='';for await(const chunk of process.stdin)raw+=chunk;const e=await db.outboxEvent.findUniqueOrThrow({where:{id:JSON.parse(raw).eventId}});await processScan(e.id,e.payload);}finally{await drainRealtime();closeReadCache();redis().disconnect();await db.$disconnect();}";
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       'docker',

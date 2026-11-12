@@ -6,6 +6,7 @@ import { normalizeSearchText } from '../domain/search-text';
 import { uuid } from '../validation';
 import { transaction } from '../infrastructure/transaction';
 import { enqueueRealtime } from '../infrastructure/realtime';
+import { cachedRead, actorCacheScope } from '../infrastructure/read-cache';
 import { refreshActor } from './context';
 
 export const savedReplySchema = z
@@ -59,6 +60,17 @@ export async function requireSavedReply(
 }
 
 export async function listSavedReplies(actor: Actor, input: unknown = {}) {
+  assertSavedReplyStaff(actor);
+  const units = actor.memberships.filter((m) => m.active).map((m) => m.departmentId);
+  return cachedRead(
+    `saved-replies:${actorCacheScope(actor)}:${JSON.stringify(input)}`,
+    ['catalog', ...units.map((id) => `department:${id}`)],
+    30000,
+    () => readSavedReplies(actor, input),
+  );
+}
+
+async function readSavedReplies(actor: Actor, input: unknown = {}) {
   assertSavedReplyStaff(actor);
   const data = z
     .object({

@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { settings } from '@niticket/core/application/settings';
+import { displayPolicy } from '@niticket/core/application/settings';
 
-// Reuse only within one server render; administrator changes remain visible on the next request.
-export const currentPolicy = cache(settings);
+// Share a display snapshot in the render; write validation bypasses this cache.
+export const currentPolicy = cache(displayPolicy);

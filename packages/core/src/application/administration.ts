@@ -24,6 +24,7 @@ import { config } from '../infrastructure/config';
 import { transaction } from '../infrastructure/transaction';
 import { enqueueRealtime } from '../infrastructure/realtime';
 import { refreshActor, requireFresh } from './context';
+import { cachedRead, actorCacheScope } from '../infrastructure/read-cache';
 
 async function audit(
   tx: Prisma.TransactionClient,
@@ -36,6 +37,15 @@ async function audit(
 }
 
 export async function departmentChoices(actor: Actor, admin = false) {
+  return cachedRead(
+    `department-choices:${actorCacheScope(actor)}:${admin}`,
+    ['catalog'],
+    90000,
+    () => readDepartmentChoices(actor, admin),
+  );
+}
+
+async function readDepartmentChoices(actor: Actor, admin = false) {
   const scope: Prisma.DepartmentWhereInput = admin
     ? actor.isAdmin
       ? {}
@@ -57,6 +67,16 @@ export async function departmentChoices(actor: Actor, admin = false) {
 }
 
 export async function conversationChoices(actor: Actor, input: unknown = {}) {
+  if (userRole(actor) !== 'STUDENT') fail('FORBIDDEN', 403);
+  return cachedRead(
+    `conversation-choices:${actorCacheScope(actor)}:${JSON.stringify(input)}`,
+    ['catalog', `user:${actor.id}`],
+    30000,
+    () => readConversationChoices(actor, input),
+  );
+}
+
+async function readConversationChoices(actor: Actor, input: unknown = {}) {
   if (userRole(actor) !== 'STUDENT') fail('FORBIDDEN', 403);
   const data = z
     .object({
@@ -114,6 +134,19 @@ export async function listDepartments(
   actor: Actor,
   admin = false,
   filters: { q?: string; cursor?: string; limit?: number } = {},
+) {
+  return cachedRead(
+    `departments:${actorCacheScope(actor)}:${admin}:${JSON.stringify(filters)}`,
+    ['catalog'],
+    30000,
+    () => readDepartments(actor, admin, filters),
+  );
+}
+
+async function readDepartments(
+  actor: Actor,
+  admin: boolean,
+  filters: { q?: string; cursor?: string; limit?: number },
 ) {
   if (filters.cursor) uuid.parse(filters.cursor);
   const scope: Prisma.DepartmentWhereInput = admin
@@ -204,7 +237,7 @@ export async function provisionDepartment(actor: Actor, input: unknown) {
     await audit(tx, actor, 'DEPARTMENT_CREATED', department.id, { responsibleUserId: person.id });
     await audit(tx, actor, 'STAFF_PROVISIONED', person.id, { departmentId: department.id });
     await enqueueRealtime(tx, { scope: 'user', userId: person.id, topics: ['access'] });
-    await enqueueRealtime(tx, { scope: 'everyone', topics: ['inbox'] });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['inbox', 'catalog'] });
     return { id: department.id, responsibleUserId: person.id };
   });
 }
@@ -255,6 +288,7 @@ export async function saveMember(actor: Actor, departmentId: string, input: unkn
     });
     await tx.session.deleteMany({ where: { userId: data.userId } });
     await enqueueRealtime(tx, { scope: 'user', userId: data.userId, topics: ['access'] });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['catalog'] });
     await audit(tx, actor, 'MEMBERSHIP_CHANGED', membership.id, {
       departmentId,
       userId: data.userId,
@@ -286,6 +320,7 @@ export async function saveCategory(actor: Actor, departmentId: string, input: un
         })
       : await tx.category.create({ data: { departmentId, name: data.name, active: data.active } });
     await audit(tx, actor, 'CATEGORY_CHANGED', c.id);
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['catalog'] });
     return { id: c.id };
   });
 }
@@ -392,6 +427,8 @@ export async function createUser(actor: Actor, input: unknown) {
     assertAdmin(actor);
     const person = await provisionStaff(tx, data);
     await audit(tx, actor, 'STAFF_PROVISIONED', person.id);
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['catalog'] });
+    await enqueueRealtime(tx, { scope: 'user', userId: person.id, topics: ['access'] });
     return { id: person.id };
   });
 }
@@ -427,6 +464,7 @@ export async function updateUser(actor: Actor, id: string, input: unknown) {
       await tx.account.deleteMany({ where: { userId: id, providerId: 'credential' } });
     await tx.session.deleteMany({ where: { userId: id } });
     await enqueueRealtime(tx, { scope: 'user', userId: id, topics: ['access'] });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['catalog'] });
     await audit(tx, actor, 'USER_ACCESS_CHANGED', id, { fields: Object.keys(data) });
     return { id };
   });
@@ -505,6 +543,16 @@ export async function readNotification(actor: Actor, input: unknown) {
 }
 
 export async function reports(actor: Actor, input: unknown = {}) {
+  if (!actor.active) fail();
+  return cachedRead(
+    `reports:${actorCacheScope(actor)}:${JSON.stringify(input)}`,
+    ['reports', 'catalog', `user:${actor.id}`],
+    15000,
+    () => readReports(actor, input),
+  );
+}
+
+async function readReports(actor: Actor, input: unknown = {}) {
   const data = z
     .object({
       departmentId: uuid.optional(),

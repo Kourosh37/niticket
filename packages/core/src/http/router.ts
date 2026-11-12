@@ -16,6 +16,7 @@ import { rateLimit } from '../infrastructure/redis';
 import { getMessageReceipts, markMessagesSeen } from '../application/message-receipts';
 import * as savedReplies from '../application/saved-replies';
 import { fileResponse } from './file-response';
+import { cachedRead } from '../infrastructure/read-cache';
 
 export async function dispatch(
   request: Request,
@@ -109,7 +110,9 @@ export async function dispatch(
   if (resource === 'notifications') {
     if (id === 'count' && method === 'GET')
       return {
-        unreadCount: await db.notification.count({ where: { userId: actor.id, readAt: null } }),
+        unreadCount: await cachedRead(`unread:${actor.id}`, [`user:${actor.id}`], 1000, () =>
+          db.notification.count({ where: { userId: actor.id, readAt: null } }),
+        ),
       };
     if (method === 'GET') return admin.notifications(actor, query.cursor);
     if (method === 'PATCH') return admin.readNotification(actor, await readJson(request));

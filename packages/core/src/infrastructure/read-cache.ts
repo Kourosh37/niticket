@@ -95,6 +95,7 @@ export function tagsForChange(change: RealtimeChange) {
     }
     if (topic === 'settings') tags.add('settings');
     if (topic === 'conversation' || topic === 'inbox') tags.add('reports');
+    if (change.scope === 'ticket' && topic === 'inbox') tags.add(`user:${change.creatorId}`);
     if (change.scope === 'ticket') tags.add(`ticket:${change.ticketId}`);
     if (change.scope === 'department') tags.add(`department:${change.departmentId}`);
     if (change.scope === 'user') tags.add(`user:${change.userId}`);
@@ -217,4 +218,13 @@ export function closeReadCache() {
   client = undefined;
   local.clear();
   generation++;
+}
+
+export function readCacheState() {
+  return {
+    entries: local.size,
+    bytes: local.byteSize,
+    sharedReady: client?.status === 'ready',
+    flights: flights.size,
+  };
 }

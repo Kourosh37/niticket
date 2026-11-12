@@ -35,6 +35,7 @@ import { refreshActor } from './context';
 import { requireSavedReply } from './saved-replies';
 import { ticketChanged } from './realtime-events';
 import { enqueueRealtime } from '../infrastructure/realtime';
+import { cachedRead, actorCacheScope } from '../infrastructure/read-cache';
 import {
   ticketSummarySelect as ticketSelect,
   ticketRepository,
@@ -526,17 +527,19 @@ export async function getTicket(
         waveform: true,
       },
     }),
-    db.departmentMembership
-      .findFirst({
-        where: {
-          departmentId: ticket.departmentId,
-          active: true,
-          user: { active: true, role: 'STAFF' },
-        },
-        orderBy: [{ role: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
-        select: { user: { select: { id: true, name: true, image: true } } },
-      })
-      .then((membership) => membership?.user ?? null),
+    cachedRead(`responsible:${ticket.departmentId}`, ['catalog', 'profiles'], 60000, () =>
+      db.departmentMembership
+        .findFirst({
+          where: {
+            departmentId: ticket.departmentId,
+            active: true,
+            user: { active: true, role: 'STAFF' },
+          },
+          orderBy: [{ role: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+          select: { user: { select: { id: true, name: true, image: true } } },
+        })
+        .then((membership) => membership?.user ?? null),
+    ),
   ]);
   return {
     ticket,
@@ -839,6 +842,15 @@ export async function syncTicket(actor: Actor, id: string, since?: string) {
 }
 
 export async function inboxRevision(actor: Actor) {
+  return cachedRead(
+    `inbox-revision:${actorCacheScope(actor)}`,
+    ['reports', `user:${actor.id}`],
+    1000,
+    () => readInboxRevision(actor),
+  );
+}
+
+async function readInboxRevision(actor: Actor) {
   const result = await db.ticket.aggregate({
     where: ticketScope(actor),
     _count: { id: true },

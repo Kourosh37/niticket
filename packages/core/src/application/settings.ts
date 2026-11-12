@@ -4,6 +4,8 @@ import { config } from '../infrastructure/config';
 import { assertAdmin, type Actor } from '../domain/authorization';
 import { requireFresh, refreshActor } from './context';
 import { transaction } from '../infrastructure/transaction';
+import { cachedRead } from '../infrastructure/read-cache';
+import { enqueueRealtime } from '../infrastructure/realtime';
 
 export const settingsSchema = z
   .object({
@@ -29,6 +31,9 @@ export async function settings() {
       });
 }
 
+/** Display cache only. Mutation limits always call the authoritative settings(). */
+export const displayPolicy = () => cachedRead('display-policy', ['settings'], 60000, settings);
+
 export async function saveSettings(actor: Actor, input: unknown) {
   assertAdmin(actor);
   await requireFresh(actor);
@@ -44,6 +49,7 @@ export async function saveSettings(actor: Actor, input: unknown) {
     await tx.auditLog.create({
       data: { actorId: actor.id, action: 'POLICY_CHANGED', resourceId: 'policy', metadata: value },
     });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['settings'] });
     return value;
   });
 }
