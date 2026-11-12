@@ -18,7 +18,9 @@ for (const width of [390, 1440]) {
   }) => {
     const { fixtures } = await import('../helpers/fixtures');
     const { db } = await import('@niticket/database');
+    const { addMessage } = await import('@niticket/core/application/tickets');
     const f = await fixtures();
+    const student = await f.actor(f.student.id);
     const ticket = await db.ticket.create({
       data: {
         creatorId: f.student.id,
@@ -54,10 +56,10 @@ for (const width of [390, 1440]) {
       'visibility',
       'visible',
     );
-    await db.message.create({
-      data: { ticketId: ticket.id, senderId: f.student.id, body: 'اولین پیام بعد از باز کردن چت' },
+    await addMessage(student, ticket.id, {
+      version: 1,
+      body: 'اولین پیام بعد از باز کردن چت',
     });
-    await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
     await expect(page.getByText('اولین پیام بعد از باز کردن چت', { exact: true })).toBeInViewport({
       ratio: 1,
       timeout: 15000,
@@ -79,14 +81,10 @@ for (const width of [390, 1440]) {
     await expect.poll(gap).toBeGreaterThan(25);
     await expect.poll(gap).toBeLessThan(100);
     const readingTop = await area.evaluate((node) => node.scrollTop);
-    await db.message.create({
-      data: {
-        ticketId: ticket.id,
-        senderId: f.student.id,
-        body: 'پاسخ تازه هنگام خواندن پیام‌های قبلی',
-      },
+    await addMessage(student, ticket.id, {
+      version: 2,
+      body: 'پاسخ تازه هنگام خواندن پیام‌های قبلی',
     });
-    await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
     await expect(page.getByRole('button', { name: 'پیام جدید', exact: true })).toBeVisible({
       timeout: 15000,
     });
@@ -101,10 +99,10 @@ for (const width of [390, 1440]) {
     await area.dispatchEvent('touchend');
     await area.dispatchEvent('pointerdown');
     await area.dispatchEvent('pointerup');
-    await db.message.create({
-      data: { ticketId: ticket.id, senderId: f.student.id, body: 'پاسخ بعد از بازگشت به انتها' },
+    await addMessage(student, ticket.id, {
+      version: 3,
+      body: 'پاسخ بعد از بازگشت به انتها',
     });
-    await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
     await expect(page.getByText('پاسخ بعد از بازگشت به انتها', { exact: true })).toBeInViewport({
       ratio: 1,
       timeout: 15000,

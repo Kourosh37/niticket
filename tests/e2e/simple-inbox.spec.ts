@@ -50,7 +50,9 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   await expect(s.getByLabel('پاسخ شما', { exact: true })).toBeInViewport();
   expect(await db.message.count({ where: { ticketId: id } })).toBe(0);
   expect(
-    await db.outboxEvent.count({ where: { payload: { path: ['ticketId'], equals: id } } }),
+    await db.outboxEvent.count({
+      where: { type: 'TICKET_NOTIFICATION', payload: { path: ['ticketId'], equals: id } },
+    }),
   ).toBe(0);
   await s.locator('#attachment').setInputFiles('tests/fixtures/photo.png');
   await s.getByRole('button', { name: 'ارسال پیام', exact: true }).click();
@@ -125,6 +127,8 @@ test('long chats use a single message scroller, preserve older-message position 
   test.setTimeout(90000);
   const { fixtures } = await import('../helpers/fixtures');
   const { db } = await import('@niticket/database');
+  const { transaction } = await import('@niticket/core/infrastructure/transaction');
+  const { ticketChanged } = await import('@niticket/core/application/realtime-events');
   const f = await fixtures();
   await db.department.update({
     where: { id: f.department.id },
@@ -207,15 +211,19 @@ test('long chats use a single message scroller, preserve older-message position 
   await expect(s.getByText('پاسخ جدید واحد برای گفتگو', { exact: true })).toBeInViewport();
   // Simulate receiving more than a page while disconnected, then fill the gap in place.
   const later = Date.now() + 1000;
-  await db.message.createMany({
-    data: Array.from({ length: 55 }, (_, index) => ({
-      ticketId: ticket.id,
-      senderId: f.agent.id,
-      body: `پیام پس از اتصال ${index}`,
-      createdAt: new Date(later + index * 1000),
-    })),
+  // Bulk fixtures model a committed change, including its normal invalidation.
+  await transaction(async (tx) => {
+    await tx.message.createMany({
+      data: Array.from({ length: 55 }, (_, index) => ({
+        ticketId: ticket.id,
+        senderId: f.agent.id,
+        body: `پیام پس از اتصال ${index}`,
+        createdAt: new Date(later + index * 1000),
+      })),
+    });
+    await tx.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
+    await ticketChanged(tx, ticket.id);
   });
-  await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
   await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeInViewport({
     timeout: 15000,
   });
@@ -247,15 +255,18 @@ test('long chats use a single message scroller, preserve older-message position 
     element.scrollTop = element.scrollHeight;
   });
   await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeInViewport();
-  await db.message.create({
-    data: {
-      ticketId: ticket.id,
-      senderId: f.agent.id,
-      body: 'پاسخ پس از بازگشت به انتهای گفتگو',
-      createdAt: new Date(later + 55000),
-    },
+  await transaction(async (tx) => {
+    await tx.message.create({
+      data: {
+        ticketId: ticket.id,
+        senderId: f.agent.id,
+        body: 'پاسخ پس از بازگشت به انتهای گفتگو',
+        createdAt: new Date(later + 55000),
+      },
+    });
+    await tx.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
+    await ticketChanged(tx, ticket.id);
   });
-  await db.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
   await expect(s.getByText('پاسخ پس از بازگشت به انتهای گفتگو', { exact: true })).toBeInViewport({
     timeout: 15000,
   });
