@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { db } from '@niticket/database';
 import { config } from '../infrastructure/config';
+import { publishRealtimeEvent } from '../infrastructure/realtime';
 import { objectBytes, putObject, deleteObject } from '../infrastructure/storage';
 import { detectFile, scanBytes } from '../infrastructure/scanner';
 import { log } from '../infrastructure/log';
@@ -297,6 +298,8 @@ export function startJobs() {
       if (event.processedAt) return;
       if (event.type === 'TICKET_NOTIFICATION') await processNotification(event.id, event.payload);
       else if (event.type === 'SCAN_ATTACHMENT') await processScan(event.id, event.payload);
+      else if (event.type === 'REALTIME_INVALIDATION')
+        await publishRealtimeEvent(event.id, event.payload);
       else throw new Error('Unknown event type');
     },
     { connection, concurrency: 4 },

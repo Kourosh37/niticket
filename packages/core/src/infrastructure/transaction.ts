@@ -1,13 +1,16 @@
 import { db, Prisma } from '@niticket/database';
 import { AppError } from '../domain/errors';
+import { withCommitCallbacks } from './after-commit';
 
 export async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      return await db.$transaction(fn, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        timeout: 15000,
-      });
+      return await withCommitCallbacks(() =>
+        db.$transaction(fn, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          timeout: 15000,
+        }),
+      );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
         if (attempt < 5) {
