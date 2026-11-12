@@ -284,11 +284,6 @@ export function Conversation({
 
   useEffect(() => {
     let active = true;
-    const draft = readDraft(id, permissions.staff);
-    if (draft) {
-      setBody(draft.body);
-      setVisibility(draft.visibility);
-    }
     type Snapshot = {
       messages: ChatMessage[];
       older: string | null;
@@ -298,6 +293,13 @@ export function Conversation({
     const snapshot = clientCache.peek<Snapshot>(`ui-chat:${id}`);
     const scope = `${permissions.staff}:${permissions.readOnly}`;
     const restore = async () => {
+      await Promise.resolve();
+      if (!active) return;
+      const draft = readDraft(id, permissions.staff);
+      if (draft) {
+        setBody(draft.body);
+        setVisibility(draft.visibility);
+      }
       try {
         if (snapshot && !initialContext) {
           await refresh(); // Reauthorize before showing a private retained page.
