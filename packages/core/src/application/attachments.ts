@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { AppError } from '../domain/errors';
 import { requireSavedReply } from './saved-replies';
 import { byteRange } from '../domain/byte-range';
+import { attachmentChanged } from './realtime-events';
 
 async function findUploadRetry(
   tx: Prisma.TransactionClient,
@@ -284,6 +285,7 @@ export async function completeUpload(actor: Actor, id: string) {
       await tx.outboxEvent.create({
         data: { type: 'SCAN_ATTACHMENT', payload: { attachmentId: id } },
       });
+    if (changed.count) await attachmentChanged(tx, a);
   });
   return { id, scanStatus: 'QUARANTINED' };
 }

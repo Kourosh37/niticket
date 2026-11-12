@@ -4,7 +4,12 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { db } from '@niticket/database';
 import { config } from '../infrastructure/config';
-import { publishRealtimeEvent } from '../infrastructure/realtime';
+import {
+  publishRealtimeEvent,
+  enqueueRealtime,
+  realtimeNamespace,
+} from '../infrastructure/realtime';
+import { attachmentChanged } from './realtime-events';
 import { objectBytes, putObject, deleteObject } from '../infrastructure/storage';
 import { detectFile, scanBytes } from '../infrastructure/scanner';
 import { log } from '../infrastructure/log';
@@ -97,6 +102,7 @@ export async function processNotification(eventId: string, payload: unknown) {
         },
         update: {},
       });
+      await enqueueRealtime(tx, { scope: 'user', userId, topics: ['notifications'] });
     }
     await tx.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
   });
@@ -141,7 +147,7 @@ export async function processScan(eventId: string, payload: unknown) {
     // Promote the exact scanned bytes to a new key: a replayed presigned PUT cannot replace approved content.
     const cleanKey = `clean/${randomUUID()}`;
     await putObject(cleanKey, cleanBytes, detected.mime);
-    await db.$transaction(async (tx) => {
+    await transaction(async (tx) => {
       const changed = await tx.attachment.updateMany({
         where: { id: attachmentId, scanStatus: 'QUARANTINED' },
         data: {
@@ -192,6 +198,7 @@ export async function processScan(eventId: string, payload: unknown) {
           },
         });
       }
+      if (changed.count) await attachmentChanged(tx, attachment);
       await tx.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
     });
     await deleteObject(attachment.objectKey);
@@ -210,21 +217,19 @@ export async function processScan(eventId: string, payload: unknown) {
         'Video stream invalid',
       ].includes(message)
     ) {
-      await db.$transaction([
-        db.attachment.update({
+      await transaction(async (tx) => {
+        await tx.attachment.update({
           where: { id: attachmentId },
           data: { scanStatus: 'REJECTED', scanResult: message },
-        }),
-        ...(attachment.ticketId
-          ? [
-              db.ticket.update({
-                where: { id: attachment.ticketId },
-                data: { updatedAt: new Date() },
-              }),
-            ]
-          : []),
-        db.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } }),
-      ]);
+        });
+        if (attachment.ticketId)
+          await tx.ticket.update({
+            where: { id: attachment.ticketId },
+            data: { updatedAt: new Date() },
+          });
+        await attachmentChanged(tx, attachment);
+        await tx.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
+      });
       await deleteObject(attachment.objectKey);
       return;
     }
@@ -343,11 +348,18 @@ export function startJobs() {
     }
   };
   const timer = setInterval(() => void dispatch(), 5000);
+  // Post-commit wakeups avoid adding the dispatch interval to normal message
+  // and attachment latency. The interval remains a durable recovery sweep.
+  const wake = new Redis(config().REDIS_URL, { maxRetriesPerRequest: 1 });
+  wake.on('error', () => {});
+  wake.on('message', () => void dispatch());
+  void wake.subscribe(`${realtimeNamespace()}:work`).catch(() => {});
   void dispatch();
   return {
     queue,
     close: async () => {
       clearInterval(timer);
+      wake.disconnect();
       while (dispatching) await new Promise((r) => setTimeout(r, 100));
       await worker.close();
       await queue.close();

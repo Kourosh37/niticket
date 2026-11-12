@@ -33,6 +33,8 @@ import { transaction } from '../infrastructure/transaction';
 import { settings } from './settings';
 import { refreshActor } from './context';
 import { requireSavedReply } from './saved-replies';
+import { ticketChanged } from './realtime-events';
+import { enqueueRealtime } from '../infrastructure/realtime';
 import {
   ticketSummarySelect as ticketSelect,
   ticketRepository,
@@ -67,6 +69,7 @@ async function event(
   await tx.auditLog.create({
     data: { actorId: actor.id, action: type, resourceId: ticket.id, metadata },
   });
+  await ticketChanged(tx, ticket.id, ['conversation', 'inbox'], internal);
   if (!internal)
     await tx.outboxEvent.create({
       data: {
@@ -187,6 +190,7 @@ export async function openConversation(actor: Actor, input: unknown) {
       },
     });
     // Opening a chat alone does not notify the unit; the first message does.
+    await ticketChanged(tx, ticket.id);
     return ticket;
   });
 }
@@ -648,11 +652,13 @@ export async function addMessage(actor: Actor, id: string, input: unknown) {
         ? { status: staff ? 'WAITING_FOR_USER' : 'OPEN', resolvedAt: null, closedAt: null }
         : {}),
     });
-    if (staff && !internal)
+    if (staff && !internal) {
       await tx.notification.updateMany({
         where: { userId: actor.id, ticketId: id, readAt: null },
         data: { readAt: new Date() },
       });
+      await enqueueRealtime(tx, { scope: 'user', userId: actor.id, topics: ['notifications'] });
+    }
     await event(
       tx,
       actor,
@@ -754,6 +760,11 @@ export async function transferTicket(actor: Actor, id: string, input: unknown) {
       to: data.departmentId,
       reason: data.reason,
     });
+    await enqueueRealtime(tx, {
+      scope: 'department',
+      departmentId: ticket.departmentId,
+      topics: ['inbox', 'access'],
+    });
     return { version: ticket.version + 1 };
   });
 }
@@ -807,6 +818,7 @@ export async function addActivityNote(
         metadata: { ticketId, activityId },
       },
     });
+    await ticketChanged(tx, ticketId, ['conversation'], true);
     return { id: note.id };
   });
 }

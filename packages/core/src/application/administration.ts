@@ -22,6 +22,7 @@ import { internalIdentityEmail } from './mobile-identity';
 import { iranianPhoneSchema, asciiDigits, normalizeIranianPhone } from '../domain/phone';
 import { config } from '../infrastructure/config';
 import { transaction } from '../infrastructure/transaction';
+import { enqueueRealtime } from '../infrastructure/realtime';
 import { refreshActor, requireFresh } from './context';
 
 async function audit(
@@ -179,6 +180,7 @@ export async function saveDepartment(actor: Actor, input: unknown, id?: string) 
     await audit(tx, actor, id ? 'DEPARTMENT_UPDATED' : 'DEPARTMENT_CREATED', department.id, {
       active: data.active,
     });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['access', 'inbox'] });
     return { id: department.id };
   });
 }
@@ -201,6 +203,8 @@ export async function provisionDepartment(actor: Actor, input: unknown) {
     });
     await audit(tx, actor, 'DEPARTMENT_CREATED', department.id, { responsibleUserId: person.id });
     await audit(tx, actor, 'STAFF_PROVISIONED', person.id, { departmentId: department.id });
+    await enqueueRealtime(tx, { scope: 'user', userId: person.id, topics: ['access'] });
+    await enqueueRealtime(tx, { scope: 'everyone', topics: ['inbox'] });
     return { id: department.id, responsibleUserId: person.id };
   });
 }
@@ -250,6 +254,7 @@ export async function saveMember(actor: Actor, departmentId: string, input: unkn
       },
     });
     await tx.session.deleteMany({ where: { userId: data.userId } });
+    await enqueueRealtime(tx, { scope: 'user', userId: data.userId, topics: ['access'] });
     await audit(tx, actor, 'MEMBERSHIP_CHANGED', membership.id, {
       departmentId,
       userId: data.userId,
@@ -421,6 +426,7 @@ export async function updateUser(actor: Actor, id: string, input: unknown) {
     if (changedPhone)
       await tx.account.deleteMany({ where: { userId: id, providerId: 'credential' } });
     await tx.session.deleteMany({ where: { userId: id } });
+    await enqueueRealtime(tx, { scope: 'user', userId: id, topics: ['access'] });
     await audit(tx, actor, 'USER_ACCESS_CHANGED', id, { fields: Object.keys(data) });
     return { id };
   });
@@ -483,9 +489,13 @@ export async function readNotification(actor: Actor, input: unknown) {
   const { id } = z.object({ id: uuid.optional() }).strict().parse(input);
   if (userRole(actor) === 'STAFF')
     fail('REPLY_REQUIRED', 403, 'اعلان‌های مسئول واحد پس از ارسال پاسخ عمومی خوانده می‌شوند.');
-  await db.notification.updateMany({
-    where: { userId: actor.id, readAt: null, ...(id ? { id } : {}) },
-    data: { readAt: new Date() },
+  await transaction(async (tx) => {
+    const changed = await tx.notification.updateMany({
+      where: { userId: actor.id, readAt: null, ...(id ? { id } : {}) },
+      data: { readAt: new Date() },
+    });
+    if (changed.count)
+      await enqueueRealtime(tx, { scope: 'user', userId: actor.id, topics: ['notifications'] });
   });
   return { ok: true };
 }

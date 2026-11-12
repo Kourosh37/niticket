@@ -3,6 +3,7 @@ import type { Actor } from '../domain/authorization';
 import { fail } from '../domain/errors';
 import { sessionDevice } from '../domain/session-device';
 import { transaction } from '../infrastructure/transaction';
+import { enqueueRealtime } from '../infrastructure/realtime';
 import { uuid } from '../validation';
 import { refreshActor } from './context';
 
@@ -76,6 +77,7 @@ export async function revokeSessions(actor: Actor, sessionId?: string) {
         metadata: { count: result.count },
       },
     });
+    await enqueueRealtime(tx, { scope: 'user', userId: actor.id, topics: ['access'] });
     return { revoked: result.count };
   });
 }

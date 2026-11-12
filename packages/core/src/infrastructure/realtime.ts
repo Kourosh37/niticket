@@ -31,15 +31,17 @@ export async function enqueueRealtime(tx: Prisma.TransactionClient, input: Realt
     data: { type: 'REALTIME_INVALIDATION', payload: change },
   });
   afterCommit(() => {
-    void publishRealtimeEvent(event.id, change).catch((error: unknown) => {
-      log.warn(
-        {
-          operation: 'realtime_publish',
-          category: error instanceof Error ? error.name : 'unknown',
-        },
-        'Realtime delivery deferred to outbox',
-      );
-    });
+    void publishRealtimeEvent(event.id, change)
+      .then(() => redis().publish(`${realtimeNamespace()}:work`, 'wake'))
+      .catch((error: unknown) => {
+        log.warn(
+          {
+            operation: 'realtime_publish',
+            category: error instanceof Error ? error.name : 'unknown',
+          },
+          'Realtime delivery deferred to outbox',
+        );
+      });
   });
   return event.id;
 }

@@ -8,6 +8,7 @@ import { otpCodeSchema, passwordSchema } from '../domain/phone';
 import { hashPassword, verifyDummyPassword } from '../infrastructure/auth';
 import { rateLimit } from '../infrastructure/redis';
 import { transaction } from '../infrastructure/transaction';
+import { enqueueRealtime } from '../infrastructure/realtime';
 import { refreshActor, requireFresh } from './context';
 import { consumeOtp, issueOtp } from './otp';
 
@@ -100,6 +101,7 @@ export async function setPassword(actor: Actor, input: unknown) {
         },
       });
     await tx.session.deleteMany({ where: { userId: actor.id, id: { not: actor.sessionId } } });
+    await enqueueRealtime(tx, { scope: 'user', userId: actor.id, topics: ['access'] });
     await tx.auditLog.create({
       data: {
         actorId: actor.id,

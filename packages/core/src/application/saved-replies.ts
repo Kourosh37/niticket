@@ -5,6 +5,7 @@ import { fail } from '../domain/errors';
 import { normalizeSearchText } from '../domain/search-text';
 import { uuid } from '../validation';
 import { transaction } from '../infrastructure/transaction';
+import { enqueueRealtime } from '../infrastructure/realtime';
 import { refreshActor } from './context';
 
 export const savedReplySchema = z
@@ -164,6 +165,11 @@ export async function createSavedReply(actor: Actor, input: unknown) {
         metadata: { departmentId: data.departmentId },
       },
     });
+    await enqueueRealtime(tx, {
+      scope: 'department',
+      departmentId: data.departmentId,
+      topics: ['saved-replies'],
+    });
     return reply;
   });
 }
@@ -198,7 +204,13 @@ export async function updateSavedReply(actor: Actor, id: string, input: unknown)
     await tx.auditLog.create({
       data: { actorId: actor.id, action: 'SAVED_REPLY_UPDATED', resourceId: id, metadata: {} },
     });
-    return tx.savedReply.findUniqueOrThrow({ where: { id }, select });
+    const reply = await tx.savedReply.findUniqueOrThrow({ where: { id }, select });
+    await enqueueRealtime(tx, {
+      scope: 'department',
+      departmentId: reply.departmentId,
+      topics: ['saved-replies'],
+    });
+    return reply;
   });
 }
 
@@ -213,6 +225,15 @@ export async function deleteSavedReply(actor: Actor, id: string, input: unknown)
     });
     if (!changed.count) fail('CONFLICT', 409, 'پیام آماده تغییر کرده است؛ فهرست را تازه کنید.');
     // Keep approved bytes and sent message snapshots intact when removing a template.
+    const reply = await tx.savedReply.findUniqueOrThrow({
+      where: { id },
+      select: { departmentId: true },
+    });
+    await enqueueRealtime(tx, {
+      scope: 'department',
+      departmentId: reply.departmentId,
+      topics: ['saved-replies'],
+    });
     await tx.auditLog.create({
       data: { actorId: actor.id, action: 'SAVED_REPLY_DELETED', resourceId: id, metadata: {} },
     });

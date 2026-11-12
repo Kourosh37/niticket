@@ -12,6 +12,8 @@ import { fail } from '../domain/errors';
 import { uuid } from '../validation';
 import { transaction } from '../infrastructure/transaction';
 import { refreshActor } from './context';
+import { ticketChanged } from './realtime-events';
+import { enqueueRealtime } from '../infrastructure/realtime';
 
 const messageIds = z.array(uuid).min(1).max(50);
 
@@ -34,6 +36,18 @@ export async function markMessagesSeen(actor: Actor, ticketId: string, input: un
           ],
         }
       : { visibility: 'PUBLIC', senderId: { not: actor.id } };
+    const publicChange =
+      !isStaff(actor, ticket) ||
+      !!(await tx.message.findFirst({
+        where: {
+          ticketId,
+          id: { in: data.messageIds },
+          visibility: 'PUBLIC',
+          senderId: ticket.creatorId,
+          readAt: null,
+        },
+        select: { id: true },
+      }));
     const result = await tx.message.updateMany({
       where: {
         AND: [
@@ -69,6 +83,13 @@ export async function markMessagesSeen(actor: Actor, ticketId: string, input: un
           })
         : { count: 0 };
     // Receipt-only changes do not advance the ticket revision or activity time.
+    if (result.count) await ticketChanged(tx, ticketId, ['receipts'], !publicChange);
+    if (result.count || notifications.count)
+      await enqueueRealtime(tx, {
+        scope: 'user',
+        userId: actor.id,
+        topics: ['inbox', 'notifications'],
+      });
     return { updated: result.count, notificationsRead: notifications.count };
   });
 }
