@@ -116,12 +116,17 @@ test('keeps requester and officer navigation at the bottom and shares private un
   await expect(dock.getByRole('link')).toHaveCount(2);
   await expect(badge).toHaveText('۲');
   await expect(page.locator('header')).toHaveCount(0);
-  await db.notification.createMany({
-    data: Array.from({ length: 100 }, () => ({
-      userId: f.agent.id,
-      eventId: randomUUID(),
-      title: 'اعلان جدید',
-    })),
+  const { transaction } = await import('@niticket/core/infrastructure/transaction');
+  const { enqueueRealtime } = await import('@niticket/core/infrastructure/realtime');
+  await transaction(async (tx) => {
+    await tx.notification.createMany({
+      data: Array.from({ length: 100 }, () => ({
+        userId: f.agent.id,
+        eventId: randomUUID(),
+        title: 'اعلان جدید',
+      })),
+    });
+    await enqueueRealtime(tx, { scope: 'user', userId: f.agent.id, topics: ['notifications'] });
   });
   await page.evaluate(() => window.dispatchEvent(new Event('notifications:changed')));
   await expect(badge).toHaveText('۹۹+');
