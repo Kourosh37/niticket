@@ -32,7 +32,9 @@ export function useRealtimeSync(
     let stopped = false,
       running = false,
       dirty = false,
-      lastStart = 0;
+      lastStart = 0,
+      failures = 0,
+      retryAfter = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let poll: ReturnType<typeof setInterval>;
     const topics = key.split(',') as Topic[];
@@ -44,8 +46,11 @@ export function useRealtimeSync(
       lastStart = Date.now();
       try {
         if ((await latest.current()) === false) dirty = true;
+        failures = 0;
+        retryAfter = 0;
       } catch {
-        /* Periodic reconciliation recovers HTTP/network failures. */
+        dirty = true;
+        retryAfter = Date.now() + Math.min(30000, 5000 * 2 ** Math.min(failures++, 3));
       } finally {
         running = false;
         if (!stopped && dirty) schedule();
@@ -54,7 +59,10 @@ export function useRealtimeSync(
     const schedule = () => {
       dirty = true;
       if (!stopped && !running && !timer)
-        timer = setTimeout(() => void run(), Math.max(0, 750 - (Date.now() - lastStart)));
+        timer = setTimeout(
+          () => void run(),
+          Math.max(0, 750 - (Date.now() - lastStart), retryAfter - Date.now()),
+        );
     };
     const interval = () => {
       clearInterval(poll);
@@ -62,6 +70,11 @@ export function useRealtimeSync(
     };
     const unsubscribe = realtime.subscribe((signal) => {
       if (signal.kind === 'state') interval();
+      if (signal.kind === 'ready') {
+        retryAfter = 0;
+        clearTimeout(timer);
+        timer = undefined;
+      }
       if (matchesSignal(signal, topics, ticketId)) schedule();
     });
     interval();

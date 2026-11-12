@@ -105,6 +105,7 @@ it('defers busy and hidden consumers without losing their invalidation', async (
 });
 
 it('recovers rejected requests and uses the latest callback without reconnecting subscriptions', async () => {
+  transport.live = true;
   const first = vi.fn().mockRejectedValue(new TypeError('Offline'));
   const second = vi.fn().mockResolvedValue(undefined);
   const view = renderHook(({ work }) => useRealtimeSync(work, ['inbox']), {
@@ -113,7 +114,31 @@ it('recovers rejected requests and uses the latest callback without reconnecting
   await act(() => vi.advanceTimersByTimeAsync(1));
   view.rerender({ work: second });
   act(() => emit({ kind: 'ready' }));
-  await act(() => vi.advanceTimersByTimeAsync(750));
+  await act(() => vi.advanceTimersByTimeAsync(1000));
   expect(second).toHaveBeenCalledTimes(1);
   expect(transport.listeners.size).toBe(1);
+});
+
+it('retries failed HTTP reads with bounded backoff while a stream remains healthy', async () => {
+  transport.live = true;
+  const work = vi
+    .fn()
+    .mockRejectedValueOnce(new TypeError('Temporary HTTP failure'))
+    .mockResolvedValue(undefined);
+  renderHook(() => useRealtimeSync(work, ['conversation']));
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  await act(() => vi.advanceTimersByTimeAsync(4998));
+  expect(work).toHaveBeenCalledTimes(1);
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(work).toHaveBeenCalledTimes(2);
+});
+
+it('supports consumers whose debounced HTTP loader already handles initial data', async () => {
+  const work = vi.fn().mockResolvedValue(undefined);
+  renderHook(() => useRealtimeSync(work, ['saved-replies'], { initial: false }));
+  await act(() => vi.advanceTimersByTimeAsync(1000));
+  expect(work).not.toHaveBeenCalled();
+  act(() => emit({ kind: 'change', topics: ['saved-replies'], ticketIds: [] }));
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(work).toHaveBeenCalledTimes(1);
 });
