@@ -338,14 +338,6 @@ textarea {
 :root[data-theme='light'] .messenger-input-row textarea {
   background: var(--background);
 }
-:root[data-theme='light'] .inbox-tabs {
-  background: var(--surface-alt);
-}
-:root[data-theme='light'] .inbox-tabs a[aria-current] {
-  background: var(--surface);
-  color: var(--accent-foreground);
-  border-color: var(--primary);
-}
 :root[data-theme='light'] .inbox-thread.thread-action {
   background: var(--accent);
 }

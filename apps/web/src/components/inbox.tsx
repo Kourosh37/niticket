@@ -8,6 +8,7 @@ import { Avatar } from './avatar';
 import { Button } from './ui/button';
 import { Select } from './ui/select';
 import { InboxRefresh } from './inbox-refresh';
+import { InboxTabs } from './inbox-tabs';
 import { UnreadInboxNotice } from './notification-status';
 import { MessageSearch } from './message-search';
 import { LiveSearchForm } from './live-search-form';
@@ -73,8 +74,9 @@ export async function Inbox({
       <h1 className="sr-only">{staff ? 'گفتگوهای واحد' : 'گفتگوهای من'}</h1>
       <UnreadInboxNotice />
       <section className="inbox-panel" aria-label="فهرست گفتگوها">
-        <nav className="inbox-tabs" aria-label="نمایش گفتگوها">
-          {(staff
+        <InboxTabs
+          active={view}
+          tabs={(staff
             ? [
                 ['action', 'پیام‌های جدید'],
                 ['answered', 'پاسخ داده‌شده'],
@@ -85,16 +87,8 @@ export async function Inbox({
                 ['action', 'پاسخ‌های جدید'],
                 ['answered', 'پاسخ داده‌شده'],
               ]
-          ).map(([key, label]) => (
-            <Link
-              key={key}
-              href={href({ view: key })}
-              aria-current={view === key ? 'page' : undefined}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
+          ).map(([key, label]) => ({ key, label, href: href({ view: key }) }))}
+        />
         {departments.length > 1 && (
           <LiveSearchForm
             action={base}
