@@ -1,6 +1,7 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
+import { goToModalStep } from '../helpers/modal-steps';
 
 try {
   loadEnvFile('.env');
@@ -85,10 +86,13 @@ test('keeps administration forms fully visible and preserves values across secti
   await page.getByRole('button', { name: 'واحد جدید', exact: true }).click();
   const create = page.getByRole('dialog', { name: 'ایجاد واحد و حساب مسئول', exact: true });
   await create.getByLabel('نام واحد', { exact: true }).fill('نامی که در تغییر بخش حفظ می‌شود');
+  await create.getByRole('button', { name: 'مرحله بعد', exact: true }).click();
+  await create.getByLabel('نام و نام خانوادگی مسئول', { exact: true }).fill('مسئول نمونه');
+  await create.getByLabel('شماره موبایل مسئول', { exact: true }).fill('09121234567');
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const section of ['واحد', 'مسئول', 'تصویر']) {
-      await create.getByRole('tab', { name: section, exact: true }).click();
+      await goToModalStep(create, section);
       await fits(create);
       if (viewport.width === 390 && section === 'واحد')
         await page.screenshot({
@@ -96,12 +100,16 @@ test('keeps administration forms fully visible and preserves values across secti
           animations: 'disabled',
         });
       await expect(
-        create.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }),
+        create.getByRole('button', {
+          name: section === 'تصویر' ? 'ایجاد واحد و مسئول' : 'مرحله بعد',
+          exact: true,
+        }),
       ).toBeInViewport({ ratio: 1 });
     }
   }
-  // A hidden required field must be revealed and focused, rather than causing a silent failure.
-  await create.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }).click();
+  await goToModalStep(create, 'مسئول');
+  await create.getByLabel('نام و نام خانوادگی مسئول', { exact: true }).fill('');
+  await create.getByRole('button', { name: 'مرحله بعد', exact: true }).click();
   await expect(create.getByRole('tab', { name: 'مسئول', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -117,7 +125,7 @@ test('keeps administration forms fully visible and preserves values across secti
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const section of ['اطلاعات', 'دسترسی']) {
-      await edit.getByRole('tab', { name: section, exact: true }).click();
+      await goToModalStep(edit, section);
       await fits(edit);
     }
   }
@@ -127,7 +135,7 @@ test('keeps administration forms fully visible and preserves values across secti
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const section of ['اطلاعات حساب', 'تصویر پروفایل']) {
-      await person.getByRole('tab', { name: section, exact: true }).click();
+      await goToModalStep(person, section);
       await fits(person);
     }
   }
@@ -176,7 +184,7 @@ test('fits all saved-reply sections, paginates the library and supports nested h
   const editor = page.getByRole('dialog', { name: 'پیام آماده جدید', exact: true });
   await editor.getByLabel('عنوان پیام آماده', { exact: true }).fill('پیش‌نویس محفوظ');
   await editor.getByLabel('متن پیام آماده', { exact: true }).fill('متن محفوظ پس از تغییر بخش');
-  await editor.getByRole('tab', { name: 'فایل‌ها', exact: true }).click();
+  await goToModalStep(editor, 'فایل‌ها');
   await editor.getByLabel('پیوست پیام آماده', { exact: true }).setInputFiles(
     Array.from({ length: 5 }, (_, index) => ({
       name: index === 0 ? `${'long-filename-'.repeat(15)}.txt` : `attachment-${index}.txt`,
@@ -187,7 +195,7 @@ test('fits all saved-reply sections, paginates the library and supports nested h
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const section of ['متن پیام', 'فایل‌ها', 'پیام صوتی']) {
-      await editor.getByRole('tab', { name: section, exact: true }).click();
+      await goToModalStep(editor, section);
       await fits(editor);
       if (viewport.width === 390 && section === 'متن پیام')
         await page.screenshot({
@@ -241,7 +249,7 @@ test('fits all saved-reply sections, paginates the library and supports nested h
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const section of ['یادداشت', 'پیام صوتی']) {
-      await note.getByRole('tab', { name: section, exact: true }).click();
+      await goToModalStep(note, section);
       await fits(note);
     }
   }

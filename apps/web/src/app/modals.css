@@ -162,6 +162,101 @@
   margin: 0;
   font-size: 12px;
 }
+.modal-form-steps {
+  align-items: center;
+  gap: 3px;
+}
+.modal-form-steps > button {
+  padding-inline: 5px;
+  gap: 5px;
+}
+.modal-form-steps > button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.modal-form-steps .modal-step-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.modal-form-steps > button .modal-step-number {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+}
+.modal-form-steps > button[data-complete='true'] .modal-step-number {
+  border-color: var(--success);
+  background: var(--success-surface);
+  color: var(--success);
+}
+.modal-form-steps > button[aria-selected='true'] .modal-step-number {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.modal-form-steps > button .modal-step-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+.modal-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.modal-form-actions > .button {
+  min-height: 44px;
+  padding-inline: 10px;
+  gap: 6px;
+  white-space: nowrap;
+}
+.modal-form-actions > .modal-form-primary {
+  flex: 1;
+  min-width: 0;
+}
+.modal-form-actions > .button > svg {
+  flex-shrink: 0;
+}
+.modal-form-panel:not([hidden]) {
+  animation: modal-step-enter 140ms ease-out;
+}
+@keyframes modal-step-enter {
+  from {
+    opacity: 0.4;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (max-width: 400px) {
+  .modal-form-actions > .button {
+    padding-inline: 8px;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .modal-form-steps > button {
+    font-size: 11px;
+    gap: 4px;
+    padding-inline: 3px;
+  }
+  .modal-form-steps .modal-step-arrow {
+    width: 10px;
+  }
+  .modal-form-steps > button .modal-step-number {
+    width: 18px;
+    height: 18px;
+  }
+}
 .modal-form:has(.reauthentication-inline) > :is(.modal-form-tabs, .modal-form-fields),
 .modal-form-footer:has(.reauthentication-inline) > :not(.reauthentication-inline) {
   display: none;
@@ -484,5 +579,6 @@
 @media (prefers-reduced-motion: reduce) {
   .modal-form-panel {
     scroll-behavior: auto;
+    animation: none;
   }
 }

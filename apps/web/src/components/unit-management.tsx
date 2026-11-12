@@ -79,6 +79,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
       setError(error instanceof Error ? error.message : 'ذخیره اطلاعات انجام نشد.');
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -164,6 +165,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                   size="sm"
                   onClick={() => {
                     setPerson(m.user);
+                    setPhoto(null);
                     setError('');
                   }}
                   disabled={busy}
@@ -253,6 +255,8 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
       >
         <ModalForm
           disabled={busy}
+          submitLabel="ایجاد واحد و مسئول"
+          busyLabel="در حال ایجاد…"
           sections={[
             {
               title: 'واحد',
@@ -347,7 +351,6 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
               {error}
             </p>
           )}
-          <Button disabled={busy}>{busy ? 'در حال ایجاد…' : 'ایجاد واحد و مسئول'}</Button>
         </ModalForm>
       </Modal>
       <Modal
@@ -360,6 +363,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
         {editing && (
           <ModalForm
             disabled={busy}
+            submitLabel="ذخیره واحد"
             sections={[
               {
                 title: 'اطلاعات',
@@ -438,14 +442,16 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                 {error}
               </p>
             )}
-            <Button disabled={busy}>ذخیره واحد</Button>
           </ModalForm>
         )}
       </Modal>
       <Modal
         open={!!person}
         onOpenChange={(open) => {
-          if (!open && !busy) setPerson(null);
+          if (!open && !busy) {
+            setPerson(null);
+            setPhoto(null);
+          }
         }}
         title="ویرایش حساب مسئول واحد"
       >
@@ -453,12 +459,18 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
           <>
             <ModalForm
               disabled={busy}
+              submitLabel="ذخیره حساب مسئول"
               sections={[
                 { title: 'اطلاعات حساب', content: <ResponsibleFields person={person} /> },
                 {
                   title: 'تصویر پروفایل',
                   content: (
-                    <AvatarUpload userId={person.id} name={person.name} image={person.image} />
+                    <AvatarUpload
+                      userId={person.id}
+                      name={person.name}
+                      image={person.image}
+                      onFileChange={setPhoto}
+                    />
                   ),
                 },
               ]}
@@ -473,18 +485,26 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
                       phoneNumber: f.get('phoneNumber'),
                     }),
                   });
+                  if (photo) {
+                    setProgress(0);
+                    await uploadAvatar(photo, person.id, setProgress);
+                    setProgress(null);
+                  }
                   setPerson(null);
+                  setPhoto(null);
                   setSuccess('اطلاعات مسئول ذخیره و نشست‌های قبلی او لغو شد.');
                 });
               }}
             >
               {reauthentication.confirmation}
+              {progress !== null && (
+                <UploadProgress percent={progress} label="بارگذاری تصویر مسئول" />
+              )}
               {error && (
                 <p role="alert" className="error-message">
                   {error}
                 </p>
               )}
-              <Button disabled={busy}>ذخیره حساب مسئول</Button>
             </ModalForm>
           </>
         )}

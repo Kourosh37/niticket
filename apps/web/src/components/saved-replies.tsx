@@ -226,6 +226,8 @@ function SavedReplyEditor({
         onSubmit={submit}
         disabled={busy}
         lockNavigation={recording}
+        submitLabel="ذخیره پیام آماده"
+        onCancel={onClose}
         sections={[
           {
             title: 'متن پیام',
@@ -355,14 +357,6 @@ function SavedReplyEditor({
             {error}
           </p>
         )}
-        <div className="saved-reply-actions">
-          <Button type="submit" disabled={busy || recording} aria-busy={busy}>
-            {busy ? 'در حال ذخیره…' : 'ذخیره پیام آماده'}
-          </Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
-            انصراف
-          </Button>
-        </div>
       </ModalForm>
     </Modal>
   );

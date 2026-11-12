@@ -30,10 +30,16 @@ const sections = [
   {
     title: 'اطلاعات',
     content: (
-      <label>
-        نام
-        <input required name="name" />
-      </label>
+      <>
+        <label>
+          نام
+          <input required name="name" />
+        </label>
+        <label>
+          متن
+          <textarea name="body" />
+        </label>
+      </>
     ),
   },
   {
@@ -53,72 +59,135 @@ const sections = [
   },
 ];
 
-it('keeps hidden fields, files and checkboxes mounted and submits all sections together', () => {
+it('shows Next until the last step, prevents jumping ahead and never submits while advancing', () => {
+  const save = vi.fn();
+  render(<ModalForm sections={sections} onSubmit={save} submitLabel="ذخیره" />);
+  expect(screen.queryByRole('button', { name: 'ذخیره' })).toBeNull();
+  expect(screen.getByRole('tab', { name: 'پیوست' }).hasAttribute('disabled')).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  expect(screen.getByRole('tab', { name: 'اطلاعات' }).getAttribute('aria-selected')).toBe('true');
+  fireEvent.change(screen.getByLabelText('نام'), { target: { value: 'نام محفوظ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  expect(screen.getByRole('tab', { name: 'پیوست' }).getAttribute('aria-current')).toBe('step');
+  expect(screen.queryByRole('button', { name: 'مرحله بعد' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'ذخیره' })).toBeTruthy();
+  expect(save).not.toHaveBeenCalled();
+});
+
+it('keeps files, text and checkboxes mounted across Back and Next and submits every section together', () => {
   const save = vi.fn();
   render(
     <ModalForm
       sections={sections}
-      onSubmit={(event) => {
-        event.preventDefault();
-        save(new FormData(event.currentTarget));
-      }}
-    >
-      <button type="submit">ذخیره</button>
-    </ModalForm>,
+      submitLabel="ذخیره"
+      onSubmit={(event) => save(new FormData(event.currentTarget))}
+    />,
   );
   fireEvent.change(screen.getByLabelText('نام'), { target: { value: 'نام محفوظ' } });
-  fireEvent.click(screen.getByRole('tab', { name: 'پیوست' }));
+  fireEvent.change(screen.getByLabelText('متن'), { target: { value: 'متن محفوظ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
   const fileInput = screen.getByLabelText('فایل');
   fireEvent.change(fileInput, { target: { files: [new File(['contents'], 'file.txt')] } });
   fireEvent.click(screen.getByLabelText('انتشار'));
-  fireEvent.click(screen.getByRole('tab', { name: 'اطلاعات' }));
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله قبل' }));
+  expect((screen.getByLabelText('متن') as HTMLTextAreaElement).value).toBe('متن محفوظ');
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
   expect(screen.getByLabelText('فایل')).toBe(fileInput);
   expect((fileInput as HTMLInputElement).files?.[0].name).toBe('file.txt');
-  expect((screen.getByLabelText('نام') as HTMLInputElement).value).toBe('نام محفوظ');
   fireEvent.click(screen.getByRole('button', { name: 'ذخیره' }));
   expect(save).toHaveBeenCalledTimes(1);
   expect(save.mock.calls[0][0].get('name')).toBe('نام محفوظ');
+  expect(save.mock.calls[0][0].get('body')).toBe('متن محفوظ');
   expect(save.mock.calls[0][0].get('publish')).toBe('on');
 });
 
-it('reveals and focuses an invalid field in another section before submitting', async () => {
+it('revalidates all sections at confirmation and reveals a hidden invalid field', async () => {
   const save = vi.fn();
-  render(
-    <ModalForm sections={sections} onSubmit={save}>
-      <button type="submit">ذخیره</button>
-    </ModalForm>,
-  );
-  fireEvent.click(screen.getByRole('tab', { name: 'پیوست' }));
+  render(<ModalForm sections={sections} onSubmit={save} submitLabel="ذخیره" />);
+  fireEvent.change(screen.getByLabelText('نام'), { target: { value: 'نام معتبر' } });
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  fireEvent.change(screen.getByLabelText('نام'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: 'ذخیره' }));
   expect(save).not.toHaveBeenCalled();
   expect(screen.getByRole('tab', { name: 'اطلاعات' }).getAttribute('aria-selected')).toBe('true');
-  expect(screen.getByLabelText('نام').closest('[hidden]')).toBeNull();
   await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('نام')));
 });
 
-it('provides RTL roving tab navigation and locks sections during recording or submission', () => {
+it('uses RTL keyboard navigation for reached steps and does not advance during composition or textarea Enter', async () => {
+  render(<ModalForm sections={sections} onSubmit={vi.fn()} submitLabel="ذخیره" />);
+  const name = screen.getByLabelText('نام');
+  fireEvent.change(name, { target: { value: 'نام معتبر' } });
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'اطلاعات' }), { key: 'End' });
+  expect(screen.getByRole('tab', { name: 'پیوست' }).hasAttribute('disabled')).toBe(true);
+  fireEvent.keyDown(name, { key: 'Enter', isComposing: true });
+  fireEvent.keyDown(screen.getByLabelText('متن'), { key: 'Enter' });
+  expect(screen.queryByRole('button', { name: 'ذخیره' })).toBeNull();
+  fireEvent.keyDown(name, { key: 'Enter' });
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'پیوست' })),
+  );
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'اطلاعات' })),
+  );
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'پیوست' })),
+  );
+});
+
+it('locks navigation while recording, blocks all submission while busy and only applies payload restrictions on the final step', () => {
+  const save = vi.fn();
   const view = render(
-    <ModalForm sections={sections} onSubmit={vi.fn()}>
-      <button>ذخیره</button>
-    </ModalForm>,
+    <ModalForm sections={sections} onSubmit={save} submitLabel="ذخیره" lockNavigation />,
   );
-  fireEvent.keyDown(screen.getByRole('tab', { name: 'اطلاعات' }), { key: 'ArrowLeft' });
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'پیوست' }));
-  fireEvent.keyDown(document.activeElement!, { key: 'Home' });
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'اطلاعات' }));
-  view.rerender(
-    <ModalForm sections={sections} onSubmit={vi.fn()} lockNavigation>
-      <button>ذخیره</button>
-    </ModalForm>,
-  );
+  expect(screen.getByRole('button', { name: 'مرحله بعد' }).hasAttribute('disabled')).toBe(true);
   expect(screen.getAllByRole('tab').every((tab) => tab.hasAttribute('disabled'))).toBe(true);
-  expect((screen.getByLabelText('نام') as HTMLInputElement).disabled).toBe(false);
-  view.rerender(
-    <ModalForm sections={sections} onSubmit={vi.fn()} disabled>
-      <button>ذخیره</button>
-    </ModalForm>,
-  );
+  expect(screen.getByLabelText('نام').matches(':disabled')).toBe(false);
+  view.rerender(<ModalForm sections={sections} onSubmit={save} submitLabel="ذخیره" disabled />);
   expect(screen.getByLabelText('نام').matches(':disabled')).toBe(true);
+  fireEvent.submit(view.container.querySelector('form')!);
+  expect(save).not.toHaveBeenCalled();
+  view.rerender(
+    <ModalForm sections={sections} onSubmit={save} submitLabel="ذخیره" submitDisabled />,
+  );
+  fireEvent.change(screen.getByLabelText('نام'), { target: { value: 'نام معتبر' } });
+  expect(screen.getByRole('button', { name: 'مرحله بعد' }).hasAttribute('disabled')).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  expect(screen.getByRole('button', { name: 'ذخیره' }).hasAttribute('disabled')).toBe(true);
+});
+
+it('allows optional steps to be empty and requires an intentional final confirmation', () => {
+  const save = vi.fn();
+  const optional = [
+    { title: 'متن', content: <textarea /> },
+    { title: 'فایل', content: <input type="file" /> },
+    { title: 'وویس', content: <p>وویس اختیاری</p> },
+  ];
+  const view = render(<ModalForm sections={optional} onSubmit={save} submitLabel="تأیید" />);
+  fireEvent.submit(view.container.querySelector('form')!);
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'تأیید' }), { detail: 2 });
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'تأیید' }), { detail: 1 });
+  expect(save).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a single-section form directly submittable', () => {
+  const save = vi.fn();
+  render(
+    <ModalForm
+      sections={[{ title: 'نام', content: <input defaultValue="مقدار" required /> }]}
+      onSubmit={save}
+      submitLabel="ذخیره"
+    />,
+  );
+  expect(screen.queryByRole('tablist')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'مرحله بعد' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'ذخیره' }));
+  expect(save).toHaveBeenCalledTimes(1);
 });
 
 it('bounds rendered list items, keeps the current item on rotation and clamps pages after deletion', () => {
@@ -149,8 +218,10 @@ it('bounds rendered list items, keeps the current item on rotation and clamps pa
 it('paginates long Persian text without losing whitespace or splitting emoji characters', () => {
   const text = 'متن فارسی 👩‍💻\n'.repeat(70) + 'پایان';
   render(<PagedText text={text} />);
-  const navigation = screen.getByRole('navigation', { name: 'صفحه‌بندی متن' });
-  const next = within(navigation).getByRole('button', { name: 'صفحه بعدی' });
+  const next = within(screen.getByRole('navigation', { name: 'صفحه‌بندی متن' })).getByRole(
+    'button',
+    { name: 'صفحه بعدی' },
+  );
   let restored = '';
   for (;;) {
     restored += document.querySelector('.modal-text-page')!.textContent;

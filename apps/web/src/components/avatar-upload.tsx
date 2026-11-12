@@ -12,10 +12,12 @@ export function AvatarUpload({
   name,
   image,
   userId,
+  onFileChange,
 }: {
   name: string;
   image?: string | null;
   userId?: string;
+  onFileChange?: (file: File | null) => void;
 }) {
   const id = useId(),
     router = useRouter();
@@ -45,6 +47,15 @@ export function AvatarUpload({
               if (!file) return;
               if (file.size > 2097152) {
                 setError('حجم تصویر حداکثر ۲ مگابایت باشد.');
+                setMessage('');
+                e.target.value = '';
+                onFileChange?.(null);
+                return;
+              }
+              if (onFileChange) {
+                setError('');
+                setMessage('تصویر انتخاب شد؛ پس از تأیید نهایی ذخیره می‌شود.');
+                onFileChange(file);
                 return;
               }
               setBusy(true);

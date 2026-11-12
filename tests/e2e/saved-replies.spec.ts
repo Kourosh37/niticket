@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
+import { goToModalStep } from '../helpers/modal-steps';
 
 try {
   loadEnvFile('.env');
@@ -52,7 +53,7 @@ test('manages a minimal media library, searches and sends a complete saved reply
   await editor
     .getByLabel('متن پیام آماده', { exact: true })
     .fill('متن پاسخ آماده همراه عکس، سند، ویدیو و صدا');
-  await editor.getByRole('tab', { name: 'فایل‌ها', exact: true }).click();
+  await goToModalStep(editor, 'فایل‌ها');
   await editor
     .getByLabel('پیوست پیام آماده', { exact: true })
     .setInputFiles([
@@ -60,7 +61,7 @@ test('manages a minimal media library, searches and sends a complete saved reply
       'tests/fixtures/document.pdf',
       'tests/fixtures/video.webm',
     ]);
-  await editor.getByRole('tab', { name: 'پیام صوتی', exact: true }).click();
+  await goToModalStep(editor, 'پیام صوتی');
   await editor.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
   await page.waitForTimeout(1100);
   await editor.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
@@ -157,6 +158,10 @@ test('manages a minimal media library, searches and sends a complete saved reply
     .first()
     .click();
   await page.getByLabel('متن پیام آماده', { exact: true }).fill('متن جدید کتابخانه');
+  await goToModalStep(
+    page.getByRole('dialog', { name: 'ویرایش پیام آماده', exact: true }),
+    'پیام صوتی',
+  );
   await page.getByRole('button', { name: 'ذخیره پیام آماده', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: `حذف ${title}`, exact: true }).click();

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { goToModalStep } from '../helpers/modal-steps';
 import { loadEnvFile } from 'node:process';
 import { randomBytes, randomUUID, randomInt } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -94,6 +95,7 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
   await page.getByRole('button', { name: `ویرایش ${f.department.name}`, exact: true }).click();
   const updatedName = `واحد تأیید رمز ${randomUUID().slice(0, 8)}`;
   await page.getByLabel('نام واحد', { exact: true }).fill(updatedName);
+  await goToModalStep(page.getByRole('dialog', { name: 'ویرایش واحد', exact: true }), 'دسترسی');
   await page.getByRole('button', { name: 'ذخیره واحد', exact: true }).click();
   const dialog = page.getByRole('dialog');
   const confirmation = dialog.getByRole('group', { name: 'تأیید هویت برای ادامه عملیات' });
@@ -295,11 +297,17 @@ test('three roles complete a ticket with private history notes, file previews an
   const name = `واحد مرورگر ${Date.now()}`,
     officerPhone = `+989${randomInt(100000000, 999999999)}`;
   await a.getByLabel('نام واحد', { exact: true }).fill(name);
-  await a.getByRole('tab', { name: 'مسئول', exact: true }).click();
+  await goToModalStep(
+    a.getByRole('dialog', { name: 'ایجاد واحد و حساب مسئول', exact: true }),
+    'مسئول',
+  );
   await a.getByLabel('نام و نام خانوادگی مسئول', { exact: true }).fill('مسئول آزمون مرورگر');
   await a.getByLabel('شماره موبایل مسئول', { exact: true }).fill(officerPhone);
   await expect(a.getByRole('textbox', { name: /شناسه|آیدی|ایدی/ })).toHaveCount(0);
-  await a.getByRole('tab', { name: 'تصویر', exact: true }).click();
+  await goToModalStep(
+    a.getByRole('dialog', { name: 'ایجاد واحد و حساب مسئول', exact: true }),
+    'تصویر',
+  );
   await a.getByLabel('تصویر پروفایل مسئول (اختیاری)').setInputFiles('tests/fixtures/photo.png');
   await a.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }).click();
   await expect(a.getByRole('dialog', { name: 'ایجاد واحد و حساب مسئول' })).toHaveCount(0, {
@@ -474,7 +482,7 @@ test('three roles complete a ticket with private history notes, file previews an
   await u.getByLabel('یادداشت متنی (اختیاری)').fill('PRIVATE_HISTORY_BROWSER');
   await expect(u.getByLabel('یادداشت متنی (اختیاری)')).toHaveValue('PRIVATE_HISTORY_BROWSER');
   const noteDialog = u.getByRole('dialog', { name: 'یادداشت برای این رویداد', exact: true });
-  await noteDialog.getByRole('tab', { name: 'پیام صوتی', exact: true }).click();
+  await goToModalStep(noteDialog, 'پیام صوتی');
   await noteDialog.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
   await u.waitForTimeout(1100);
   await noteDialog.getByRole('button', { name: 'پایان ضبط', exact: true }).click();

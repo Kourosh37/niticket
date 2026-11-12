@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { StickyNote, Lock } from 'lucide-react';
 import { Modal } from './ui/dialog';
 import { ModalForm } from './ui/modal-form';
-import { Button } from './ui/button';
 import { VoiceRecorder } from './voice-recorder';
 import { UploadProgress } from './upload-progress';
 import { request } from '@/lib/utils';
@@ -50,6 +49,8 @@ export function HistoryNote({
         <ModalForm
           disabled={busy}
           lockNavigation={recording}
+          submitLabel={pending ? 'تلاش دوباره برای وویس' : 'ثبت یادداشت'}
+          submitDisabled={!body.trim() && !voice && !pending}
           sections={[
             {
               title: 'یادداشت',
@@ -127,11 +128,6 @@ export function HistoryNote({
               {error}
             </p>
           )}
-          <div className="form-actions">
-            <Button disabled={busy || recording || (!body.trim() && !voice && !pending)}>
-              {busy ? 'در حال ذخیره…' : pending ? 'تلاش دوباره برای وویس' : 'ثبت یادداشت'}
-            </Button>
-          </div>
         </ModalForm>
       </Modal>
     </>

@@ -185,6 +185,7 @@ export function AdminUsers({
         {editing && (
           <ModalForm
             disabled={busy}
+            submitLabel="ذخیره اطلاعات کاربر"
             sections={[
               {
                 title: 'اطلاعات کاربر',
@@ -237,7 +238,6 @@ export function AdminUsers({
                 {error}
               </p>
             )}
-            <Button disabled={busy}>ذخیره اطلاعات کاربر</Button>
           </ModalForm>
         )}
       </Modal>

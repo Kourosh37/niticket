@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { goToModalStep } from '../helpers/modal-steps';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -180,6 +181,7 @@ test('opens a unit history from administration and reads its conversations and p
   await noteDialog
     .getByLabel('یادداشت متنی (اختیاری)', { exact: true })
     .fill('یادداشت تازه برای رویداد قدیمی');
+  await goToModalStep(noteDialog, 'پیام صوتی');
   await noteDialog.getByRole('button', { name: 'ثبت یادداشت', exact: true }).click();
   await expect(noteDialog).toHaveCount(0);
   await page
