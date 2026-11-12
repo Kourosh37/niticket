@@ -72,7 +72,12 @@ export async function api(request: Request, fn: (actor: Actor) => Promise<unknow
     const response =
       result instanceof Response ? result : Response.json({ data: result, requestId });
     response.headers.set('x-request-id', requestId);
-    response.headers.set('cache-control', 'no-store');
+    response.headers.set(
+      'cache-control',
+      response.headers.get('content-type')?.startsWith('text/event-stream')
+        ? 'no-store, no-transform'
+        : 'no-store',
+    );
     return response;
   } catch (error) {
     let status = 500;
