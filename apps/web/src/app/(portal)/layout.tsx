@@ -1,5 +1,5 @@
 import { currentActor } from '@/lib/session';
-import { getProfile } from '@niticket/core/application/administration';
+import { currentProfile } from '@/lib/profile';
 import { Shell } from '@/components/shell';
 import { currentPolicy } from '@/lib/policy';
 
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const actor = await currentActor();
-  const [profile, policy] = await Promise.all([getProfile(actor), currentPolicy()]);
+  const [profile, policy] = await Promise.all([currentProfile(), currentPolicy()]);
   return (
     <Shell
       universityName={policy.universityName}

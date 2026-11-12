@@ -10,6 +10,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from './config';
 
 let client: S3Client | undefined;
+let uploadClient: S3Client | undefined;
 
 export function storage(publicEndpoint = false) {
   const c = config();
@@ -22,7 +23,7 @@ export function storage(publicEndpoint = false) {
       responseChecksumValidation: 'WHEN_REQUIRED',
       credentials: { accessKeyId: c.S3_ACCESS_KEY, secretAccessKey: c.S3_SECRET_KEY },
     });
-  return publicEndpoint ? create() : (client ??= create());
+  return publicEndpoint ? (uploadClient ??= create()) : (client ??= create());
 }
 
 export async function signedUpload(key: string, mime: string, size: number) {
