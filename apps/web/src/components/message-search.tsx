@@ -25,6 +25,8 @@ import type {
 import { normalizeSearchText } from '@niticket/core/domain/search-text';
 import { request, dateTime, digits } from '@/lib/utils';
 import { searchParameters } from '@/lib/search';
+import { clientCache, queryPolicy } from '@/lib/client-cache';
+import { realtime } from '@/lib/realtime-client';
 import { Button } from './ui/button';
 import { SearchHighlight } from './search-highlight';
 
@@ -211,6 +213,25 @@ export function MessageSearch({
   const enabled = ready(filters),
     scoped = !!onSelect,
     resultsShown = !children || !!filters.q.trim() || enabled;
+  useEffect(
+    () =>
+      realtime.subscribe((signal) => {
+        if (signal.kind === 'change' && signal.topics.includes('access')) {
+          pending.current?.abort();
+          setData(null);
+          setLoading(enabled);
+          setRevision((value) => value + 1);
+        } else if (
+          enabled &&
+          !cursor &&
+          (signal.kind === 'ready' ||
+            (signal.kind === 'change' &&
+              signal.topics.some((topic) => ['conversation', 'attachments'].includes(topic))))
+        )
+          setRevision((value) => value + 1);
+      }),
+    [enabled, cursor],
+  );
   const address = useCallback(
     (value: SearchFilters) => {
       const [path, query] = returnPath.split('?');
@@ -280,9 +301,11 @@ export function MessageSearch({
     setCursor(undefined);
     setPrevious([]);
     setActive(0);
-    setLoading(ready(next));
+    const policy = queryPolicy(`/api/v1/search?${searchParameters(next)}`);
+    const warm = policy ? clientCache.peek<SearchData>(policy.key) : undefined;
+    setLoading(ready(next) && !warm);
     setError('');
-    setData(null);
+    setData(warm ?? null);
     if (!ready(next) && !onSelect && syncUrl) window.history.replaceState(null, '', address(next));
   }
 

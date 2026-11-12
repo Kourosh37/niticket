@@ -10,6 +10,7 @@ import { request, digits } from '@/lib/utils';
 import { uploadSavedReplyFile } from '@/lib/upload';
 import { waitForAttachmentApproval } from '@/lib/attachment-approval';
 import { useRealtimeSync } from '@/lib/use-realtime-sync';
+import { clientCache, queryPolicy } from '@/lib/client-cache';
 import { Modal } from './ui/dialog';
 import { ModalForm } from './ui/modal-form';
 import { PagedItems, PagedText } from './ui/paged-content';
@@ -22,9 +23,15 @@ type ReplyList = Awaited<ReturnType<typeof listSavedReplies>>;
 type Reply = ReplyList['items'][number];
 
 function useReplyList(departmentId: string, initial?: ReplyList) {
-  const [data, setData] = useState<ReplyList>(initial ?? { items: [], nextCursor: null });
+  const warm = () => {
+    const params = new URLSearchParams({ departmentId, q: '' });
+    return clientCache.peek<ReplyList>(queryPolicy(`/api/v1/saved-replies?${params}`)!.key);
+  };
+  const [data, setData] = useState<ReplyList>(
+    () => initial ?? warm() ?? { items: [], nextCursor: null },
+  );
   const [query, setQuery] = useState(''),
-    [loading, setLoading] = useState(!initial),
+    [loading, setLoading] = useState(() => !(initial ?? warm())),
     [error, setError] = useState('');
   const controller = useRef<AbortController | null>(null);
   const load = useCallback(

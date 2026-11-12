@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Building2, ChevronLeft, LoaderCircle, Search, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { request } from '@/lib/utils';
+import { clientCache, queryPolicy } from '@/lib/client-cache';
+import { useRealtimeSync } from '@/lib/use-realtime-sync';
 
 type Choices = Awaited<
   ReturnType<typeof import('@niticket/core/application/administration').conversationChoices>
@@ -86,13 +88,24 @@ export function NewTicket({
   }, [search, cursor, composing, revision]);
 
   function searchUnits(value: string) {
+    const params = new URLSearchParams({ q: value.trim() });
+    const policy = queryPolicy(`/api/v1/departments/choices?${params}`);
+    const warm = policy ? clientCache.peek<Choices>(policy.key) : undefined;
+    if (warm) setData(warm);
     setSearch(value);
     setCursor(undefined);
     setPrevious([]);
     setLoadError('');
     setError('');
-    setLoading(true);
+    setLoading(!warm);
   }
+  useRealtimeSync(
+    () => {
+      setRevision((value) => value + 1);
+    },
+    ['catalog', 'inbox'],
+    { initial: false, liveMs: 120000, fallbackMs: 30000 },
+  );
 
   return (
     <div className="easy-new-ticket messenger-picker">
