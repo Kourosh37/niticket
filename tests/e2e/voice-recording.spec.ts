@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { loadEnvFile } from 'node:process';
-import type { Prisma } from '@prisma/client';
 
 try {
   loadEnvFile('.env');
@@ -129,17 +128,15 @@ test('finalizes automatically at the configured duration limit and produces an a
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
   const { db } = await import('@niticket/database');
-  const { settings } = await import('@niticket/core/application/settings');
+  const { settings, saveSettings } = await import('@niticket/core/application/settings');
+  const { transaction } = await import('@niticket/core/infrastructure/transaction');
+  const { enqueueRealtime } = await import('@niticket/core/infrastructure/realtime');
   const { scanInContainer } = await import('../helpers/scan-in-container');
   const f = await fixtures();
   const previous = await db.systemSetting.findUnique({ where: { key: 'policy' } });
   const policy = { ...(await settings()), maxVoiceSeconds: 10 };
   try {
-    await db.systemSetting.upsert({
-      where: { key: 'policy' },
-      create: { key: 'policy', value: policy, updatedBy: f.admin.id },
-      update: { value: policy },
-    });
+    await saveSettings(await f.actor(f.admin.id), policy);
     const ticket = await db.ticket.create({
       data: { creatorId: f.student.id, departmentId: f.department.id, subject: 'محدودیت ضبط صوت' },
     });
@@ -178,12 +175,12 @@ test('finalizes automatically at the configured duration limit and produces an a
     await page.getByRole('button', { name: 'پخش پیام صوتی', exact: true }).click();
     await expect(page.getByRole('button', { name: 'مکث پیام صوتی', exact: true })).toBeVisible();
   } finally {
-    if (previous)
-      await db.systemSetting.update({
-        where: { key: 'policy' },
-        data: { value: previous.value as Prisma.InputJsonValue },
+    if (previous) await saveSettings(await f.actor(f.admin.id), previous.value);
+    else
+      await transaction(async (tx) => {
+        await tx.systemSetting.deleteMany({ where: { key: 'policy' } });
+        await enqueueRealtime(tx, { scope: 'everyone', topics: ['settings'] });
       });
-    else await db.systemSetting.deleteMany({ where: { key: 'policy' } });
     await db.$disconnect();
   }
 });

@@ -118,7 +118,8 @@ export async function invalidateSharedReads(tags: string[]) {
       const key = `${cacheNamespace()}:tag:${tag}`;
       pipe.set(key, randomUUID(), 'PX', 86400000);
     }
-    await pipe.exec();
+    const results = await pipe.exec();
+    if (!results || results.some(([error]) => error)) throw new Error('Cache invalidation failed');
   } catch {
     unavailableUntil = Date.now() + 5000;
   }
@@ -143,12 +144,14 @@ export async function cachedRead<T>(
       const current = await shared.mget(...tagKeys);
       // Epochs can be evicted independently of data. Unique replacements
       // prevent eviction from resurrecting an old cache generation.
-      await Promise.all(
-        current.map((value, i) =>
-          value === null ? shared.set(tagKeys[i], randomUUID(), 'PX', 86400000, 'NX') : undefined,
-        ),
-      );
-      versions = (await shared.mget(...tagKeys)).map((value) => value ?? randomUUID());
+      if (current.some((value) => value === null)) {
+        await Promise.all(
+          current.map((value, i) =>
+            value === null ? shared.set(tagKeys[i], randomUUID(), 'PX', 86400000, 'NX') : undefined,
+          ),
+        );
+        versions = (await shared.mget(...tagKeys)).map((value) => value ?? randomUUID());
+      } else versions = current as string[];
     }
   } catch {
     unavailableUntil = Date.now() + 5000;
