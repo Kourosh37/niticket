@@ -195,7 +195,7 @@ test('scrolls through Persian PDF pages with embedded fonts, sharp canvases and 
   await page.getByRole('button', { name: 'پیش‌نمایش persian.pdf', exact: true }).click();
   await expect(dialog.getByRole('status')).toHaveCount(0);
   await expect(dialog.getByRole('alert')).toHaveCount(0);
-  expect(downloads).toBe(2);
+  expect(downloads).toBe(1);
   expect(errors).toEqual([]);
 });
 
@@ -283,6 +283,9 @@ test('recovers from a failed PDF request and safely cancels a preview closed whi
   await expect(dialog.locator('canvas').first()).toBeVisible();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'بستن', exact: true }).click();
+  // A fresh tab document discards retained bytes, so this still exercises binary-request cancellation.
+  await page.reload();
+  await expect(preview).toBeVisible();
   let release: (() => void) | undefined;
   await page.route(
     access,
