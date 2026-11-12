@@ -121,5 +121,36 @@ test('submits report dates, supports month/year shortcuts, Escape and compact vi
   await page.goto('/reports?from=2025-02-30&to=garbage');
   await expect(page.getByRole('heading', { name: 'گزارش‌ها و آمار' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'از تاریخ، انتخاب تاریخ' })).toBeVisible();
+  // Historical summer days used UTC+04:30. Check both edges independently so an
+  // excluded first reply cannot be masked by an incorrectly included next-day reply.
+  await db.ticket.createMany({
+    data: [
+      {
+        creatorId: f.student.id,
+        departmentId: f.department.id,
+        subject: 'ابتدای روز ایران',
+        createdAt: new Date('2020-07-19T19:30:00.000Z'),
+      },
+      {
+        creatorId: f.outsider.id,
+        departmentId: f.department.id,
+        subject: 'پیش از روز ایران',
+        createdAt: new Date('2020-07-19T19:29:59.999Z'),
+      },
+    ],
+  });
+  await page.goto(`/reports?departmentId=${f.department.id}&from=2020-07-20&to=2020-07-20`);
+  const total = page.locator('.stat-card').filter({ hasText: 'همه درخواست‌ها' }).locator('strong');
+  await expect(total).toHaveText('۱');
+  await db.ticket.updateMany({
+    where: { creatorId: f.student.id, departmentId: f.department.id },
+    data: { createdAt: new Date('2020-07-20T19:29:59.999Z') },
+  });
+  await db.ticket.updateMany({
+    where: { creatorId: f.outsider.id, departmentId: f.department.id },
+    data: { createdAt: new Date('2020-07-20T19:30:00.000Z') },
+  });
+  await page.reload();
+  await expect(total).toHaveText('۱');
   await db.$disconnect();
 });

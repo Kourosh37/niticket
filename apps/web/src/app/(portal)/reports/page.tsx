@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { DateRange } from '@/components/ui/date-picker';
 import { validCalendarDate } from '@/lib/calendar';
+import { iranDateBoundary } from '@/lib/iran-date-boundary';
 
 export default async function Page({
   searchParams,
@@ -17,12 +18,8 @@ export default async function Page({
   const query = await searchParams;
   const input = {
     departmentId: query.departmentId || undefined,
-    from: validCalendarDate(query.from)
-      ? new Date(query.from + 'T00:00:00+03:30').toISOString()
-      : undefined,
-    to: validCalendarDate(query.to)
-      ? new Date(query.to + 'T23:59:59.999+03:30').toISOString()
-      : undefined,
+    from: iranDateBoundary(query.from),
+    to: iranDateBoundary(query.to, true),
   };
   const [data, departments] = await Promise.all([reports(a, input), departmentChoices(a, true)]);
   return (
