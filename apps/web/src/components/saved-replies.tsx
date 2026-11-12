@@ -9,6 +9,7 @@ import type { listSavedReplies } from '@niticket/core/application/saved-replies'
 import { request, digits } from '@/lib/utils';
 import { uploadSavedReplyFile } from '@/lib/upload';
 import { waitForAttachmentApproval } from '@/lib/attachment-approval';
+import { useRealtimeSync } from '@/lib/use-realtime-sync';
 import { Modal } from './ui/dialog';
 import { ModalForm } from './ui/modal-form';
 import { PagedItems, PagedText } from './ui/paged-content';
@@ -63,6 +64,11 @@ function useReplyList(departmentId: string, initial?: ReplyList) {
       controller.current?.abort();
     };
   }, [load]);
+  useRealtimeSync(() => load(), ['saved-replies'], {
+    initial: false,
+    liveMs: 120000,
+    fallbackMs: 30000,
+  });
   return {
     data,
     query,
@@ -640,21 +646,14 @@ export function SavedReplyPicker({
     ['PENDING', 'QUARANTINED'].includes(file.scanStatus),
   );
   const selectedId = selected?.id;
-  useEffect(() => {
-    if (!selectedId || !waiting) return;
-    const abort = new AbortController();
-    const timer = setInterval(() => {
-      void request<Reply>(`/api/v1/saved-replies/${selectedId}`, { signal: abort.signal })
-        .then((reply) => {
-          if (!abort.signal.aborted) setSelected(reply);
-        })
-        .catch(() => {});
-    }, 3000);
-    return () => {
-      clearInterval(timer);
-      abort.abort();
-    };
-  }, [selectedId, waiting]);
+  useRealtimeSync(
+    async () => {
+      const reply = await request<Reply>(`/api/v1/saved-replies/${selectedId}`);
+      setSelected((current) => (current?.id === reply.id ? reply : current));
+    },
+    ['saved-replies', 'attachments'],
+    { enabled: !!selectedId && !!waiting },
+  );
   const ready =
     selected &&
     (selected.body || selected.attachments.length) &&

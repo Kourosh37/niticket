@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { AttachmentInfo } from '@/components/attachment-preview';
 import { request } from './utils';
+import { realtime, matchesSignal } from './realtime-client';
 
 type Listener = (file: AttachmentInfo) => void;
 const listeners = new Map<string, Set<Listener>>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let active: AbortController | undefined;
+let unsubscribe: (() => void) | undefined;
+let queued = false;
 
 function schedule(delay = 5000) {
   if (listeners.size && !timer && !active) timer = setTimeout(() => void poll(), delay);
@@ -43,7 +46,8 @@ async function poll() {
           listeners.set(id, current);
         }
       }
-      schedule(listeners.size > 50 ? 1000 : 5000);
+      schedule(queued ? 100 : listeners.size > 50 ? 1000 : realtime.live ? 60000 : 5000);
+      queued = false;
     }
   }
 }
@@ -55,6 +59,17 @@ export function useAttachmentStatus(file: AttachmentInfo) {
     const current = listeners.get(file.id) ?? new Set<Listener>();
     current.add(setUpdated);
     listeners.set(file.id, current);
+    if (!unsubscribe)
+      unsubscribe = realtime.subscribe((signal) => {
+        if (!matchesSignal(signal, ['attachments'])) return;
+        if (active) {
+          queued = true;
+          return;
+        }
+        clearTimeout(timer);
+        timer = undefined;
+        schedule(100);
+      });
     schedule(100);
     return () => {
       current.delete(setUpdated);
@@ -64,6 +79,9 @@ export function useAttachmentStatus(file: AttachmentInfo) {
         timer = undefined;
         active?.abort();
         active = undefined;
+        unsubscribe?.();
+        unsubscribe = undefined;
+        queued = false;
       }
     };
   }, [file.id, file.scanStatus]);

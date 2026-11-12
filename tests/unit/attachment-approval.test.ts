@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { waitForAttachmentApproval } from '../../apps/web/src/lib/attachment-approval';
 import { RequestError } from '../../apps/web/src/lib/utils';
+import { realtime, type RealtimeSignal } from '../../apps/web/src/lib/realtime-client';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../../apps/web/src/lib/utils', async (original) => ({
@@ -11,6 +12,29 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.useRealTimers();
   request.mockReset();
+  realtime.live = false;
+  vi.restoreAllMocks();
+});
+
+it('wakes approval immediately on an attachment invalidation and removes the waiting listener', async () => {
+  realtime.live = true;
+  let notify!: (signal: RealtimeSignal) => void;
+  const unsubscribe = vi.fn();
+  vi.spyOn(realtime, 'subscribe').mockImplementation((listener) => {
+    notify = listener;
+    return unsubscribe;
+  });
+  request
+    .mockResolvedValueOnce([file('a', 'QUARANTINED')])
+    .mockResolvedValueOnce([file('a', 'CLEAN')]);
+  const waiting = waitForAttachmentApproval(['a'], { signal: new AbortController().signal });
+  await vi.advanceTimersByTimeAsync(1);
+  expect(request).toHaveBeenCalledTimes(1);
+  notify({ kind: 'change', topics: ['attachments'], ticketIds: [] });
+  await waiting;
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
 });
 const file = (id: string, scanStatus: string) => ({ id, filename: `${id}.pdf`, scanStatus });
 

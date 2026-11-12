@@ -1,16 +1,24 @@
 import { request, RequestError } from './utils';
+import { realtime, matchesSignal } from './realtime-client';
 
 type ApprovalStatus = { id: string; filename: string; scanStatus: string };
 
 function delay(milliseconds: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const finish = () => {
+      clearTimeout(timer);
+      unsubscribe();
       signal.removeEventListener('abort', cancel);
       resolve();
-    }, milliseconds);
+    };
+    const timer = setTimeout(finish, milliseconds);
+    const unsubscribe = realtime.subscribe((event) => {
+      if (event.kind !== 'state' && matchesSignal(event, ['attachments'])) finish();
+    });
 
     function cancel() {
       clearTimeout(timer);
+      unsubscribe();
       signal.removeEventListener('abort', cancel);
       reject(signal.reason);
     }
@@ -68,7 +76,7 @@ export async function waitForAttachmentApproval(
         }
         onProgress?.(approved, ids.length);
         if (approved === ids.length) return;
-        interval = 1000;
+        interval = realtime.live ? 5000 : 1000;
       } catch (error) {
         // A temporary network/worker delay must not turn a pending file into a
         // successful save. Permission errors and rejected files remain visible.
