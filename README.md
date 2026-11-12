@@ -194,7 +194,7 @@ bun scripts/init-env.mjs
 <div dir="ltr" align="left">
 
 ```bash
-docker compose up -d --build --wait --wait-timeout 180 postgres redis minio clamav
+docker compose up -d --build --wait --wait-timeout 180 postgres redis cache minio clamav
 
 bun run db:generate
 bun run db:migrate
@@ -293,7 +293,7 @@ Storage باید جداگانه فراهم شود و تنها Nginx ورودی �
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml build
 
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --wait postgres redis clamav
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --wait postgres redis cache clamav
 
 docker compose --env-file .env.production -f docker-compose.prod.yml run --rm --no-deps migrate
 
@@ -340,6 +340,7 @@ docker compose exec -T postgres sh -c 'createdb -U "$POSTGRES_USER" niticket_tes
 bun --env-file=.env scripts/test-database.mjs
 
 # تست‌های رسانه به Worker ساخته‌شده از همین نسخه و FFmpeg داخل آن نیاز دارند.
+docker compose up -d --wait cache
 docker compose build worker
 docker compose up -d --no-deps --wait --wait-timeout 120 worker
 
