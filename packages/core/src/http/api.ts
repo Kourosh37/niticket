@@ -37,12 +37,18 @@ export function assertOrigin(request: Request) {
   const expected = config().APP_ORIGIN;
   const origin = request.headers.get('origin');
   if (origin === expected) return;
+  // Standalone Next.js reconstructs Request.url with its internal bind address.
+  // The public Host must match configuration exactly; never trust forwarded hosts.
+  const host = request.headers.get('host');
+  const destinationMatches = host
+    ? host === new URL(expected).host
+    : new URL(request.url).origin === new URL(expected).origin;
   // Privacy settings can omit Origin or serialize it as null. Fetch Metadata is
   // browser-controlled; accept it only for the configured, same-origin endpoint.
   if (
     (!origin || origin === 'null') &&
     request.headers.get('sec-fetch-site') === 'same-origin' &&
-    new URL(request.url).origin === new URL(expected).origin
+    destinationMatches
   )
     return;
   fail('FORBIDDEN', 403, 'مبدأ درخواست معتبر نیست.');

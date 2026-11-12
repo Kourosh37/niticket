@@ -21,9 +21,10 @@ for (const role of ['student', 'manager', 'admin'] as const) {
     const f = await fixtures();
     const current = await browser.newContext(),
       target = await browser.newContext(),
-      untouched = await browser.newContext();
+      untouched = await browser.newContext(),
+      privacy = await browser.newContext();
     try {
-      for (const context of [current, target, untouched]) {
+      for (const context of [current, target, untouched, privacy]) {
         expect(
           (
             await context.request.post('/api/auth/sign-in/phone-number', {
@@ -41,6 +42,14 @@ for (const role of ['student', 'manager', 'admin'] as const) {
         where: { id: currentId },
         data: { createdAt: new Date(Date.now() - 86400000) },
       });
+      const privacyId = (await (await privacy.request.get('/api/v1/users/me/sessions')).json()).data
+        .current.id;
+      // APIRequestContext sends no implicit Origin, unlike a normal browser fetch.
+      const direct = await current.request.delete(`/api/v1/users/me/sessions/${privacyId}`, {
+        headers: { 'sec-fetch-site': 'same-origin' },
+      });
+      expect(direct.status()).toBe(200);
+      expect((await privacy.request.get('/api/v1/users/me')).status()).toBe(401);
       const page = await current.newPage();
       const targetPage = await target.newPage();
       await targetPage.clock.install();
@@ -87,6 +96,7 @@ for (const role of ['student', 'manager', 'admin'] as const) {
       await current.close();
       await target.close();
       await untouched.close();
+      await privacy.close();
       await db.$disconnect();
     }
   });

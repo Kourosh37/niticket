@@ -55,3 +55,28 @@ it('does not accept missing Origin on an unexpected destination even with same-o
     ),
   ).toThrow(expect.objectContaining({ status: 403 }));
 });
+
+it('accepts a configured public Host when standalone Next reconstructs an internal bind URL', () => {
+  expect(() =>
+    assertOrigin(
+      new Request('http://0.0.0.0:3000/api/v1/users/me/sessions/device', {
+        method: 'DELETE',
+        headers: { host: 'localhost:3000', 'sec-fetch-site': 'same-origin' },
+      }),
+    ),
+  ).not.toThrow();
+});
+
+it.each(['foreign.example', 'localhost:3001', 'localhost:3000.attacker.example'])(
+  'rejects unexpected Host %s even when forwarded headers claim the configured host',
+  (host) => {
+    expect(() =>
+      assertOrigin(
+        new Request('http://localhost:3000/api/v1/users/me/sessions/device', {
+          method: 'DELETE',
+          headers: { host, 'x-forwarded-host': 'localhost:3000', 'sec-fetch-site': 'same-origin' },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ status: 403 }));
+  },
+);
