@@ -123,8 +123,22 @@
 .modal-form-panel label {
   font-size: 13px;
 }
+.modal-form-panel .field > label {
+  margin-bottom: 4px;
+}
+.modal-form-panel .checkbox-field {
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--background);
+}
+.modal-form-panel input:not([type='checkbox']):not([type='radio']):not([type='file']) {
+  height: 44px;
+}
 .modal-form-panel input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .modal-form-panel textarea {
+  display: block;
   min-height: 44px;
   padding: 10px 12px;
 }
@@ -171,6 +185,17 @@
   font-size: 12px;
 }
 .saved-reply-media-files .button {
+  flex-shrink: 0;
+}
+.modal-form .saved-reply-file {
+  min-width: 0;
+}
+.modal-form .saved-reply-file bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-form .saved-reply-file .button {
   flex-shrink: 0;
 }
 .modal-body .voice-recorder {
@@ -382,7 +407,10 @@
     min-height: 36px;
   }
   .modal-form-panel {
-    gap: 8px;
+    gap: 6px;
+  }
+  .modal-form-panel label {
+    line-height: 20px;
   }
   .modal-form-footer {
     padding-top: 8px;
@@ -396,8 +424,9 @@
   }
   .modal-form-panel textarea,
   .saved-reply-editor .modal-form-panel textarea {
-    min-height: 60px;
-    max-height: 80px;
+    height: 64px;
+    min-height: 64px;
+    max-height: 64px;
   }
   .modal-content .chat-actions-list > :is(button, a) {
     flex-direction: row;

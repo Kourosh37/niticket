@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { iranDateValue, jalaliDateLabel, validCalendarDate } from '../../apps/web/src/lib/calendar';
@@ -92,4 +92,15 @@ it('respects externally cleared ranges and does not resurrect its previous local
   view.rerender(<DateRange from="" to="" onChange={change} />);
   expect(screen.getByRole('button', { name: 'از تاریخ، انتخاب تاریخ' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'تا تاریخ، انتخاب تاریخ' })).toBeTruthy();
+});
+
+it('restores focus to the date trigger after the calendar moves focus into its selected day', async () => {
+  render(<DatePicker label="از تاریخ" value="2025-03-20" onValueChange={vi.fn()} />);
+  const trigger = screen.getByRole('button', { name: 'از تاریخ، ۳۰ اسفند ۱۴۰۳' });
+  trigger.focus();
+  fireEvent.click(trigger);
+  screen.getByRole('button', { name: /۳۰.*اسفند.*۱۴۰۳/ }).focus();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
 });

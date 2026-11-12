@@ -506,6 +506,17 @@ test('three roles complete a ticket with private history notes, file previews an
   await a.getByRole('button', { name: 'اطلاعات گفتگو', exact: true }).click();
   await a.getByText('تاریخچه و یادداشت‌های واحد', { exact: true }).click();
   await expect(a.getByRole('dialog', { name: 'اطلاعات گفتگو', exact: true })).toBeVisible();
+  const historyPages = a.getByRole('navigation', { name: 'صفحه‌بندی تاریخچه', exact: true });
+  await expect(historyPages).toBeVisible();
+  for (
+    let index = 0;
+    index < 50 && !(await a.getByText('PRIVATE_HISTORY_BROWSER', { exact: true }).count());
+    index++
+  ) {
+    const next = historyPages.getByRole('button', { name: 'صفحه بعدی', exact: true });
+    if (await next.isDisabled()) break;
+    await next.click();
+  }
   await expect(a.getByText('PRIVATE_HISTORY_BROWSER', { exact: true })).toBeVisible();
   expect(
     (

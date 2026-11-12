@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { DayPicker } from '@daypicker/persian';
 import { TZDate, type DropdownProps } from '@daypicker/react';
 import { CalendarDays } from 'lucide-react';
@@ -44,6 +44,7 @@ export function DatePicker({
   max?: string;
 }) {
   const id = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const selected = calendarDay(value);
   const today = iranDateValue();
@@ -61,6 +62,7 @@ export function DatePicker({
       </label>
       {name && <input type="hidden" name={name} value={value} />}
       <button
+        ref={trigger}
         id={id}
         type="button"
         className="date-picker-trigger"
@@ -78,6 +80,10 @@ export function DatePicker({
         title={label}
         description="تقویم هجری شمسی · به وقت ایران"
         className="date-picker-dialog"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          trigger.current?.focus({ preventScroll: true });
+        }}
       >
         {open && (
           <DayPicker

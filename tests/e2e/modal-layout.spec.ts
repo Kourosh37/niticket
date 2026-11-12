@@ -90,6 +90,11 @@ test('keeps administration forms fully visible and preserves values across secti
     for (const section of ['واحد', 'مسئول', 'تصویر']) {
       await create.getByRole('tab', { name: section, exact: true }).click();
       await fits(create);
+      if (viewport.width === 390 && section === 'واحد')
+        await page.screenshot({
+          path: '.local/ui-preview/unit-create-390.png',
+          animations: 'disabled',
+        });
       await expect(
         create.getByRole('button', { name: 'ایجاد واحد و مسئول', exact: true }),
       ).toBeInViewport({ ratio: 1 });
@@ -174,7 +179,7 @@ test('fits all saved-reply sections, paginates the library and supports nested h
   await editor.getByRole('tab', { name: 'فایل‌ها', exact: true }).click();
   await editor.getByLabel('پیوست پیام آماده', { exact: true }).setInputFiles(
     Array.from({ length: 5 }, (_, index) => ({
-      name: `attachment-${index}.txt`,
+      name: index === 0 ? `${'long-filename-'.repeat(15)}.txt` : `attachment-${index}.txt`,
       mimeType: 'text/plain',
       buffer: Buffer.from('draft'),
     })),
@@ -184,6 +189,11 @@ test('fits all saved-reply sections, paginates the library and supports nested h
     for (const section of ['متن پیام', 'فایل‌ها', 'پیام صوتی']) {
       await editor.getByRole('tab', { name: section, exact: true }).click();
       await fits(editor);
+      if (viewport.width === 390 && section === 'متن پیام')
+        await page.screenshot({
+          path: '.local/ui-preview/saved-editor-390.png',
+          animations: 'disabled',
+        });
     }
   }
   await editor.getByRole('tab', { name: 'متن پیام', exact: true }).click();
@@ -194,9 +204,15 @@ test('fits all saved-reply sections, paginates the library and supports nested h
   await page.goto(`/tickets/${ticket.id}`);
   await page.getByRole('button', { name: 'پیام‌های آماده', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'پیام‌های آماده', exact: true });
+  await expect(picker.locator('.saved-reply-summary')).toHaveCount(3);
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await fits(picker);
+    if (viewport.width === 320)
+      await page.screenshot({
+        path: '.local/ui-preview/saved-picker-320.png',
+        animations: 'disabled',
+      });
   }
   const pages = picker.getByRole('navigation', { name: 'صفحه‌بندی پیام‌های آماده', exact: true });
   await pages.getByRole('button', { name: 'آخرین صفحه', exact: true }).click();

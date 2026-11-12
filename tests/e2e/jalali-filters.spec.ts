@@ -10,6 +10,8 @@ const database = new URL(process.env.TEST_DATABASE_URL ?? process.env.DATABASE_U
 if (!process.env.TEST_DATABASE_URL) database.pathname = '/niticket_test';
 if (!database.pathname.endsWith('_test')) throw new Error('Test database required');
 process.env.DATABASE_URL = database.toString();
+// Exercise a device outside Iran; the selected civil day must still be Iranian.
+test.use({ timezoneId: 'America/Los_Angeles' });
 
 test('filters messages at Tehran midnight using Persian leap dates and preserves the range after reload', async ({
   page,
@@ -46,7 +48,7 @@ test('filters messages at Tehran midnight using Persian leap dates and preserves
   await expect(page.getByRole('button', { name: 'از تاریخ، ۳۰ اسفند ۱۴۰۳' })).toBeVisible();
   await page.getByRole('button', { name: 'از تاریخ، ۳۰ اسفند ۱۴۰۳' }).click();
   await page.getByRole('button', { name: 'رفتن به ماه بعد' }).click();
-  await page.getByRole('button', { name: /۱ فروردین ۱۴۰۴/ }).click();
+  await page.getByRole('button', { name: /^جمعه ۱-ام فروردین ۱۴۰۴$/ }).click();
   await expect(page).toHaveURL(/from=2025-03-21/);
   const results = page.locator('[data-search-result]');
   await expect(results).toHaveCount(2);
@@ -97,6 +99,11 @@ test('submits report dates, supports month/year shortcuts, Escape and compact vi
         );
       }),
     ).toBe(true);
+    if (viewport.width === 320)
+      await page.screenshot({
+        path: '.local/ui-preview/jalali-calendar-320.png',
+        animations: 'disabled',
+      });
     await page.keyboard.press('Escape');
     await expect(trigger).toBeFocused();
   }
@@ -105,7 +112,7 @@ test('submits report dates, supports month/year shortcuts, Escape and compact vi
   await page.getByRole('option', { name: '۱۴۰۴', exact: true }).click();
   await page.getByRole('combobox', { name: 'ماه را انتخاب کنید' }).click();
   await page.getByRole('option', { name: 'فروردین', exact: true }).click();
-  await page.getByRole('button', { name: /۱ فروردین ۱۴۰۴/ }).click();
+  await page.getByRole('button', { name: /^جمعه ۱-ام فروردین ۱۴۰۴$/ }).click();
   await page.getByRole('button', { name: 'نمایش گزارش', exact: true }).click();
   await expect(page).toHaveURL(/from=2025-03-21/);
   await expect(page).toHaveURL(/to=2025-03-21/);

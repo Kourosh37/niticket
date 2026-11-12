@@ -102,6 +102,9 @@
   align-items: center;
 }
 .jalali-calendar .rdp-dropdowns .select-trigger {
+  width: auto;
+  min-width: 92px;
+  flex-shrink: 0;
   min-height: 38px;
   padding-block: 6px;
   gap: 8px;

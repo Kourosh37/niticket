@@ -22,7 +22,7 @@ type Reply = ReplyList['items'][number];
 function useReplyList(departmentId: string, initial?: ReplyList) {
   const [data, setData] = useState<ReplyList>(initial ?? { items: [], nextCursor: null });
   const [query, setQuery] = useState(''),
-    [loading, setLoading] = useState(false),
+    [loading, setLoading] = useState(!initial),
     [error, setError] = useState('');
   const controller = useRef<AbortController | null>(null);
   const load = useCallback(
@@ -62,7 +62,20 @@ function useReplyList(departmentId: string, initial?: ReplyList) {
       controller.current?.abort();
     };
   }, [load]);
-  return { data, query, setQuery, loading, error, load };
+  return {
+    data,
+    query,
+    setQuery: (value: string) => {
+      if (value === query) return;
+      controller.current?.abort();
+      setLoading(true);
+      setError('');
+      setQuery(value);
+    },
+    loading,
+    error,
+    load,
+  };
 }
 
 function ReplySearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -266,7 +279,7 @@ function SavedReplyEditor({
                   disabled={busy}
                   renderItem={(file) => (
                     <div className="saved-reply-file" key={file.id}>
-                      <bdi>{file.name}</bdi>
+                      <bdi title={file.name}>{file.name}</bdi>
                       <Button
                         type="button"
                         size="icon"
