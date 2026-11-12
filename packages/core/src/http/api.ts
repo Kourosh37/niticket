@@ -33,11 +33,19 @@ export async function readJson(request: Request, max = 65536): Promise<unknown> 
 }
 
 export function assertOrigin(request: Request) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
+  const expected = config().APP_ORIGIN;
+  const origin = request.headers.get('origin');
+  if (origin === expected) return;
+  // Privacy settings can omit Origin or serialize it as null. Fetch Metadata is
+  // browser-controlled; accept it only for the configured, same-origin endpoint.
   if (
-    !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
-    request.headers.get('origin') !== config().APP_ORIGIN
+    (!origin || origin === 'null') &&
+    request.headers.get('sec-fetch-site') === 'same-origin' &&
+    new URL(request.url).origin === new URL(expected).origin
   )
-    fail('FORBIDDEN', 403, 'مبدأ درخواست معتبر نیست.');
+    return;
+  fail('FORBIDDEN', 403, 'مبدأ درخواست معتبر نیست.');
 }
 
 export async function api(request: Request, fn: (actor: Actor) => Promise<unknown>) {

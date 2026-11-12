@@ -42,6 +42,18 @@ for (const role of ['student', 'manager', 'admin'] as const) {
         data: { createdAt: new Date(Date.now() - 86400000) },
       });
       const page = await current.newPage();
+      const targetPage = await target.newPage();
+      await targetPage.clock.install();
+      await targetPage.goto('/profile');
+      await expect(targetPage.getByRole('region', { name: 'نشست‌های فعال' })).toBeVisible();
+      // Reproduce a local browser/privacy layer omitting Origin on DELETE.
+      await page.route('**/api/v1/users/me/sessions/*', async (route) => {
+        if (route.request().method() !== 'DELETE') return route.continue();
+        const headers = await route.request().allHeaders();
+        delete headers.origin;
+        headers['sec-fetch-site'] = 'same-origin';
+        await route.continue({ headers });
+      });
       page.on('dialog', (dialog) => dialog.accept());
       await page.goto('/profile');
       const section = page.getByRole('region', { name: 'نشست‌های فعال' });
@@ -59,6 +71,9 @@ for (const role of ['student', 'manager', 'admin'] as const) {
         section.getByRole('group', { name: 'تأیید هویت برای ادامه عملیات' }),
       ).toHaveCount(0);
       expect((await target.request.get('/api/v1/users/me')).status()).toBe(401);
+      await targetPage.bringToFront();
+      await targetPage.clock.fastForward(31000);
+      await expect(targetPage).toHaveURL(origin + '/login');
       expect((await current.request.get('/api/v1/users/me')).status()).toBe(200);
       expect((await untouched.request.get('/api/v1/users/me')).status()).toBe(200);
       await section
