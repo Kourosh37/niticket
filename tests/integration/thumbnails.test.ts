@@ -76,5 +76,5 @@ it('promotes scanned images with private reusable thumbnails and falls back for 
     thumbnail: true,
   });
   expect(legacy.mime).toBe('image/png');
-  expect(await new Response(legacy.stream).arrayBuffer()).toHaveLength(bytes.length);
+  expect((await new Response(legacy.stream).arrayBuffer()).byteLength).toBe(bytes.length);
 });
