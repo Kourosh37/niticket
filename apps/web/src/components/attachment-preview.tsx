@@ -1,18 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
-import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist';
-import { FileText, ImageIcon, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, ImageIcon, Eye } from 'lucide-react';
 import { Modal } from './ui/dialog';
-import { Button } from './ui/button';
-import { PagedText } from './ui/paged-content';
+import { DocumentPreview } from './document-preview';
 import { AudioPlayer } from './audio-player';
 import { DownloadButton } from './downloads';
 import { formatFileSize } from '@/lib/downloads';
-import { digits, checkSession } from '@/lib/utils';
 import { useAttachmentStatus } from '@/lib/attachment-status';
-import { previewOffice } from '@/lib/office-preview';
 
 export type AttachmentInfo = {
   id: string;
@@ -23,213 +19,6 @@ export type AttachmentInfo = {
   durationSeconds?: number | null;
   waveform?: unknown;
 };
-
-const MAX_PREVIEW_BYTES = 20971520;
-
-async function previewBytes(url: string, signal: AbortSignal) {
-  const response = await fetch(url, { signal });
-  checkSession(response);
-  if (!response.ok) throw new Error('اجازه مشاهده فایل وجود ندارد.');
-  if (Number(response.headers.get('content-length')) > MAX_PREVIEW_BYTES) {
-    await response.body?.cancel();
-    throw new Error('این فایل برای پیش‌نمایش بزرگ است؛ آن را دریافت کنید.');
-  }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('دریافت فایل انجام نشد.');
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > MAX_PREVIEW_BYTES) {
-      await reader.cancel();
-      throw new Error('این فایل برای پیش‌نمایش بزرگ است؛ آن را دریافت کنید.');
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return bytes.buffer;
-}
-
-function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
-  const [loading, setLoading] = useState(true),
-    [error, setError] = useState(''),
-    [text, setText] = useState(''),
-    [rows, setRows] = useState<string[][]>([]),
-    [page, setPage] = useState(1),
-    [pages, setPages] = useState(1);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const pdfSource = useRef<{
-    task: PDFDocumentLoadingTask;
-    document: Promise<PDFDocumentProxy>;
-  } | null>(null);
-  useEffect(() => {
-    const abort = new AbortController();
-    let active = true;
-    let rendering: { cancel: () => void } | undefined;
-
-    async function load() {
-      try {
-        if (file.size && file.size > MAX_PREVIEW_BYTES)
-          throw new Error('این فایل برای پیش‌نمایش بزرگ است؛ آن را دریافت کنید.');
-        const data =
-          file.detectedMime === 'application/pdf' && pdfSource.current
-            ? null
-            : await previewBytes(url, abort.signal);
-        if (!active) return;
-        if (file.detectedMime === 'application/pdf') {
-          if (!pdfSource.current) {
-            const pdfjs = await import('pdfjs-dist');
-            if (!active) return;
-            pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-            const loadingTask = pdfjs.getDocument({
-              data: new Uint8Array(data!),
-              useSystemFonts: true,
-              cMapUrl: '/pdf-assets/cmaps/',
-              cMapPacked: true,
-              standardFontDataUrl: '/pdf-assets/standard_fonts/',
-              wasmUrl: '/pdf-assets/wasm/',
-            });
-            pdfSource.current = { task: loadingTask, document: loadingTask.promise };
-          }
-          const pdf = await pdfSource.current.document;
-          if (!active) return;
-          setPages(pdf.numPages);
-          const p = await pdf.getPage(Math.min(page, pdf.numPages));
-          if (!active) return;
-          const initial = p.getViewport({ scale: 1 });
-          const width = Math.min(750, window.innerWidth - 90);
-          const viewport = p.getViewport({ scale: width / initial.width });
-          const target = canvas.current;
-          if (!target) return;
-          target.width = viewport.width;
-          target.height = viewport.height;
-          const render = p.render({ canvas: target, viewport });
-          rendering = render;
-          await render.promise;
-        } else if (
-          file.detectedMime?.includes('wordprocessingml') ||
-          file.detectedMime?.includes('spreadsheetml')
-        ) {
-          const result = await previewOffice(data!, file.detectedMime, abort.signal);
-          if (active) {
-            setText(result.text ?? '');
-            setRows(result.rows ?? []);
-          }
-        } else if (file.detectedMime === 'text/plain') {
-          if (active) setText(new TextDecoder('utf-8').decode(data!).slice(0, 300000));
-        } else throw new Error('پیش‌نمایش این قالب در دسترس نیست. فایل را دریافت کنید.');
-      } catch (error) {
-        if (active && !(error instanceof DOMException && error.name === 'AbortError'))
-          setError(error instanceof Error ? error.message : 'پیش‌نمایش فایل انجام نشد.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      active = false;
-      abort.abort();
-      rendering?.cancel();
-    };
-  }, [file.detectedMime, file.size, url, page]);
-  useEffect(
-    () => () => {
-      void pdfSource.current?.task.destroy();
-      pdfSource.current = null;
-    },
-    [url],
-  );
-  return (
-    <div className="document-preview">
-      {loading && (
-        <p role="status" className="muted">
-          در حال آماده‌سازی پیش‌نمایش…
-        </p>
-      )}
-      {error && (
-        <p className="error-message" role="alert">
-          {error}
-        </p>
-      )}
-      {file.detectedMime === 'application/pdf' && (
-        <>
-          <canvas ref={canvas} aria-label={`صفحه ${digits(page)} فایل پی‌دی‌اف`} />
-          {pages > 1 && (
-            <div className="preview-pagination">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="صفحه قبلی"
-                disabled={page <= 1 || loading}
-                onClick={() => {
-                  setLoading(true);
-                  setError('');
-                  setPage((p) => p - 1);
-                }}
-              >
-                <ChevronRight size={17} />
-              </Button>
-              <span>
-                صفحه {digits(page)} از {digits(pages)}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="صفحه بعدی"
-                disabled={page >= pages || loading}
-                onClick={() => {
-                  setLoading(true);
-                  setError('');
-                  setPage((p) => p + 1);
-                }}
-              >
-                <ChevronLeft size={17} />
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-      {text && (
-        <>
-          <p className="field-hint">
-            {file.detectedMime === 'text/plain'
-              ? 'نمایش محتوای متنی فایل'
-              : 'نمایش متنی سند ورد؛ برای قالب‌بندی اصلی، فایل را دریافت کنید.'}
-          </p>
-          <div className="document-text">
-            <PagedText text={text} />
-          </div>
-        </>
-      )}
-      {rows.length > 0 && (
-        <>
-          <p className="field-hint">نمایش برگه اول؛ حداکثر ۵۰۰ ردیف و ۳۰ ستون</p>
-          <div className="spreadsheet-preview">
-            <table>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr key={i}>
-                    {row.map((cell, j) => (
-                      <td key={j}>{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
   const file = useAttachmentStatus(initial);
@@ -318,7 +107,12 @@ export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
         description={file.filename}
         className="attachment-preview-dialog"
       >
-        <div className="attachment-preview-body">
+        <div
+          className={`attachment-preview-body${image ? ' image-preview-scroll preview-scroll' : ''}`}
+          role={image ? 'region' : undefined}
+          aria-label={image ? file.filename : undefined}
+          tabIndex={image ? 0 : undefined}
+        >
           {image ? (
             <Image
               src={url}
@@ -326,7 +120,7 @@ export function AttachmentPreview({ file: initial }: { file: AttachmentInfo }) {
               alt={file.filename}
               width={850}
               height={650}
-              style={{ width: '100%', height: 'auto', objectFit: 'contain', maxHeight: '65vh' }}
+              style={{ width: '100%', height: 'auto' }}
             />
           ) : (
             <DocumentPreview file={file} url={url} />

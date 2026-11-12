@@ -345,11 +345,6 @@
 .saved-reply-picker .attachment-thumbnail {
   height: min(140px, calc(var(--app-viewport-height) - 410px));
 }
-.attachment-preview-dialog .document-text {
-  padding: 12px;
-  overflow: hidden;
-  max-height: none;
-}
 .saved-reply-picker .saved-reply-toolbar {
   margin: 0;
 }
@@ -431,23 +426,40 @@
 }
 .modal-content.attachment-preview-dialog {
   width: min(900px, calc(100% - 24px));
+  height: min(900px, calc(var(--app-viewport-height) - 24px));
 }
 .attachment-preview-dialog .modal-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
   overflow: hidden;
+  flex: 1;
 }
 .attachment-preview-body {
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   margin: 0;
+  flex: 1;
 }
 .attachment-preview-body > img {
-  height: min(65dvh, calc(var(--app-viewport-height) - 190px)) !important;
-  max-height: none !important;
+  display: block;
+  height: auto;
+  max-height: none;
   width: 100%;
-  object-fit: contain;
+}
+.attachment-preview-dialog .preview-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.attachment-preview-dialog .preview-scroll:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.attachment-preview-dialog .preview-scroll::-webkit-scrollbar {
+  display: none;
 }
 .attachment-preview-dialog .preview-footer {
   margin: 0;
@@ -455,26 +467,99 @@
 }
 .attachment-preview-dialog .document-preview {
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.attachment-preview-dialog .document-preview canvas {
-  width: auto;
-  max-width: 100%;
-  height: auto;
-  max-height: calc(var(--app-viewport-height) - 245px);
-  object-fit: contain;
-  margin-inline: auto;
-}
 .attachment-preview-dialog .document-text,
 .attachment-preview-dialog .spreadsheet-preview {
-  max-height: calc(var(--app-viewport-height) - 250px);
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   margin: 0;
+}
+.attachment-preview-dialog .document-text {
+  padding: 12px;
+}
+.attachment-preview-dialog .field-hint {
+  margin: 0;
+  flex-shrink: 0;
 }
 .attachment-preview-dialog .preview-pagination {
   margin: 0;
   flex-shrink: 0;
+}
+.pdf-preview {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.pdf-preview-toolbar,
+.pdf-preview-zoom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.pdf-preview-toolbar .preview-pagination {
+  gap: 6px;
+  white-space: nowrap;
+}
+.pdf-preview-toolbar .button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+.pdf-preview-frame {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--background);
+}
+.pdf-preview-scroll {
+  position: absolute;
+  inset: 0;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+/* PDF pages retain their own colors, metrics and pixel density in both themes.
+   Do not constrain canvas height or apply the application's document styles. */
+.pdf-preview-scroll .pdfViewer .page {
+  box-sizing: content-box;
+}
+.pdf-preview-scroll .pdfViewer canvas {
+  display: block;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  margin: 0;
+}
+.preview-error {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.preview-error p {
+  margin: 0;
+  flex: 1;
+}
+@media (max-width: 360px) {
+  .pdf-preview-toolbar .button {
+    width: 30px;
+    height: 32px;
+    min-height: 32px;
+  }
+  .pdf-preview-toolbar,
+  .pdf-preview-toolbar .preview-pagination {
+    gap: 2px;
+  }
 }
 @media (max-width: 600px) {
   .modal-form-tabs > button {

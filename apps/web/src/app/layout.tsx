@@ -18,6 +18,7 @@ import './select.css';
 import './voice.css';
 import './responsive.css';
 import '@daypicker/react/style.css';
+import 'pdfjs-dist/web/pdf_viewer.css';
 import './calendar.css';
 import './modals.css';
 
