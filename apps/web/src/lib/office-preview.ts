@@ -1,10 +1,27 @@
 import type { OfficePreview } from '../workers/office-preview';
+import { clientCache } from './client-cache';
+import { parsedDocuments } from './media-cache';
 
 export function previewOffice(
   data: ArrayBuffer,
   mime: string,
   signal: AbortSignal,
+  key?: string,
 ): Promise<OfficePreview> {
+  if (key && clientCache.scope) {
+    parsedDocuments.activate(clientCache.scope);
+    return parsedDocuments.load(
+      `${key}:${mime}:office-v1`,
+      ['media'],
+      300000,
+      (sharedSignal) => parseOffice(data, mime, sharedSignal),
+      signal,
+    );
+  }
+  return parseOffice(data, mime, signal);
+}
+
+function parseOffice(data: ArrayBuffer, mime: string, signal: AbortSignal): Promise<OfficePreview> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new DOMException('Aborted', 'AbortError'));

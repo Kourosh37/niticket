@@ -1,4 +1,5 @@
 import { checkSession } from './utils';
+import { rememberMedia, reuseMedia } from './media-cache';
 
 export type DownloadFile = { id: string; filename: string; size?: number | null };
 
@@ -95,6 +96,13 @@ async function perform(job: Job) {
   update(job, { status: 'downloading' });
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
+    const access = `/api/v1/attachments/${job.file.id}/access`;
+    const warm = await reuseMedia(access, job.controller.signal);
+    if (warm) {
+      save([warm], job.file.filename, warm.type);
+      update(job, { status: 'complete', received: warm.size, total: warm.size });
+      return;
+    }
     const response = await fetch(`/api/v1/attachments/${job.file.id}/access`, {
       signal: job.controller.signal,
       cache: 'no-cache',
@@ -135,6 +143,9 @@ async function perform(job: Job) {
     if (!received || (declared > 0 && received !== declared))
       throw new Error('دریافت فایل کامل نشد. دوباره تلاش کنید.');
     if (jobs.get(job.file.id) !== job || job.controller.signal.aborted) return;
+    const mime = response.headers.get('content-type') ?? 'application/octet-stream';
+    if (received <= 20 * 1024 * 1024)
+      rememberMedia(access, response.headers.get('etag'), new Blob(parts, { type: mime }));
     save(
       parts,
       job.file.filename,

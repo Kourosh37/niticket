@@ -5,6 +5,7 @@ import type { AttachmentInfo } from './attachment-preview';
 import { PdfPreview } from './pdf-preview';
 import { MAX_PREVIEW_BYTES, previewBytes } from '@/lib/preview-bytes';
 import { previewOffice } from '@/lib/office-preview';
+import { mediaVersion } from '@/lib/media-cache';
 
 export function DocumentPreview({ file, url }: { file: AttachmentInfo; url: string }) {
   if (file.detectedMime === 'application/pdf')
@@ -30,7 +31,12 @@ function TextDocumentPreview({ file, url }: { file: AttachmentInfo; url: string 
           file.detectedMime?.includes('wordprocessingml') ||
           file.detectedMime?.includes('spreadsheetml')
         ) {
-          const result = await previewOffice(data, file.detectedMime, abort.signal);
+          const result = await previewOffice(
+            data,
+            file.detectedMime,
+            abort.signal,
+            `${url}:${mediaVersion(url) ?? ''}`,
+          );
           if (!abort.signal.aborted) {
             setText(result.text ?? '');
             setRows(result.rows ?? []);

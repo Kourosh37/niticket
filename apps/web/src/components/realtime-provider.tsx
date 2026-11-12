@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { realtime } from '../lib/realtime-client';
 import { clientCache } from '../lib/client-cache';
+import { clearMediaCache } from '../lib/media-cache';
 
 export function RealtimeProvider({
   children,
@@ -22,6 +23,7 @@ export function RealtimeProvider({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = realtime.subscribe((signal) => {
       clientCache.changed(signal);
+      if (signal.kind === 'change' && signal.topics.includes('access')) clearMediaCache();
       if (
         signal.kind === 'change' &&
         signal.topics.some((topic) => ['access', 'catalog', 'settings'].includes(topic)) &&

@@ -10,11 +10,19 @@ type Flight = {
 
 /** Private, tab-local cache. Clearing a session aborts requests and destroys all retained data. */
 export class ClientCache {
-  private data = new BoundedCache<unknown>({ entries: 160, bytes: 6 * 1024 * 1024 });
+  private data: BoundedCache<unknown>;
   private pending = new Map<string, Flight>();
   private epoch = 0;
   scope: string | null = null;
   freshUntil = 0;
+
+  constructor(
+    limits = { entries: 160, bytes: 6 * 1024 * 1024 },
+    private sizeOf = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength,
+    private onClear?: () => void,
+  ) {
+    this.data = new BoundedCache(limits);
+  }
 
   activate(scope: string) {
     if (scope !== this.scope) {
@@ -24,6 +32,7 @@ export class ClientCache {
   }
 
   clear() {
+    this.onClear?.();
     this.epoch++;
     this.data.clear();
     for (const flight of this.pending.values()) flight.controller.abort();
@@ -44,7 +53,7 @@ export class ClientCache {
 
   remember(key: string, value: unknown, tags: string[], ttl = 60000) {
     if (!this.scope) return;
-    const size = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+    const size = this.sizeOf(value);
     this.data.set(`${this.scope}:${key}`, structuredClone(value), ttl, size, tags);
   }
 
@@ -139,7 +148,18 @@ export class ClientCache {
   }
 }
 
-export const clientCache = new ClientCache();
+const resetListeners = new Set<() => void>();
+
+export const clientCache = new ClientCache(undefined, undefined, () => {
+  for (const listener of resetListeners) listener();
+});
+
+export function onPrivateCacheReset(listener: () => void) {
+  resetListeners.add(listener);
+  return () => {
+    resetListeners.delete(listener);
+  };
+}
 
 export function queryPolicy(path: string) {
   const url = new URL(path, 'http://local');

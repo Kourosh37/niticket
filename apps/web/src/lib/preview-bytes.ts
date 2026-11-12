@@ -1,8 +1,18 @@
 import { checkSession } from './utils';
+import { mediaBlob } from './media-cache';
 
 export const MAX_PREVIEW_BYTES = 20 * 1024 * 1024;
 
 export async function previewBytes(url: string, signal: AbortSignal) {
+  const blob = await mediaBlob(url, signal, async (sharedSignal) => {
+    const data = await readBytes(url, sharedSignal);
+    return new Blob([data.buffer], { type: data.mime });
+  });
+  signal.throwIfAborted();
+  return blob.arrayBuffer();
+}
+
+async function readBytes(url: string, signal: AbortSignal) {
   const response = await fetch(url, { signal });
   checkSession(response);
   if (!response.ok) throw new Error('اجازه مشاهده فایل وجود ندارد.');
@@ -34,5 +44,8 @@ export async function previewBytes(url: string, signal: AbortSignal) {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-  return bytes.buffer;
+  return {
+    buffer: bytes.buffer,
+    mime: response.headers.get('content-type') ?? 'application/octet-stream',
+  };
 }
