@@ -99,6 +99,7 @@ export function NewTicket({
     setError('');
     setLoading(!warm);
   }
+
   useRealtimeSync(
     () => {
       setRevision((value) => value + 1);

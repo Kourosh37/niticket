@@ -125,6 +125,7 @@ export function Conversation({
   const [restorePosition, setRestorePosition] = useState<
     { id: string; offset: number } | undefined
   >();
+  const readingPosition = useRef<{ id: string; offset: number } | undefined>(undefined);
   const lastDetail = useRef(detail);
   const [searchOpen, setSearchOpen] = useState(false),
     [searchSelection, setSearchSelection] = useState<SearchSelection | null>(null),
@@ -316,6 +317,7 @@ export function Conversation({
               gap && fresh.nextMessageCursor ? fresh.nextMessageCursor : snapshot.older,
             );
             setRestorePosition(snapshot.position);
+            readingPosition.current = snapshot.position;
             followLatest.current = !snapshot.position;
             setWindowKey((value) => value + 1);
           }
@@ -338,34 +340,38 @@ export function Conversation({
 
   useEffect(() => {
     if (!memoryReady || initialContext) return;
-    const save = () => {
-      if (clientCache.scope !== actorId || messages.length > 400 || browsing.current) return;
-      const area = document.querySelector<HTMLElement>('.messenger-scroll');
+    const area = document.querySelector<HTMLElement>('.messenger-scroll');
+    const capture = () => {
+      if (!area?.isConnected) return;
       const top = area?.getBoundingClientRect().top ?? 0;
       const row = area
         ? [...area.querySelectorAll<HTMLElement>('[data-message-id]')].find(
             (node) => node.getBoundingClientRect().bottom > top,
           )
         : undefined;
-      const position =
+      readingPosition.current =
         !followLatest.current && row
           ? { id: row.dataset.messageId!, offset: row.getBoundingClientRect().top - top }
           : undefined;
+    };
+    const save = () => {
+      if (clientCache.scope !== actorId || messages.length > 400 || browsing.current) return;
+      capture();
       clientCache.remember(
         `ui-chat:${id}`,
         {
           messages,
           older: olderCursor,
           scope: `${permissions.staff}:${permissions.readOnly}`,
-          position,
+          position: readingPosition.current,
         },
         ['ui-snapshot', 'catalog'],
         120000,
       );
     };
-    const area = document.querySelector<HTMLElement>('.messenger-scroll');
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
+      capture();
       clearTimeout(timer);
       timer = setTimeout(save, 200);
     };

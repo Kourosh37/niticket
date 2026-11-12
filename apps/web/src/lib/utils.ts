@@ -52,10 +52,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       options.signal ?? undefined,
     );
   const data = await fetchRequest<T>(path, options);
-  if (!['GET', 'HEAD'].includes(method)) {
-    clientCache.changed({ kind: 'ready' });
-    clientCache.freshUntil = Date.now() + 2000;
-  }
+  if (!['GET', 'HEAD'].includes(method)) clientCache.mutated(path);
   return data;
 }
 

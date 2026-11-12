@@ -96,3 +96,16 @@ it('invalidates receipt-sensitive pages and keeps authentication endpoints outsi
   expect(queryPolicy('https://untrusted.example/api/v1/search')).toBeUndefined();
   expect(queryPolicy('/api/v1/search?b=2&a=1')?.key).toBe('/api/v1/search?a=1&b=2');
 });
+
+it('refreshes ticket queries after a write without discarding retained reading positions', () => {
+  const cache = new ClientCache();
+  cache.activate('first');
+  cache.remember('messages', [1], ['ticket:one']);
+  cache.remember('position', { id: 'older', offset: 42 }, ['ui-snapshot', 'catalog']);
+  cache.mutated('/api/v1/tickets/one/read');
+  expect(cache.peek('messages')).toBeUndefined();
+  expect(cache.peek('position')).toEqual({ id: 'older', offset: 42 });
+  expect(cache.freshUntil).toBeGreaterThan(Date.now());
+  cache.mutated('/api/v1/admin/departments/one');
+  expect(cache.peek('position')).toBeUndefined();
+});

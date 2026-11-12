@@ -145,6 +145,22 @@ export class ClientCache {
       this.invalidate([...signal.topics, ...signal.ticketIds.map((id) => `ticket:${id}`)]);
   }
 
+  mutated(path: string) {
+    this.freshUntil = Date.now() + 2000;
+    const ticket = new URL(path, 'http://local').pathname.match(/^\/api\/v1\/tickets\/([^/]+)/);
+    if (ticket)
+      this.invalidate([
+        `ticket:${ticket[1]}`,
+        'conversation',
+        'search',
+        'receipts',
+        'inbox',
+        'notifications',
+        'attachments',
+      ]);
+    else this.changed({ kind: 'ready' });
+  }
+
   get state() {
     return { entries: this.data.size, bytes: this.data.byteSize, pending: this.pending.size };
   }
