@@ -155,6 +155,8 @@ test('opens a unit history from administration and reads its conversations and p
   await expect(
     page.getByText('یادداشت خصوصی قابل مشاهده برای مدیر', { exact: true }),
   ).toBeVisible();
+  // Unmount the old account's live stream before replacing its cookies through the test API.
+  await page.goto('/login');
   await page.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
   expect(
     (
@@ -190,6 +192,7 @@ test('opens a unit history from administration and reads its conversations and p
     .click();
   await expect(page.getByText('یادداشت تازه برای رویداد قدیمی', { exact: true })).toBeVisible();
   await expectHistorySize(106);
+  await page.goto('/login');
   await page.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
   expect(
     (
