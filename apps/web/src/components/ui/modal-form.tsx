@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useId, useRef, useState } from 'react';
+import { Fragment, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { digits } from '@/lib/utils';
 import { Button } from './button';
@@ -34,8 +34,22 @@ export function ModalForm({
     [reached, setReached] = useState(0);
   const form = useRef<HTMLFormElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const pendingFocus = useRef<{
+    step: number;
+    invalid?: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+  } | null>(null);
   const last = active === sections.length - 1;
   const locked = disabled || lockNavigation;
+
+  useLayoutEffect(() => {
+    const request = pendingFocus.current;
+    pendingFocus.current = null;
+    if (!request || request.step !== active) return;
+    // Focus after the panel becomes visible, before paint. A deferred animation
+    // frame can steal a newer field focus and discard the user's first keystrokes.
+    (request.invalid ?? tabs.current[active])?.focus({ preventScroll: true });
+    request.invalid?.reportValidity();
+  }, [active]);
 
   function validate(through: number) {
     const panels = form.current?.querySelectorAll<HTMLElement>('[data-form-section]');
@@ -44,11 +58,13 @@ export function ModalForm({
         HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
       >('input:invalid, textarea:invalid, select:invalid');
       if (!invalid) continue;
-      setActive(index);
-      requestAnimationFrame(() => {
+      if (index === active) {
         invalid.focus({ preventScroll: true });
         invalid.reportValidity();
-      });
+      } else {
+        pendingFocus.current = { step: index, invalid };
+        setActive(index);
+      }
       return false;
     }
     return true;
@@ -58,9 +74,13 @@ export function ModalForm({
     if (locked || next < 0 || next >= sections.length || next > Math.max(reached, active + 1))
       return;
     if (next > active && !validate(next - 1)) return;
+    if (next === active) {
+      tabs.current[next]?.focus({ preventScroll: true });
+      return;
+    }
+    pendingFocus.current = { step: next };
     setActive(next);
     setReached((previous) => Math.max(previous, next));
-    requestAnimationFrame(() => tabs.current[next]?.focus({ preventScroll: true }));
   }
 
   return (

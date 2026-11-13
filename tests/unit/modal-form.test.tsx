@@ -113,6 +113,34 @@ it('revalidates all sections at confirmation and reveals a hidden invalid field'
   await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('نام')));
 });
 
+it('does not steal focus from a field when delayed frames run after returning to its step', () => {
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+  render(<ModalForm sections={sections} onSubmit={vi.fn()} submitLabel="ذخیره" />);
+  fireEvent.change(screen.getByLabelText('نام'), { target: { value: 'نام معتبر' } });
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله قبل' }));
+  const body = screen.getByLabelText('متن');
+  body.focus();
+  act(() => frames.forEach((frame) => frame(100)));
+  expect(document.activeElement).toBe(body);
+});
+
+it('focuses the revealed invalid field before the next paint and validates an already active field immediately', () => {
+  render(<ModalForm sections={sections} onSubmit={vi.fn()} submitLabel="ذخیره" />);
+  const name = screen.getByLabelText('نام');
+  const validity = vi.spyOn(name as HTMLInputElement, 'reportValidity');
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  expect(document.activeElement).toBe(name);
+  expect(validity).toHaveBeenCalledTimes(1);
+  fireEvent.change(name, { target: { value: 'نام معتبر' } });
+  fireEvent.click(screen.getByRole('button', { name: 'مرحله بعد' }));
+  fireEvent.change(name, { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: 'ذخیره' }));
+  expect(document.activeElement).toBe(name);
+  expect(validity).toHaveBeenCalledTimes(2);
+});
+
 it('uses RTL keyboard navigation for reached steps and does not advance during composition or textarea Enter', async () => {
   render(<ModalForm sections={sections} onSubmit={vi.fn()} submitLabel="ذخیره" />);
   const name = screen.getByLabelText('نام');
