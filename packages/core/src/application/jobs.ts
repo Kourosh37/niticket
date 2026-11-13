@@ -407,7 +407,8 @@ export function startJobs(role = config().WORKER_ROLE) {
   let dispatching = false,
     dispatchAgain = false,
     closing = false;
-  let lastAuthCleanup = 0;
+  let lastAuthCleanup = 0,
+    lastTelemetry = 0;
   const dispatch = async () => {
     if (closing) return;
     if (dispatching) {
@@ -420,11 +421,14 @@ export function startJobs(role = config().WORKER_ROLE) {
       else await connection.ping();
       if (!workers.every((worker) => worker.isRunning())) throw new Error('Worker is not running');
       await writeFile(path.join(tmpdir(), 'niticket-worker-heartbeat'), String(Date.now()));
+      if (Date.now() - lastTelemetry >= 60000) {
+        log.info({ metrics: processMetrics(), role }, 'Worker metrics');
+        lastTelemetry = Date.now();
+      }
       if (role !== 'media' && Date.now() - lastAuthCleanup >= 60000) {
         await cleanupExpiredAuth();
         await collectOrphanedStorage();
         await purgeCompletedOutbox();
-        log.info({ metrics: processMetrics(), role }, 'Worker metrics');
         lastAuthCleanup = Date.now();
       }
       if (role !== 'media') await expireUploads();
