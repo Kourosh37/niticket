@@ -148,6 +148,7 @@ test('applies the system theme before paint, persists choices with CSP and synch
 
 test('uses semantic palettes across requester, officer, admin, chat and modal screens', async ({
   page,
+  browserName,
 }) => {
   test.setTimeout(90000);
   const { fixtures } = await import('../helpers/fixtures');
@@ -167,7 +168,28 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     },
   });
   const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  let replacingDocument = false;
+  const navigate = async (path: string) => {
+    replacingDocument = true;
+    try {
+      await page.goto(path);
+    } finally {
+      replacingDocument = false;
+    }
+  };
+  page.on('pageerror', (error) => {
+    // https://github.com/microsoft/playwright/issues/43120
+    // WebKit reports native cancellations during document replacement as page errors.
+    // Restrict the exception to native diagnostic names, this origin, and an active navigation.
+    if (
+      browserName === 'webkit' &&
+      replacingDocument &&
+      ['Fetch API cannot load http', 'EventSource cannot load http'].includes(error.name) &&
+      /^\/{1,2}localhost:3001\/.* due to access control checks\.$/.test(error.message)
+    )
+      return;
+    errors.push(error.message);
+  });
   await page.emulateMedia({ colorScheme: 'light' });
   await login(page, f.student.phoneNumber!, f.password);
   for (const width of [320, 390, 768, 1440]) {
@@ -187,9 +209,9 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await page.getByRole('link', { name: 'تنظیمات', exact: true }).click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await palette(page, true);
-  await page.goto('/');
+  await navigate('/');
   await page.screenshot({ path: '.local/ui-preview/theme-inbox-dark.png' });
-  await page.goto(`/tickets/${ticket.id}`);
+  await navigate(`/tickets/${ticket.id}`);
   await expect(page.locator('.messenger-bubble')).toHaveCount(2);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -225,6 +247,8 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   const info = page.getByRole('dialog', { name: 'اطلاعات گفتگو', exact: true });
   await expect(info).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })).toHaveCount(0);
+  // The outgoing sheet is aria-hidden before its exit animation releases the keyboard layer.
+  await expect(page.locator('.modal-content[data-state="closed"]')).toHaveCount(0);
   await palette(page, true);
   await page.keyboard.press('Escape');
   await expect(info).toHaveCount(0);
@@ -234,7 +258,7 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     .getByRole('link', { name: 'تنظیمات', exact: true })
     .click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
-  await page.goto(`/tickets/${ticket.id}`);
+  await navigate(`/tickets/${ticket.id}`);
   await palette(page, false);
   await expect(page.locator('[data-testid="virtuoso-item-list"]')).toHaveCSS(
     'visibility',
@@ -261,20 +285,20 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     .click();
   await page.getByRole('switch', { name: 'حالت تاریک' }).click();
   await palette(page, true);
-  await page.goto('/profile');
+  await navigate('/profile');
   await expect(page).toHaveURL('http://localhost:3001/settings');
   await expect(page.getByRole('heading', { name: 'تنظیمات', exact: true })).toBeVisible();
   await palette(page, true);
   // Close the authenticated shell before switching accounts through the test
   // API; its live session guard otherwise correctly races the next navigation.
-  await page.goto('/login');
+  await navigate('/login');
   await page.request.post('/api/auth/sign-out', {
     headers: { origin: 'http://localhost:3001' },
     data: {},
   });
   await login(page, f.agent.phoneNumber!, f.password);
   await palette(page, true);
-  await page.goto('/login');
+  await navigate('/login');
   await page.request.post('/api/auth/sign-out', {
     headers: { origin: 'http://localhost:3001' },
     data: {},
@@ -282,7 +306,7 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await login(page, f.admin.phoneNumber!, f.password);
   await palette(page, true);
   for (const path of ['/admin/users', '/admin/departments']) {
-    await page.goto(path);
+    await navigate(path);
     await palette(page, true);
     await page.getByRole('switch', { name: 'حالت تاریک' }).click();
     await palette(page, false);
