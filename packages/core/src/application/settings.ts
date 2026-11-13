@@ -9,6 +9,7 @@ import { enqueueRealtime } from '../infrastructure/realtime';
 
 export const settingsSchema = z
   .object({
+    // Retained for stored policies and existing clients; continuous conversations ignore this value.
     reopenDays: z.number().int().min(0).max(365),
     maxUploadBytes: z.number().int().min(1024).max(52428800),
     maxVoiceSeconds: z.number().int().min(10).max(600),

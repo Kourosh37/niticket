@@ -16,7 +16,7 @@ import {
   userRole,
 } from '../domain/authorization';
 import { fail } from '../domain/errors';
-import { assertTransition, canReopen } from '../domain/workflow';
+import { assertTransition } from '../domain/workflow';
 import {
   createTicketSchema,
   listSchema,
@@ -682,12 +682,12 @@ export async function changeStatus(actor: Actor, id: string, input: unknown) {
   const data = statusSchema.parse(input);
   if (['RESOLVED', 'CLOSED', 'REOPENED'].includes(data.status))
     fail('CONTINUOUS_CONVERSATION', 409, 'گفتگوها همیشه قابل ادامه هستند و بسته نمی‌شوند.');
-  const policy = await settings();
   return transaction(async (tx) => {
     const loaded = await getLocked(tx, actor, id, data.version);
     actor = loaded.actor;
     const ticket = loaded.ticket;
     assertParticipant(actor, ticket);
+    assertStaff(actor, ticket);
     assertTransition(ticket.status, data.status);
     const latest = await tx.message.findFirst({
       where: { ticketId: id, visibility: 'PUBLIC' },
@@ -696,19 +696,8 @@ export async function changeStatus(actor: Actor, id: string, input: unknown) {
     });
     if (data.status === 'WAITING_FOR_USER' && (!latest || latest.senderId === ticket.creatorId))
       fail('REPLY_REQUIRED', 409, 'ابتدا پاسخ عمومی برای کاربر ارسال کنید.');
-    if (!isStaff(actor, ticket)) {
-      if (
-        ticket.creatorId !== actor.id ||
-        data.status !== 'REOPENED' ||
-        !canReopen(ticket.resolvedAt, policy.reopenDays)
-      )
-        fail('FORBIDDEN', 403, 'مهلت یا مجوز بازگشایی درخواست وجود ندارد.');
-    }
     await update(tx, ticket, {
       status: data.status,
-      ...(data.status === 'RESOLVED' ? { resolvedAt: new Date() } : {}),
-      ...(data.status === 'CLOSED' ? { closedAt: new Date() } : {}),
-      ...(data.status === 'REOPENED' ? { reopenCount: { increment: 1 }, resolvedAt: null } : {}),
     });
     await event(tx, actor, ticket, 'STATUS_CHANGED', { from: ticket.status, to: data.status });
     return { version: ticket.version + 1 };

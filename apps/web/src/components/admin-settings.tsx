@@ -36,7 +36,7 @@ export function AdminSettings({ policy }: { policy: Awaited<ReturnType<typeof se
                 body: JSON.stringify({
                   universityName: f.get('universityName'),
                   supportDescription: f.get('supportDescription'),
-                  reopenDays: Number(f.get('reopenDays')),
+                  reopenDays: policy.reopenDays,
                   maxUploadBytes: Number(f.get('megabytes')) * 1048576,
                   maxVoiceSeconds: Number(f.get('maxVoiceSeconds')),
                   allowUserUrgent: false,
@@ -98,18 +98,6 @@ export function AdminSettings({ policy }: { policy: Awaited<ReturnType<typeof se
                 defaultValue={policy.maxVoiceSeconds}
               />
             </div>
-          </div>
-          <div className="field">
-            <label htmlFor="reopenDays">مهلت بازگشایی درخواست حل‌شده (روز)</label>
-            <input
-              id="reopenDays"
-              name="reopenDays"
-              type="number"
-              min={0}
-              max={365}
-              required
-              defaultValue={policy.reopenDays}
-            />
           </div>
         </fieldset>
         {reauthentication.confirmation}
