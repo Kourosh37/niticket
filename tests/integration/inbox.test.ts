@@ -20,6 +20,34 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
+it('matches normalized Persian message text and literal wildcards while excluding private and foreign messages', async () => {
+  const f = await fixtures();
+  const student = await f.actor(f.student.id);
+  const ticket = await db.ticket.create({
+    data: {
+      creatorId: student.id,
+      departmentId: f.department.id,
+      subject: randomUUID(),
+      messages: {
+        create: [
+          { senderId: student.id, body: 'كلاس رياضي ۱۲۳ %_literal' },
+          { senderId: f.agent.id, body: 'PRIVATE_SEARCH_ONLY', visibility: 'INTERNAL' },
+        ],
+      },
+    },
+  });
+  expect(
+    (await listTickets(student, { q: 'کلاس ریاضی 123' })).items.map((item) => item.id),
+  ).toContain(ticket.id);
+  expect((await listTickets(student, { q: '%_literal' })).items.map((item) => item.id)).toContain(
+    ticket.id,
+  );
+  expect((await listTickets(student, { q: 'PRIVATE_SEARCH_ONLY' })).items).toEqual([]);
+  expect((await listTickets(await f.actor(f.outsider.id), { q: 'کلاس ریاضی 123' })).items).toEqual(
+    [],
+  );
+});
+
 it('scopes new and answered inboxes to the current role and hides private previews', async () => {
   const statuses = ['OPEN', 'WAITING_FOR_USER', 'RESOLVED', 'CLOSED'] as const;
   const tickets = await Promise.all(

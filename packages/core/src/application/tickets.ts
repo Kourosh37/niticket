@@ -36,6 +36,8 @@ import { requireSavedReply } from './saved-replies';
 import { ticketChanged } from './realtime-events';
 import { enqueueRealtime } from '../infrastructure/realtime';
 import { cachedRead, actorCacheScope } from '../infrastructure/read-cache';
+import { boundedQuery } from '../infrastructure/bounded-query';
+import { normalizeSearchText } from '../domain/search-text';
 import {
   ticketSummarySelect as ticketSelect,
   ticketRepository,
@@ -211,6 +213,8 @@ export async function listTickets(actor: Actor, input: unknown) {
           : Prisma.sql`FALSE`
         : Prisma.sql`t."creatorId"=${actor.id}`;
   const pattern = `%${(q.q ?? '').replace(/[\\%_]/g, '\\$&')}%`;
+  const messagePattern = `%${normalizeSearchText(q.q ?? '').replace(/[\\%_]/g, '\\$&')}%`;
+  const query = <T>(sql: Prisma.Sql) => (q.q ? boundedQuery<T>(sql) : db.$queryRaw<T>(sql));
   // Read state belongs to public replies, independently of notification delivery or the latest sender.
   const unreadReplies = Prisma.sql`EXISTS (
     SELECT 1 FROM "Message" unread WHERE unread."ticketId"=t.id
@@ -240,7 +244,7 @@ export async function listTickets(actor: Actor, input: unknown) {
       t.subject ILIKE ${pattern}
       OR EXISTS (SELECT 1 FROM "Department" d WHERE d.id=t."departmentId" AND d.name ILIKE ${pattern})
       OR EXISTS (SELECT 1 FROM "User" u WHERE u.id=t."creatorId" AND u.name ILIKE ${pattern})
-      OR EXISTS (SELECT 1 FROM "Message" m WHERE m."ticketId"=t.id AND m.visibility='PUBLIC' AND m.body ILIKE ${pattern})
+      OR EXISTS (SELECT 1 FROM "Message" m WHERE m."ticketId"=t.id AND m.visibility='PUBLIC' AND niticket_search_text(m.body) LIKE ${messagePattern})
     )`
         : Prisma.empty
     }`;
@@ -250,12 +254,12 @@ export async function listTickets(actor: Actor, input: unknown) {
   ) latest ON TRUE WHERE ${predicate}`;
   // Validate the cursor against the same access, search and reply-state filters.
   const anchors = q.cursor
-    ? await db.$queryRaw<{ id: string; lastActivityAt: Date }[]>(Prisma.sql`
+    ? await query<{ id: string; lastActivityAt: Date }[]>(Prisma.sql`
         SELECT t.id,t."lastActivityAt" ${source} AND t.id=${q.cursor}`)
     : [];
   if (q.cursor && !anchors.length) fail();
   const anchor = anchors[0];
-  const ids = await db.$queryRaw<{ id: string; hasUnreadReplies: boolean }[]>(Prisma.sql`
+  const ids = await query<{ id: string; hasUnreadReplies: boolean }[]>(Prisma.sql`
     SELECT t.id,${student ? unreadReplies : Prisma.sql`FALSE`} AS "hasUnreadReplies" ${source}
     ${anchor ? Prisma.sql`AND (t."lastActivityAt",t.id)<(${anchor.lastActivityAt},${anchor.id})` : Prisma.empty}
     ORDER BY t."lastActivityAt" DESC,t.id DESC LIMIT ${q.limit + 1}`);
