@@ -251,10 +251,15 @@ test('long chats use a single message scroller, preserve older-message position 
       return box ? Math.abs(box.y - position) : Infinity;
     })
     .toBeLessThan(4);
-  await area.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
+  // Resume following through reader input, not a virtualizer-like programmatic correction.
+  await area.hover();
+  await s.mouse.wheel(0, 100000);
   await expect(s.getByText('پیام پس از اتصال 54', { exact: true })).toBeInViewport();
+  await expect
+    .poll(() =>
+      area.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop),
+    )
+    .toBeLessThan(2);
   await transaction(async (tx) => {
     await tx.message.create({
       data: {
