@@ -176,7 +176,7 @@ export function UnitManagement({ departments, q = '' }: { departments: Departmen
             ))}
             <div className="upload-controls">
               <Button asChild variant="outline" size="sm">
-                <Link href={`/admin/departments/${d.id}/history`}>
+                <Link href={`/admin/departments/${d.id}/history`} prefetch={false}>
                   <History size={15} /> تاریخچه واحد
                 </Link>
               </Button>
