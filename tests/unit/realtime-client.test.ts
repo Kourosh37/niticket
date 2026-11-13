@@ -147,6 +147,28 @@ it('allows HTTP fallback when EventSource is unsupported', () => {
   expect(vi.getTimerCount()).toBe(0);
 });
 
+it('suspends streams on document departure and reconciles a restored browser-cache document once', async () => {
+  const client = new RealtimeClient(),
+    listener = vi.fn();
+  client.subscribe(listener);
+  stop = client.start();
+  FakeSource.instances[0].send('ready');
+  window.dispatchEvent(new Event('pagehide'));
+  expect(FakeSource.instances[0].closed).toBe(true);
+  expect(client.live).toBe(false);
+  window.dispatchEvent(new Event('online'));
+  await vi.advanceTimersByTimeAsync(120000);
+  expect(FakeSource.instances).toHaveLength(1);
+  window.dispatchEvent(new Event('pageshow'));
+  window.dispatchEvent(new Event('pageshow'));
+  expect(FakeSource.instances).toHaveLength(2);
+  FakeSource.instances[1].send('ready');
+  expect(listener).toHaveBeenLastCalledWith({ kind: 'ready' });
+  stop();
+  window.dispatchEvent(new Event('pageshow'));
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 it('matches topics and ticket scopes while always reconciling access changes and reconnects', () => {
   expect(
     matchesSignal(

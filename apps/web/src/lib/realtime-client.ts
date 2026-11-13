@@ -26,6 +26,7 @@ export class RealtimeClient {
   private watchdog?: ReturnType<typeof setInterval>;
   private listeners = new Set<Listener>();
   private stopped = true;
+  private suspended = false;
   private attempts = 0;
   private lastEvent = 0;
   live = false;
@@ -57,13 +58,14 @@ export class RealtimeClient {
 
   private reconnect = () => {
     this.disconnect();
-    if (this.stopped || !navigator.onLine) return;
+    if (this.stopped || this.suspended || !navigator.onLine) return;
     const delay = Math.min(30000, 1000 * 2 ** Math.min(this.attempts++, 5));
     this.retry = setTimeout(this.connect, delay * (0.8 + Math.random() * 0.4));
   };
 
   private connect = () => {
-    if (this.stopped || !navigator.onLine || typeof EventSource === 'undefined') return;
+    if (this.stopped || this.suspended || !navigator.onLine || typeof EventSource === 'undefined')
+      return;
     this.disconnect();
     let source: EventSource;
     try {
@@ -129,17 +131,32 @@ export class RealtimeClient {
 
   start() {
     this.stopped = false;
+    this.suspended = false;
     this.attempts = 0;
     this.connect();
     const online = () => this.connect();
     const offline = () => this.disconnect();
+    const hide = () => {
+      this.suspended = true;
+      this.disconnect();
+    };
+    const show = () => {
+      if (!this.suspended) return;
+      this.suspended = false;
+      this.attempts = 0;
+      this.connect();
+    };
     window.addEventListener('online', online);
     window.addEventListener('offline', offline);
+    window.addEventListener('pagehide', hide);
+    window.addEventListener('pageshow', show);
     return () => {
       this.stopped = true;
       this.disconnect();
       window.removeEventListener('online', online);
       window.removeEventListener('offline', offline);
+      window.removeEventListener('pagehide', hide);
+      window.removeEventListener('pageshow', show);
     };
   }
 }
