@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./apps/web/src/*"],
+      "@niticket/core/*": ["./packages/core/src/*"],
+      "@niticket/database": ["./packages/database/src/index.ts"]
+    }
+  },
+  "include": ["tests/**/*.ts", "tests/**/*.tsx"],
+  "exclude": ["node_modules", "apps/web/.next"]
+}

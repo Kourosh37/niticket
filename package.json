@@ -12,7 +12,7 @@
     "build": "bun run db:generate && bun run --cwd apps/web build",
     "start": "bun run --cwd apps/web start",
     "worker": "bun --env-file=.env apps/worker/src/index.ts",
-    "typecheck": "bun --bun tsc --noEmit && bun run --cwd apps/web typecheck",
+    "typecheck": "bun --bun tsc --noEmit && bun --bun tsc --project tsconfig.tests.json --noEmit && bun run --cwd apps/web typecheck",
     "lint": "bun --bun eslint .",
     "format": "bun --bun prettier --write . && bun --bun prisma format --schema packages/database/prisma/schema.prisma",
     "format:check": "bun --bun prettier --check .",

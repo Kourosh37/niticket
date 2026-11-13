@@ -39,7 +39,8 @@ it('debounces typing, aborts superseded searches and ignores late responses afte
   fireEvent.change(input, { target: { value: '' } });
   expect(pending[1].signal.aborted).toBe(true);
   await act(async () => {
-    for (const job of pending) job.resolve({ items: [], terms: [], nextCursor: null });
+    for (const job of pending)
+      job.resolve({ items: [], terms: [], nextCursor: null, snapshot: new Date().toISOString() });
   });
   expect(screen.queryByText('پیامی پیدا نشد. عبارت یا فیلترها را تغییر دهید.')).toBeNull();
   expect(screen.queryByRole('dialog')).toBeNull();

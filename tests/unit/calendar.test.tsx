@@ -81,9 +81,7 @@ it('disables days outside the date range and prevents Today from bypassing its b
   expect(screen.getByRole('button', { name: /۲۹.*اسفند.*۱۴۰۳/ }).hasAttribute('disabled')).toBe(
     false,
   );
-  expect(screen.getByRole('button', { name: 'امروز', exact: true }).hasAttribute('disabled')).toBe(
-    true,
-  );
+  expect(screen.getByRole('button', { name: 'امروز' }).hasAttribute('disabled')).toBe(true);
 });
 
 it('respects externally cleared ranges and does not resurrect its previous local selection', () => {
