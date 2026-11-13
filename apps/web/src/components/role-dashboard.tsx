@@ -65,6 +65,7 @@ export async function RoleDashboard({ actor }: { actor: Actor }) {
                 <Link
                   className="unit-overview-card"
                   href={`/admin/departments/${d.id}/history`}
+                  prefetch={false}
                   key={d.id}
                 >
                   <div className="unit-overview-heading">
