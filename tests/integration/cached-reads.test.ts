@@ -8,7 +8,7 @@ import {
   saveDepartment,
   reports,
 } from '@niticket/core/application/administration';
-import { openConversation } from '@niticket/core/application/tickets';
+import { openConversation, transferTicket } from '@niticket/core/application/tickets';
 import {
   createSavedReply,
   listSavedReplies,
@@ -25,6 +25,25 @@ afterAll(async () => {
   closeReadCache();
   redis().disconnect();
   await db.$disconnect();
+});
+
+it('refreshes both source and destination report caches when a conversation moves units', async () => {
+  const source = await fixtures(),
+    destination = await fixtures();
+  const from = await source.actor(source.manager.id),
+    to = await destination.actor(destination.agent.id);
+  const ticket = await openConversation(await source.actor(source.student.id), {
+    departmentId: source.department.id,
+  });
+  expect((await reports(from)).total).toBe(1);
+  expect((await reports(to)).total).toBe(0);
+  await transferTicket(from, ticket.id, {
+    version: (await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).version,
+    departmentId: destination.department.id,
+    reason: 'Transfer report regression',
+  });
+  expect((await reports(from)).total).toBe(0);
+  expect((await reports(to)).total).toBe(1);
 });
 
 it('reuses unit reads, isolates personalized choices and invalidates committed catalog changes', async () => {

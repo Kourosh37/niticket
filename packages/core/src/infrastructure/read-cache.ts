@@ -134,6 +134,7 @@ export function tagsForChange(change: RealtimeChange) {
         tags.add(`report-user:${change.creatorId}`);
         tags.add(`report-department:${change.departmentId}`);
       }
+      if (change.scope === 'department') tags.add(`report-department:${change.departmentId}`);
     }
     if (change.scope === 'ticket' && topic === 'inbox') tags.add(`user:${change.creatorId}`);
     if (change.scope === 'ticket') tags.add(`ticket:${change.ticketId}`);
