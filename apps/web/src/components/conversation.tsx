@@ -33,16 +33,14 @@ import { stopAudio } from '@/lib/audio-playback';
 import { Avatar } from './avatar';
 import { AvatarPreview } from './avatar-preview';
 import { ThemeToggle } from './theme-toggle';
-import { HistoryNote } from './history-note';
-import { AttachmentPreview } from './attachment-preview';
 import { Button } from './ui/button';
 import dynamic from 'next/dynamic';
 import type { TimelineHandle } from './message-timeline';
 import { Modal } from './ui/dialog';
-import { PagedItems, PagedText } from './ui/paged-content';
+import { ConversationDetails } from './conversation-details';
 import { UploadProgress } from './upload-progress';
 import { VoiceRecorder } from './voice-recorder';
-import { date, dateTime, digits, request, RequestError } from '@/lib/utils';
+import { digits, request, RequestError } from '@/lib/utils';
 import { uploadFile } from '@/lib/upload';
 import { useMessageReceipts } from '@/lib/use-message-receipts';
 import { ConversationNavigation } from './notification-status';
@@ -70,15 +68,6 @@ const SavedReplyPicker = dynamic(() =>
 
 type Detail = Awaited<ReturnType<typeof getTicket>>;
 type ChatMessage = Detail['messages'][number];
-
-const activityNames: Record<string, string> = {
-  TICKET_CREATED: 'اولین پیام ارسال شد',
-  PUBLIC_REPLY: 'پیام ارسال شد',
-  INTERNAL_NOTE: 'یادداشت خصوصی ثبت شد',
-  STATUS_CHANGED: 'وضعیت قبلی درخواست تغییر کرد',
-  ATTACHMENT_READY: 'پیوست آماده شد',
-  TRANSFERRED: 'گفتگو به واحد دیگری منتقل شد',
-};
 
 export function Conversation({
   detail,
@@ -140,9 +129,6 @@ export function Conversation({
     [filename, setFilename] = useState(''),
     [pendingMessage, setPendingMessage] = useState<string | null>(null),
     [recorderKey, setRecorderKey] = useState(0);
-  const [olderActivities, setOlderActivities] = useState<Detail['activities']>(detail.activities),
-    [activityCursor, setActivityCursor] = useState(detail.nextActivityCursor),
-    [loadingHistory, setLoadingHistory] = useState(false);
   const timeline = useRef<TimelineHandle>(null),
     input = useRef<HTMLTextAreaElement>(null),
     followLatest = useRef(true),
@@ -703,72 +689,6 @@ export function Conversation({
     }
   }
 
-  const [historyOpen, setHistoryOpen] = useState(false),
-    [historyError, setHistoryError] = useState('');
-  const historyInFlight = useRef(false);
-  const historyPaged = useRef(false);
-  const fetchHistory = useCallback(
-    async (cursor?: string) => {
-      if (historyInFlight.current) return;
-      historyInFlight.current = true;
-      setLoadingHistory(true);
-      try {
-        const page = await request<{ items: Detail['activities']; nextCursor: string | null }>(
-          `/api/v1/tickets/${id}/history${cursor ? `?cursor=${cursor}` : ''}`,
-        );
-        if (!mounted.current) return;
-        setHistoryError('');
-        setOlderActivities((current) =>
-          [
-            ...new Map(
-              [...current, ...page.items].map((activity) => [activity.id, activity]),
-            ).values(),
-          ].sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() ||
-              b.id.localeCompare(a.id),
-          ),
-        );
-        if (cursor) historyPaged.current = true;
-        if (cursor || !historyPaged.current) setActivityCursor(page.nextCursor);
-      } catch (error) {
-        if (mounted.current)
-          setHistoryError(error instanceof Error ? error.message : 'تاریخچه دریافت نشد.');
-      } finally {
-        historyInFlight.current = false;
-        if (mounted.current) setLoadingHistory(false);
-      }
-    },
-    [id],
-  );
-  const refreshActivity = useCallback(
-    async (activityId: string) => {
-      try {
-        const activity = await request<Detail['activities'][number]>(
-          `/api/v1/tickets/${id}/history/${activityId}`,
-        );
-        if (mounted.current) {
-          setOlderActivities((current) =>
-            current.map((item) => (item.id === activity.id ? activity : item)),
-          );
-          setHistoryError('');
-        }
-      } catch (error) {
-        if (mounted.current)
-          setHistoryError(error instanceof Error ? error.message : 'تاریخچه دریافت نشد.');
-      }
-    },
-    [id],
-  );
-  useRealtimeSync(() => fetchHistory(), ['conversation', 'attachments'], {
-    ticketId: id,
-    enabled: info && historyOpen,
-    fallbackMs: 15000,
-  });
-  const activities = useMemo(
-    () => [...new Map(olderActivities.map((activity) => [activity.id, activity])).values()],
-    [olderActivities],
-  );
   const counterpart =
     permissions.staff || permissions.readOnly ? ticket.creator.name : ticket.department.name;
   const conversationControls = (
@@ -1225,112 +1145,14 @@ export function Conversation({
           )}
         </Modal>
       )}
-      <Modal
+      <ConversationDetails
+        key={id}
         open={info}
-        onOpenChange={(value) => {
-          setInfo(value);
-          if (!value) setHistoryOpen(false);
-        }}
-        title="اطلاعات گفتگو"
-        description={ticket.department.name}
-      >
-        <dl className="messenger-details">
-          <div>
-            <dt>فرستنده</dt>
-            <dd>{ticket.creator.name}</dd>
-          </div>
-          <div>
-            <dt>واحد</dt>
-            <dd>{ticket.department.name}</dd>
-          </div>
-          <div>
-            <dt>مسئول واحد</dt>
-            <dd>{data.responsible?.name ?? 'هنوز تعیین نشده'}</dd>
-          </div>
-          <div>
-            <dt>شروع گفتگو</dt>
-            <dd>{date(ticket.createdAt)}</dd>
-          </div>
-        </dl>
-        {(permissions.staff || permissions.readOnly) && (
-          <details
-            className="messenger-history"
-            open={historyOpen}
-            onToggle={(event) => {
-              setHistoryOpen(event.currentTarget.open);
-            }}
-          >
-            <summary>تاریخچه و یادداشت‌های واحد</summary>
-            {loadingHistory && <p role="status">در حال دریافت تاریخچه…</p>}
-            {historyError && (
-              <p role="alert" className="error-message">
-                {historyError}
-                <Button type="button" variant="ghost" onClick={() => void fetchHistory()}>
-                  تلاش دوباره
-                </Button>
-              </p>
-            )}
-            {!loadingHistory && !historyError && !activities.length && (
-              <p className="muted">هنوز رویدادی برای این گفتگو ثبت نشده است.</p>
-            )}
-            <PagedItems
-              items={activities}
-              pageSize={1}
-              compactSize={1}
-              label="صفحه‌بندی تاریخچه"
-              renderItem={(activity) => (
-                <article className="history-event" key={activity.id}>
-                  <div className="history-event-title">
-                    <strong>{activityNames[activity.type] ?? 'گفتگو به‌روزرسانی شد'}</strong>
-                    <time>{dateTime(activity.createdAt)}</time>
-                  </div>
-                  <PagedItems
-                    items={activity.notes}
-                    pageSize={1}
-                    compactSize={1}
-                    label="صفحه‌بندی یادداشت‌ها"
-                    renderItem={(note) => (
-                      <div key={note.id} className="history-note">
-                        <strong>{note.author.name}</strong>
-                        <PagedText text={note.body} />
-                        <PagedItems
-                          items={note.attachments}
-                          pageSize={1}
-                          compactSize={1}
-                          label="پیوست‌های یادداشت"
-                          renderItem={(file) => <AttachmentPreview key={file.id} file={file} />}
-                        />
-                      </div>
-                    )}
-                  />
-                  {permissions.staff && (
-                    <HistoryNote
-                      ticketId={id}
-                      activityId={activity.id}
-                      maxSeconds={maxSeconds}
-                      maxBytes={maxBytes}
-                      onSaved={() => void refreshActivity(activity.id)}
-                    />
-                  )}
-                </article>
-              )}
-            />
-            {activityCursor && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loadingHistory}
-                onClick={() => {
-                  setLoadingHistory(true);
-                  void fetchHistory(activityCursor ?? undefined);
-                }}
-              >
-                رویدادهای قبلی
-              </Button>
-            )}
-          </details>
-        )}
-      </Modal>
+        onOpenChange={setInfo}
+        data={data}
+        maxSeconds={maxSeconds}
+        maxBytes={maxBytes}
+      />
     </div>
   );
 }
