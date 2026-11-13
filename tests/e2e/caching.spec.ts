@@ -157,6 +157,8 @@ test('restores an authorized old message window, reading anchor and text draft a
   const { fixtures } = await import('../helpers/fixtures');
   const { db } = await import('@niticket/database');
   const f = await fixtures();
+  let releasePage: (() => void) | undefined;
+  const olderPath = '**/api/v1/tickets/*/messages?cursor=*';
   const ticket = await db.ticket.create({
     data: { creatorId: f.student.id, departmentId: f.department.id, subject: 'warm conversation' },
   });
@@ -175,11 +177,26 @@ test('restores an authorized old message window, reading anchor and text draft a
     await expect(page.getByText('Cached message 119', { exact: true })).toBeInViewport();
     await area.hover();
     await page.mouse.wheel(0, -100000);
+    const gate = new Promise<void>((resolve) => {
+      releasePage = resolve;
+    });
+    await page.route(olderPath, async (route) => {
+      const response = await route.fetch();
+      await gate;
+      await route.fulfill({ response });
+    });
     const older = page.waitForResponse((response) =>
       response.url().includes(`/tickets/${ticket.id}/messages?cursor=`),
     );
     await page.getByRole('button', { name: 'پیام‌های قبلی', exact: true }).click();
+    // Exercise measurements while the prepend is pending, rather than relying on network speed.
+    const draft = page.getByLabel('پاسخ شما', { exact: true });
+    await draft.fill('line one\nline two\nline three\nline four');
+    await draft.fill('');
+    await expect(page.getByText('Cached message 70', { exact: true })).toBeInViewport();
+    releasePage!();
     expect((await older).ok()).toBe(true);
+    await page.unroute(olderPath);
     await expect(page.getByText('Cached message 70', { exact: true })).toBeInViewport();
     await area.press('Control+Home');
     await expect(page.getByText('Cached message 20', { exact: true })).toBeInViewport();
@@ -196,6 +213,8 @@ test('restores an authorized old message window, reading anchor and text draft a
     await page.reload();
     await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveValue('');
   } finally {
+    releasePage?.();
+    await page.unrouteAll({ behavior: 'wait' });
     await db.$disconnect();
   }
 });

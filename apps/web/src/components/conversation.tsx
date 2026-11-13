@@ -395,6 +395,9 @@ export function Conversation({
 
   const loadOlder = useCallback(async () => {
     if (!olderCursor || loadingOlder || finding) return;
+    // The loading indicator and composer can resize before the HTTP page arrives.
+    followLatest.current = false;
+    timeline.current?.preserveAnchor();
     setLoadingOlder(true);
     try {
       const previous = await request<{ items: ChatMessage[]; nextCursor: string | null }>(
@@ -414,6 +417,7 @@ export function Conversation({
 
   const loadNewer = useCallback(async () => {
     if (!newerCursor || loadingOlder || finding) return;
+    timeline.current?.preserveAnchor();
     setLoadingOlder(true);
     try {
       const page = await request<{ items: ChatMessage[]; nextCursor: string | null }>(

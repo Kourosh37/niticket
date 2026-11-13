@@ -135,6 +135,15 @@ for (const width of [390, 1440]) {
       .poll(() => area.evaluate((node) => node.scrollTop))
       .toBeGreaterThan(afterPaging + 25);
     expect(await page.locator('[data-message-id]').count()).toBeLessThan(40);
+    await page.mouse.wheel(0, 100000);
+    await expect.poll(gap).toBeLessThan(2);
+    await addMessage(student, ticket.id, {
+      version: 4,
+      body: 'Following resumes after a deliberate wheel return',
+    });
+    await expect(
+      page.getByText('Following resumes after a deliberate wheel return', { exact: true }),
+    ).toBeInViewport();
     await db.$disconnect();
   });
 }

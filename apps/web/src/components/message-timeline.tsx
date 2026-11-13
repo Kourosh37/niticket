@@ -19,6 +19,7 @@ import { AttachmentPreview } from './attachment-preview';
 import { Button } from './ui/button';
 import { date } from '@/lib/utils';
 import { SearchHighlight } from './search-highlight';
+import { shouldFollowLatest } from '@/lib/scroll-follow';
 
 type Detail = Awaited<ReturnType<typeof getTicket>>;
 type Message = Detail['messages'][number];
@@ -188,6 +189,7 @@ export const MessageTimeline = memo(function MessageTimeline({
 }) {
   const virtualizer = useRef<VirtuosoHandle | null>(null);
   const initialPositioning = useRef(!focusId && !restorePosition);
+  const returningToEnd = useRef(false);
   const scroller = useRef<HTMLElement | null>(null),
     following = useRef(!focusId && !restorePosition),
     geometry = useRef({ height: 0, viewport: 0, top: 0 }),
@@ -238,6 +240,7 @@ export const MessageTimeline = memo(function MessageTimeline({
       jumpToLatest,
       preserveAnchor: () => {
         initialPositioning.current = false;
+        returningToEnd.current = false;
         setFollowing(false);
         const area = scroller.current;
         if (!area) return;
@@ -294,8 +297,11 @@ export const MessageTimeline = memo(function MessageTimeline({
       onWheelCapture={(event) => {
         anchor.current = null;
         initialPositioning.current = false;
-        if (event.deltaY < 0) setFollowing(false);
-        else if (event.deltaY > 0) {
+        if (event.deltaY < 0) {
+          returningToEnd.current = false;
+          setFollowing(false);
+        } else if (event.deltaY > 0) {
+          returningToEnd.current = true;
           const area = event.currentTarget;
           if (area.scrollHeight - area.clientHeight - area.scrollTop <= 1) setFollowing(true);
         }
@@ -307,7 +313,12 @@ export const MessageTimeline = memo(function MessageTimeline({
           initialPositioning.current = false;
           anchor.current = null;
         }
-        if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) setFollowing(false);
+        if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
+          returningToEnd.current = false;
+          setFollowing(false);
+        }
+        if (['ArrowDown', 'PageDown', 'End', ' '].includes(event.key))
+          returningToEnd.current = true;
         if (
           event.target === event.currentTarget &&
           event.ctrlKey &&
@@ -325,6 +336,7 @@ export const MessageTimeline = memo(function MessageTimeline({
         }
       }}
       onTouchMoveCapture={() => {
+        returningToEnd.current = true;
         anchor.current = null;
         initialPositioning.current = false;
         setFollowing(false);
@@ -347,15 +359,23 @@ export const MessageTimeline = memo(function MessageTimeline({
         // Allow Virtuoso to place the initial rows above the footer before any
         // reader input, without treating its corrections as a manual scroll.
         setFollowing(
-          (initialPositioning.current && gap <= 100) ||
-            (gap <= 1 && !movingUp) ||
-            (following.current && (gap <= 100 || resized)),
+          shouldFollowLatest({
+            following: following.current,
+            initial: initialPositioning.current,
+            returning: returningToEnd.current,
+            restoring: !!anchor.current,
+            gap,
+            movingUp,
+            resized,
+          }),
         );
         geometry.current = { height, viewport, top: area.scrollTop };
       }}
       onPointerDownCapture={(event) => {
         anchor.current = null;
+        returningToEnd.current = false;
         if (event.target === event.currentTarget || event.button === 1) {
+          returningToEnd.current = true;
           initialPositioning.current = false;
           setFollowing(false);
         }
