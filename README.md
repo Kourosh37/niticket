@@ -328,17 +328,11 @@ URLهای اتصال داخل Compose باید از میزبان `postgres` اس
 
 ## 🧪 توسعه و تست
 
-تست‌ها به پایگاه جداگانه با نام منتهی به `_test` نیاز دارند.
-
-در اولین اجرا آن را بسازید؛ اگر موجود است، دستور ایجاد را تکرار نکنید.
+دستورهای تست یکپارچه و مرورگر برای هر اجرا پایگاه داده، bucket و صف جدا می‌سازند و پس از پایان همان منابع را پاک می‌کنند. حساب دیتابیس تست باید مجوز ساخت پایگاه داشته باشد؛ در صورت نیاز `TEST_ADMIN_DATABASE_URL` را جدا تنظیم کنید. اطلاعات محیط اصلی حذف نمی‌شود.
 
 <div dir="ltr" align="left">
 
 ```bash
-docker compose exec -T postgres sh -c 'createdb -U "$POSTGRES_USER" niticket_test'
-
-bun --env-file=.env scripts/test-database.mjs
-
 # تست‌های رسانه به Worker ساخته‌شده از همین نسخه و FFmpeg داخل آن نیاز دارند.
 docker compose up -d --wait cache
 docker compose build worker

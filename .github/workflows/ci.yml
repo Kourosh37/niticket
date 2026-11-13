@@ -22,8 +22,6 @@ jobs:
       - run: bun run db:generate
       - run: bun run db:migrate
       - run: bun --env-file=.env scripts/init-storage.ts
-      - run: docker compose exec -T postgres createdb -U niticket niticket_test
-      - run: bun --env-file=.env scripts/test-database.mjs
       - run: docker compose build worker && docker compose up -d --no-deps --wait --wait-timeout 120 worker media-worker
       - run: bun run format:check && bun run typecheck && bun run lint && bun run test && bun run test:integration
       - run: bun run build

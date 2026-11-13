@@ -23,7 +23,7 @@ const child = spawn(process.execPath, [resolve(standalone, 'server.js')], {
     BETTER_AUTH_URL: 'http://localhost:3001',
     SMS_PROVIDER: 'log',
     LOG_LEVEL: 'info',
-    QUEUE_NAME: 'niticket-test',
+    QUEUE_NAME: process.env.TEST_QUEUE_NAME ?? 'niticket-test',
     PORT: '3001',
     HOSTNAME: '127.0.0.1',
   },

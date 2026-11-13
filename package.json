@@ -17,8 +17,8 @@
     "format": "bun --bun prettier --write . && bun --bun prisma format --schema packages/database/prisma/schema.prisma",
     "format:check": "bun --bun prettier --check .",
     "test": "bun --bun vitest run --project unit",
-    "test:integration": "bun --bun vitest run --project integration",
-    "test:e2e": "bun --bun playwright test",
+    "test:integration": "bun scripts/isolated-tests.mjs integration",
+    "test:e2e": "bun scripts/isolated-tests.mjs e2e",
     "db:generate": "bun --bun prisma generate --schema packages/database/prisma/schema.prisma",
     "db:migrate": "bun --bun prisma migrate deploy --schema packages/database/prisma/schema.prisma",
     "admin:bootstrap": "bun --env-file=.env scripts/bootstrap.ts"

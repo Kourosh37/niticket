@@ -47,7 +47,7 @@ export default defineConfig({
           testTimeout: 30000,
           env: {
             DATABASE_URL: testUrl.toString(),
-            QUEUE_NAME: 'niticket-test',
+            QUEUE_NAME: process.env.TEST_QUEUE_NAME ?? 'niticket-test',
             CACHE_REDIS_URL: '',
             ADMIN_PHONE: `+989${randomInt(100000000, 999999999)}`,
           },
