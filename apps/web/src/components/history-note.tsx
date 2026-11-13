@@ -35,7 +35,15 @@ export function HistoryNote({
     [key, setKey] = useState(0);
   return (
     <>
-      <button type="button" className="history-note-trigger" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className="history-note-trigger"
+        onClick={(event) => {
+          // WebKit does not focus pointer-activated buttons automatically.
+          event.currentTarget.focus({ preventScroll: true });
+          setOpen(true);
+        }}
+      >
         <StickyNote size={13} /> یادداشت یا وویس
       </button>
       <Modal

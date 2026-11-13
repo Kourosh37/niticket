@@ -222,9 +222,12 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
     .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
     .getByRole('button', { name: 'اطلاعات گفتگو', exact: true })
     .click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  const info = page.getByRole('dialog', { name: 'اطلاعات گفتگو', exact: true });
+  await expect(info).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })).toHaveCount(0);
   await palette(page, true);
   await page.keyboard.press('Escape');
+  await expect(info).toHaveCount(0);
   await page.getByRole('button', { name: 'گزینه‌های گفتگو', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'گزینه‌های گفتگو', exact: true })
@@ -264,14 +267,14 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await palette(page, true);
   // Close the authenticated shell before switching accounts through the test
   // API; its live session guard otherwise correctly races the next navigation.
-  await page.goto('about:blank');
+  await page.goto('/login');
   await page.request.post('/api/auth/sign-out', {
     headers: { origin: 'http://localhost:3001' },
     data: {},
   });
   await login(page, f.agent.phoneNumber!, f.password);
   await palette(page, true);
-  await page.goto('about:blank');
+  await page.goto('/login');
   await page.request.post('/api/auth/sign-out', {
     headers: { origin: 'http://localhost:3001' },
     data: {},

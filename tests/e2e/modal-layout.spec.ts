@@ -50,7 +50,11 @@ async function fits(dialog: Locator) {
                 bounds.left < box.left - 1 ||
                 bounds.right > box.right + 1 ||
                 bounds.top < box.top - 1 ||
-                bounds.bottom > box.bottom + 1
+                bounds.bottom > box.bottom + 1 ||
+                bounds.left < -1 ||
+                bounds.top < -1 ||
+                bounds.right > innerWidth + 1 ||
+                bounds.bottom > innerHeight + 1
               );
             })
             .map((control) => control.getAttribute('aria-label') ?? control.textContent),
@@ -104,7 +108,7 @@ test('keeps administration forms fully visible and preserves values across secti
           name: section === 'تصویر' ? 'ایجاد واحد و مسئول' : 'مرحله بعد',
           exact: true,
         }),
-      ).toBeInViewport({ ratio: 1 });
+      ).toBeInViewport({ ratio: 0.99 }); // WebKit rounds fractional clipping rectangles.
     }
   }
   await goToModalStep(create, 'مسئول');
@@ -233,7 +237,7 @@ test('fits all saved-reply sections, paginates the library and supports nested h
     await fits(picker);
     await expect(
       picker.getByRole('button', { name: 'ارسال پیام آماده', exact: true }),
-    ).toBeInViewport({ ratio: 1 });
+    ).toBeInViewport({ ratio: 0.99 }); // Exact control bounds are checked by fits().
   }
   await picker.getByRole('button', { name: 'بستن', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
