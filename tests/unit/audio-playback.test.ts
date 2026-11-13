@@ -16,6 +16,7 @@ class AudioStub extends EventTarget {
   duration = Infinity;
   readyState = 0;
   playbackRate = 1;
+  paused = true;
   ended = false;
   error: object | null = null;
   reject?: (error: Error) => void;
@@ -24,12 +25,15 @@ class AudioStub extends EventTarget {
     AudioStub.instances.push(this);
   }
   play() {
+    this.paused = false;
+    this.ended = false;
     this.dispatchEvent(new Event('play'));
     return new Promise<void>((_resolve, reject) => {
       this.reject = reject;
     });
   }
   pause() {
+    this.paused = true;
     this.dispatchEvent(new Event('pause'));
   }
   load = vi.fn();
@@ -94,6 +98,59 @@ it('does not turn an intentional pause into a playback error when a pending play
   expect(getPlayback()).toMatchObject({ playing: false, error: '' });
 });
 
+it('captures the final media time and cancels progress immediately, before the native pause event arrives', () => {
+  const cancel = vi.fn();
+  vi.stubGlobal('requestAnimationFrame', () => 42);
+  vi.stubGlobal('cancelAnimationFrame', cancel);
+  void playAudio('/voice', 'voice', 10, 1);
+  const player = AudioStub.instances[0];
+  player.readyState = 1;
+  player.currentTime = 0.68;
+  player.dispatchEvent(new Event('timeupdate'));
+  player.dispatchEvent(new Event('playing'));
+  player.pause = () => {
+    player.paused = true;
+  };
+  player.currentTime = 0.731;
+  pauseAudio();
+  expect(getPlayback()).toMatchObject({ playing: false, time: 0.731 });
+  expect(cancel).toHaveBeenCalledWith(42);
+  player.dispatchEvent(new Event('pause'));
+  player.dispatchEvent(new Event('timeupdate'));
+  expect(getPlayback()).toMatchObject({ playing: false, time: 0.731 });
+});
+
+it('preserves a pending seek when pausing before metadata has loaded', () => {
+  void playAudio('/voice', 'voice', 10, 1, 5);
+  const player = AudioStub.instances[0];
+  seekAudio(8);
+  pauseAudio();
+  expect(getPlayback()).toMatchObject({ playing: false, time: 8 });
+  player.readyState = 1;
+  player.dispatchEvent(new Event('loadedmetadata'));
+  expect(player.currentTime).toBe(8);
+});
+
+it('ignores queued play and pause events that no longer match the current media state', () => {
+  const cancel = vi.fn();
+  vi.stubGlobal('requestAnimationFrame', () => 42);
+  vi.stubGlobal('cancelAnimationFrame', cancel);
+  void playAudio('/voice', 'voice', 10, 1);
+  const player = AudioStub.instances[0];
+  player.pause = () => {
+    player.paused = true;
+  };
+  pauseAudio();
+  player.dispatchEvent(new Event('play'));
+  expect(getPlayback().playing).toBe(false);
+  void playAudio('/voice', 'voice', 10, 1);
+  player.dispatchEvent(new Event('playing'));
+  cancel.mockClear();
+  player.dispatchEvent(new Event('pause'));
+  expect(getPlayback().playing).toBe(true);
+  expect(cancel).not.toHaveBeenCalled();
+});
+
 it('replays an ended recording from zero and retries a failed download at its previous position', () => {
   void playAudio('/voice', 'voice', 10, 1);
   const player = AudioStub.instances[0];
@@ -104,7 +161,7 @@ it('replays an ended recording from zero and retries a failed download at its pr
   expect(getPlayback()).toMatchObject({ time: 0, playing: false, duration: 10 });
   void playAudio('/voice', 'voice', 10, 1, 10);
   expect(player.currentTime).toBe(0);
-  expect(getPlayback().time).toBe(0);
+  expect(getPlayback()).toMatchObject({ time: 0, playing: true });
   player.ended = false;
   player.currentTime = 4;
   player.dispatchEvent(new Event('timeupdate'));

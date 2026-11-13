@@ -65,10 +65,16 @@ function audio() {
       });
     }
 
-    listen('play', () => publish({ playing: true, error: '' }));
-    listen('playing', () => trackProgress(player));
+    listen('play', () => {
+      if (!player.paused && !player.ended) publish({ playing: true, error: '' });
+    });
+    listen('playing', () => {
+      if (!player.paused && !player.ended) trackProgress(player);
+    });
     listen('waiting', cancelProgress);
     listen('pause', () => {
+      // Media events are queued: a previous pause can arrive after playback resumes.
+      if (!player.paused) return;
       cancelProgress();
       publish({ playing: false, ...(pendingSeek === null ? { time: player.currentTime } : {}) });
     });
@@ -160,8 +166,15 @@ export async function playAudio(
 
 export function pauseAudio() {
   playRequest++;
-  element?.pause();
-  publish({ playing: false });
+  cancelProgress();
+  const player = element;
+  player?.pause();
+  // Publish the final media clock with the paused state, without waiting for the
+  // queued native pause event. A pre-metadata seek must keep its requested time.
+  publish({
+    playing: false,
+    ...(player && pendingSeek === null ? { time: player.currentTime } : {}),
+  });
 }
 
 export function seekAudio(time: number) {

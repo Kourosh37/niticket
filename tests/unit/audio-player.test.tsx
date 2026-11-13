@@ -21,6 +21,7 @@ class AudioStub extends EventTarget {
   }
   async play() {
     this.paused = false;
+    this.ended = false;
     this.dispatchEvent(new Event('play'));
   }
   pause() {
@@ -85,4 +86,26 @@ it('fills bars fractionally from the media time, preserves pause and seek positi
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'پخش پیام صوتی' })));
   expect(player.currentTime).toBe(0);
   expect(fills()).toEqual(['0%', '0%', '0%', '0%']);
+  expect(screen.getByRole('button', { name: 'مکث پیام صوتی' })).toBeTruthy();
+});
+
+it('freezes the waveform at the actual pause position even when the native pause event is deferred', async () => {
+  const view = render(<AudioPlayer src="/voice" durationSeconds={4} waveform={[1, 1, 1, 1]} />);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'پخش پیام صوتی' })));
+  const player = AudioStub.instances[0];
+  player.pause = () => {
+    player.paused = true;
+  };
+  player.currentTime = 1.5;
+  fireEvent.click(screen.getByRole('button', { name: 'مکث پیام صوتی' }));
+  const fills = () =>
+    [...view.container.querySelectorAll<HTMLElement>('.audio-wave > span')].map((bar) =>
+      bar.style.getPropertyValue('--wave-fill'),
+    );
+  expect(fills()).toEqual(['100%', '50%', '0%', '0%']);
+  act(() => {
+    player.dispatchEvent(new Event('pause'));
+    player.dispatchEvent(new Event('timeupdate'));
+  });
+  expect(fills()).toEqual(['100%', '50%', '0%', '0%']);
 });
