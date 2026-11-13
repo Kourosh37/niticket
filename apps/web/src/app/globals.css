@@ -392,13 +392,19 @@
   overflow: hidden;
 }
 .audio-wave > span {
+  position: relative;
+  overflow: hidden;
   flex: 1 1 0;
   min-width: 0;
   max-width: 4px;
   border-radius: 3px;
-  background: var(--surface-alt);
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
 }
-.audio-wave > span.played {
+.audio-wave > span::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--wave-fill, 0%);
   background: var(--primary);
 }
 .audio-seek {

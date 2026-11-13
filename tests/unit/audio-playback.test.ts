@@ -101,6 +101,7 @@ it('replays an ended recording from zero and retries a failed download at its pr
   player.currentTime = 10;
   player.ended = true;
   player.dispatchEvent(new Event('ended'));
+  expect(getPlayback()).toMatchObject({ time: 0, playing: false, duration: 10 });
   void playAudio('/voice', 'voice', 10, 1, 10);
   expect(player.currentTime).toBe(0);
   expect(getPlayback().time).toBe(0);
@@ -113,6 +114,41 @@ it('replays an ended recording from zero and retries a failed download at its pr
   expect(player.load).toHaveBeenCalledOnce();
   player.dispatchEvent(new Event('loadedmetadata'));
   expect(player.currentTime).toBe(4);
+});
+
+it('tracks the media clock between timeupdate events and cancels animation on buffering, pause and source replacement', () => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let id = 0;
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++id, callback);
+    return id;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (key: number) => frames.delete(key));
+  const advance = (now: number) => {
+    const scheduled = [...frames.values()];
+    frames.clear();
+    for (const frame of scheduled) frame(now);
+  };
+  void playAudio('/clock', 'clock', 10, 1);
+  const player = AudioStub.instances[0];
+  player.dispatchEvent(new Event('playing'));
+  player.currentTime = 0.12;
+  advance(100);
+  expect(getPlayback().time).toBe(0.12);
+  player.dispatchEvent(new Event('waiting'));
+  expect(frames.size).toBe(0);
+  player.dispatchEvent(new Event('playing'));
+  player.currentTime = 2.25;
+  advance(200);
+  expect(getPlayback().time).toBe(2.25);
+  pauseAudio();
+  expect(frames.size).toBe(0);
+  player.dispatchEvent(new Event('playing'));
+  void playAudio('/other', 'other', 5, 1);
+  expect(frames.size).toBe(0);
+  player.currentTime = 8;
+  advance(300);
+  expect(getPlayback().time).toBe(0);
 });
 
 it('ignores stale cleanup and late events after stopping the selected voice', async () => {

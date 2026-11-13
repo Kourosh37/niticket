@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useSyncExternalStore, useEffect } from 'react';
+import { useMemo, useState, useSyncExternalStore, useEffect, type CSSProperties } from 'react';
 import { Play, Pause, Volume2, X } from 'lucide-react';
 import {
   getPlayback,
@@ -48,19 +48,19 @@ export function AudioPlayer({
     },
     [src],
   );
-  const bars = useMemo(
-    () =>
-      Array.isArray(waveform) && waveform.length
-        ? waveform
-            .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-            .slice(0, 100)
-        : Array.from({ length: 64 }, () => 0),
-    [waveform],
-  );
+  const bars = useMemo(() => {
+    const values = Array.isArray(waveform)
+      ? waveform
+          .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+          .slice(0, 100)
+      : [];
+    return values.length ? values : Array.from({ length: 64 }, () => 0);
+  }, [waveform]);
+  const progress = duration > 0 ? Math.max(0, Math.min(1, time / duration)) : 0;
 
   function seek(value: number) {
-    setPosition(value);
     if (selected) seekAudio(value);
+    else setPosition(value);
   }
 
   return (
@@ -71,20 +71,31 @@ export function AudioPlayer({
         aria-label={playing ? `مکث ${label}` : `پخش ${label}`}
         onClick={() => {
           if (playing) pauseAudio();
-          else void playAudio(src, label, duration, speed, time);
+          else {
+            setPosition(0); // Consume a pre-play seek without retaining stale progress after completion.
+            void playAudio(src, label, duration, speed, time);
+          }
         }}
       >
         {playing ? <Pause size={20} /> : <Play size={20} />}
       </button>
       <div className="audio-main">
-        <div className="audio-wave" aria-hidden="true">
-          {bars.map((v, i) => (
-            <span
-              key={i}
-              className={duration > 0 && i / bars.length <= time / duration ? 'played' : ''}
-              style={{ height: `${4 + Math.max(0, Math.min(1, v)) * 27}px` }}
-            />
-          ))}
+        <div className="audio-wave" aria-hidden="true" dir="ltr">
+          {bars.map((v, i) => {
+            const fill = Math.max(0, Math.min(1, progress * bars.length - i));
+            return (
+              <span
+                key={i}
+                className={fill > 0 ? 'played' : ''}
+                style={
+                  {
+                    height: `${4 + Math.max(0, Math.min(1, v)) * 27}px`,
+                    '--wave-fill': `${fill * 100}%`,
+                  } as CSSProperties
+                }
+              />
+            );
+          })}
         </div>
         <input
           className="audio-seek"

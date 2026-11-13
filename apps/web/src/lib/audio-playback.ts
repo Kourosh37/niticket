@@ -24,11 +24,33 @@ let state = idlePlayback;
 let element: HTMLAudioElement | undefined;
 let playRequest = 0;
 let pendingSeek: number | null = null;
+let animationFrame: number | undefined;
 const listeners = new Set<() => void>();
 
 function publish(changes: Partial<Playback>) {
   state = { ...state, ...changes };
   listeners.forEach((listener) => listener());
+}
+
+function cancelProgress() {
+  if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+  animationFrame = undefined;
+}
+
+function trackProgress(player: HTMLAudioElement) {
+  cancelProgress();
+  let updatedAt = 0;
+  const update = (now: number) => {
+    animationFrame = undefined;
+    if (element !== player || player.paused || player.ended) return;
+    // Read the media clock; wall-clock interpolation drifts during buffering and seeking.
+    if (pendingSeek === null && now - updatedAt >= 40) {
+      if (Math.abs(player.currentTime - state.time) > 0.001) publish({ time: player.currentTime });
+      updatedAt = now;
+    }
+    animationFrame = requestAnimationFrame(update);
+  };
+  animationFrame = requestAnimationFrame(update);
 }
 
 function audio() {
@@ -44,8 +66,19 @@ function audio() {
     }
 
     listen('play', () => publish({ playing: true, error: '' }));
-    listen('pause', () => publish({ playing: false }));
-    listen('ended', () => publish({ playing: false, time: state.duration || player.currentTime }));
+    listen('playing', () => trackProgress(player));
+    listen('waiting', cancelProgress);
+    listen('pause', () => {
+      cancelProgress();
+      publish({ playing: false, ...(pendingSeek === null ? { time: player.currentTime } : {}) });
+    });
+    listen('ended', () => {
+      cancelProgress();
+      playRequest++;
+      pendingSeek = null;
+      player.currentTime = 0;
+      publish({ playing: false, time: 0 });
+    });
     listen('timeupdate', () => {
       if (pendingSeek === null) publish({ time: player.currentTime });
     });
@@ -57,9 +90,10 @@ function audio() {
         pendingSeek = null;
       }
     });
-    listen('error', () =>
-      publish({ playing: false, error: 'دریافت صدا انجام نشد. دوباره تلاش کنید.' }),
-    );
+    listen('error', () => {
+      cancelProgress();
+      publish({ playing: false, error: 'دریافت صدا انجام نشد. دوباره تلاش کنید.' });
+    });
   }
   return element;
 }
@@ -86,6 +120,7 @@ export async function playAudio(
 ) {
   const request = ++playRequest;
   if (state.src !== src) {
+    cancelProgress();
     // A separate element per source isolates queued media events from previous voices.
     const previous = element;
     element = undefined;
@@ -145,6 +180,7 @@ export function setAudioSpeed(speed: number) {
 
 export function stopAudio(src?: string) {
   if (src && state.src !== src) return;
+  cancelProgress();
   playRequest++;
   const previous = element;
   element = undefined;
