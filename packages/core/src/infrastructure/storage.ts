@@ -19,7 +19,12 @@ export function storage(publicEndpoint = false) {
       endpoint: publicEndpoint ? c.S3_PUBLIC_ENDPOINT : c.S3_ENDPOINT,
       region: c.S3_REGION,
       forcePathStyle: true,
-      requestHandler: { connectionTimeout: 3000, requestTimeout: 30000, socketTimeout: 30000 },
+      requestHandler: {
+        connectionTimeout: 3000,
+        requestTimeout: 30000,
+        socketTimeout: 30000,
+        throwOnRequestTimeout: true,
+      },
       maxAttempts: 3,
       requestChecksumCalculation: 'WHEN_REQUIRED',
       responseChecksumValidation: 'WHEN_REQUIRED',

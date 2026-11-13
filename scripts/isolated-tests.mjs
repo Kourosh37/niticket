@@ -66,7 +66,7 @@ async function cleanBucket() {
     forcePathStyle: true,
     requestChecksumCalculation: 'WHEN_REQUIRED',
     credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY },
-    requestHandler: { connectionTimeout: 3000, requestTimeout: 30000 },
+    requestHandler: { connectionTimeout: 3000, requestTimeout: 30000, throwOnRequestTimeout: true },
   });
   try {
     let KeyMarker, VersionIdMarker;
