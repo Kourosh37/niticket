@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { request } from '@/lib/utils';
 import { clientCache, queryPolicy } from '@/lib/client-cache';
 import { useRealtimeSync } from '@/lib/use-realtime-sync';
+import { useHydrated } from '@/lib/use-hydrated';
 
 type Choices = Awaited<
   ReturnType<typeof import('@niticket/core/application/administration').conversationChoices>
@@ -20,6 +21,7 @@ export function NewTicket({
   initialDepartment?: string;
 }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [data, setData] = useState(initial),
     [cursor, setCursor] = useState<string | undefined>(),
     [previous, setPrevious] = useState<(string | undefined)[]>([]),
@@ -125,7 +127,7 @@ export function NewTicket({
             aria-label="جستجوی واحد"
             placeholder="نام واحد را بنویسید…"
             value={search}
-            disabled={!!openingId}
+            disabled={!hydrated || !!openingId}
             maxLength={100}
             onChange={(event) => {
               searchUnits(event.target.value);
@@ -176,7 +178,11 @@ export function NewTicket({
               key={d.id}
               className="unit-choice"
               disabled={
-                loading || !!loadError || !!openingId || !(d.acceptingTickets || d.canContinue)
+                !hydrated ||
+                loading ||
+                !!loadError ||
+                !!openingId ||
+                !(d.acceptingTickets || d.canContinue)
               }
               aria-label={`انتخاب ${d.name}`}
               onClick={() => void open(d.id)}

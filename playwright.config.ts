@@ -23,7 +23,7 @@ export default defineConfig({
     {
       name: 'webkit',
       testMatch:
-        /(?:theme|select-controls|jalali-filters|unit-search|session-revocation|caching|modal-layout)\.spec\.ts/,
+        /(?:theme|select-controls|jalali-filters|unit-search|session-revocation|caching|modal-layout|hydration)\.spec\.ts/,
       use: { browserName: 'webkit', launchOptions: {} },
     },
   ],

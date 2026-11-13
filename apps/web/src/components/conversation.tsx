@@ -977,7 +977,7 @@ export function Conversation({
               enterKeyHint="send"
               value={body}
               maxLength={20000}
-              disabled={busy || !!pendingMessage}
+              disabled={!memoryReady || busy || !!pendingMessage}
               placeholder={
                 pendingMessage
                   ? 'ارسال فایل‌ها را تکمیل کنید…'
@@ -1004,7 +1004,7 @@ export function Conversation({
                 id="attachment"
                 type="file"
                 multiple
-                disabled={busy}
+                disabled={!memoryReady || busy}
                 accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx,.webm,.ogg,.m4a,.mp4,.mp3,.wav"
                 onChange={(event) => {
                   const chosen = Array.from(event.target.files ?? []);

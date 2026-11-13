@@ -10,6 +10,7 @@ import { request, digits } from '@/lib/utils';
 import { uploadSavedReplyFile } from '@/lib/upload';
 import { waitForAttachmentApproval } from '@/lib/attachment-approval';
 import { useRealtimeSync } from '@/lib/use-realtime-sync';
+import { useHydrated } from '@/lib/use-hydrated';
 import { clientCache, queryPolicy } from '@/lib/client-cache';
 import { Modal } from './ui/dialog';
 import { ModalForm } from './ui/modal-form';
@@ -93,12 +94,14 @@ function useReplyList(departmentId: string, initial?: ReplyList) {
 }
 
 function ReplySearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const hydrated = useHydrated();
   return (
     <label className="saved-reply-search">
       <Search size={18} />
       <span className="sr-only">جستجو در پیام‌های آماده</span>
       <input
         type="search"
+        disabled={!hydrated}
         value={value}
         maxLength={100}
         placeholder="جستجو در پیام‌های آماده…"
@@ -507,6 +510,7 @@ function ManagedReplies({
   maxSeconds: number;
 }) {
   const list = useReplyList(departmentId, initial);
+  const hydrated = useHydrated();
   const [editor, setEditor] = useState<Reply | 'new' | null>(null),
     [deleting, setDeleting] = useState<Reply | null>(null);
   const [busy, setBusy] = useState(false),
@@ -515,7 +519,7 @@ function ManagedReplies({
     <section className="surface saved-replies-panel" aria-label="فهرست پیام‌های آماده">
       <div className="saved-reply-toolbar">
         <ReplySearch value={list.query} onChange={list.setQuery} />
-        <Button type="button" onClick={() => setEditor('new')}>
+        <Button type="button" disabled={!hydrated} onClick={() => setEditor('new')}>
           <Plus size={17} />
           پیام جدید
         </Button>
@@ -540,7 +544,7 @@ function ManagedReplies({
             <button
               type="button"
               className="saved-reply-summary"
-              disabled={list.loading}
+              disabled={!hydrated || list.loading}
               onClick={() => setEditor(reply)}
               aria-label={`ویرایش ${reply.title}`}
             >
@@ -555,6 +559,7 @@ function ManagedReplies({
               variant="ghost"
               size="icon"
               aria-label={`حذف ${reply.title}`}
+              disabled={!hydrated}
               onClick={() => {
                 setError('');
                 setDeleting(reply);
