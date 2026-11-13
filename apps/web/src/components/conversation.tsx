@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { realtime } from '@/lib/realtime-client';
 import { useRealtimeSync } from '@/lib/use-realtime-sync';
 import { clientCache } from '@/lib/client-cache';
+import { mergeConversationMessages as mergeMessages } from '@/lib/conversation-messages';
 import { clearTicketDraft, readDraft, saveDraft } from '@/lib/conversation-memory';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
@@ -69,27 +70,6 @@ const SavedReplyPicker = dynamic(() =>
 
 type Detail = Awaited<ReturnType<typeof getTicket>>;
 type ChatMessage = Detail['messages'][number];
-
-function mergeMessages(previous: ChatMessage[], incoming: ChatMessage[]) {
-  const byId = new Map(previous.map((message) => [message.id, message]));
-  for (const message of incoming) {
-    const previous = byId.get(message.id);
-    if (
-      !previous ||
-      previous.body !== message.body ||
-      previous.visibility !== message.visibility ||
-      String(previous.readAt) !== String(message.readAt) ||
-      previous.sender.name !== message.sender.name ||
-      previous.sender.image !== message.sender.image ||
-      JSON.stringify(previous.attachments) !== JSON.stringify(message.attachments)
-    )
-      byId.set(message.id, message);
-  }
-  return [...byId.values()].sort(
-    (a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id),
-  );
-}
 
 const activityNames: Record<string, string> = {
   TICKET_CREATED: 'اولین پیام ارسال شد',
@@ -316,9 +296,12 @@ export function Conversation({
             setOlderCursor(
               gap && fresh.nextMessageCursor ? fresh.nextMessageCursor : snapshot.older,
             );
-            setRestorePosition(snapshot.position);
-            readingPosition.current = snapshot.position;
-            followLatest.current = !snapshot.position;
+            const position =
+              clientCache.peek<{ id: string; offset: number } | null>(`ui-anchor:${id}`) ??
+              snapshot.position;
+            setRestorePosition(position);
+            readingPosition.current = position;
+            followLatest.current = !position;
             setWindowKey((value) => value + 1);
           }
         }
@@ -354,21 +337,30 @@ export function Conversation({
           ? { id: row.dataset.messageId!, offset: row.getBoundingClientRect().top - top }
           : undefined;
     };
-    const save = () => {
+    const saveWindow = () => {
       if (clientCache.scope !== actorId || messages.length > 400 || browsing.current) return;
-      capture();
       clientCache.remember(
         `ui-chat:${id}`,
         {
           messages,
           older: olderCursor,
           scope: `${permissions.staff}:${permissions.readOnly}`,
-          position: readingPosition.current,
         },
         ['ui-snapshot', 'catalog'],
         120000,
       );
     };
+    const save = () => {
+      if (clientCache.scope !== actorId || browsing.current) return;
+      capture();
+      clientCache.remember(
+        `ui-anchor:${id}`,
+        readingPosition.current ?? null,
+        ['ui-snapshot', 'catalog'],
+        120000,
+      );
+    };
+    saveWindow();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       capture();
@@ -381,6 +373,7 @@ export function Conversation({
     return () => {
       clearTimeout(timer);
       save();
+      saveWindow();
       area?.removeEventListener('scroll', schedule);
       window.removeEventListener('pagehide', save);
     };

@@ -17,7 +17,7 @@ export class ClientCache {
   freshUntil = 0;
 
   constructor(
-    limits = { entries: 160, bytes: 6 * 1024 * 1024 },
+    private limits = { entries: 160, bytes: 6 * 1024 * 1024 },
     private sizeOf = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength,
     private onClear?: () => void,
   ) {
@@ -55,7 +55,18 @@ export class ClientCache {
   remember(key: string, value: unknown, tags: string[], ttl = 60000) {
     if (!this.scope) return;
     const size = this.sizeOf(value);
+    if (
+      !Number.isFinite(size) ||
+      size < 0 ||
+      size > this.limits.bytes ||
+      ttl <= 0 ||
+      this.limits.entries < 1
+    ) {
+      this.data.delete(`${this.scope}:${key}`);
+      return false;
+    }
     this.data.set(`${this.scope}:${key}`, structuredClone(value), ttl, size, tags);
+    return true;
   }
 
   async load<T>(

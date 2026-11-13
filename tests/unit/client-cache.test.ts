@@ -109,3 +109,21 @@ it('refreshes ticket queries after a write without discarding retained reading p
   cache.mutated('/api/v1/admin/departments/one');
   expect(cache.peek('position')).toBeUndefined();
 });
+
+it('rejects oversized values before cloning and removes an older representation of the same key', () => {
+  const cache = new ClientCache(
+    { entries: 2, bytes: 100 },
+    (value) => (value as { size: number }).size,
+  );
+  cache.activate('one');
+  cache.remember('item', { size: 10 }, []);
+  const copy = vi.spyOn(globalThis, 'structuredClone');
+  try {
+    expect(cache.remember('item', { size: 1000 }, [])).toBe(false);
+    expect(copy).not.toHaveBeenCalled();
+    expect(cache.peek('item')).toBeUndefined();
+    expect(cache.state.bytes).toBe(0);
+  } finally {
+    copy.mockRestore();
+  }
+});
