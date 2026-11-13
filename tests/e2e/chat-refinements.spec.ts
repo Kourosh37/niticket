@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -161,7 +161,6 @@ test('shows the responsible contact photo, compact composer controls and vertica
   // The virtualizer measures rows while hidden; viewport geometry alone is not a paint check.
   await expect(page.getByText('پیوست‌های یک پیام', { exact: true })).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/chat-refinements-dark.png' });
-  await db.$disconnect();
 });
 
 test('shows double ticks only after visible counterparty views and never marks hidden or offscreen messages', async ({
@@ -247,5 +246,4 @@ test('shows double ticks only after visible counterparty views and never marks h
   ).toBe(403);
   await sender.close();
   await recipient.close();
-  await db.$disconnect();
 });

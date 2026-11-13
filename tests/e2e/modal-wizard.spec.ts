@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { approveSavedReplyFiles } from '../helpers/approve-saved-reply';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
@@ -107,7 +107,6 @@ for (const kind of ['text', 'file', 'voice'] as const) {
     expect(saved.body).toBe(kind === 'text' ? 'متن اختیاری که پس از بازگشت حفظ می‌شود' : '');
     expect(saved.attachments.length).toBe(kind === 'text' ? 0 : 1);
     if (kind === 'voice') expect(saved.attachments[0].declaredMime).toMatch(/^audio\//);
-    await db.$disconnect();
   });
 }
 
@@ -150,5 +149,4 @@ test('defers a responsible contact photo until final confirmation and cancels wi
   await editor.getByRole('button', { name: 'ذخیره حساب مسئول', exact: true }).click();
   await expect(editor).toHaveCount(0, { timeout: 30000 });
   expect(await db.attachment.count({ where: { avatarOwnerId: f.manager.id } })).toBe(1);
-  await db.$disconnect();
 });

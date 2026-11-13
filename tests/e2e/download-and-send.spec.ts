@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -133,7 +133,6 @@ test('shows inline transfer progress and retains downloads across virtualized me
   expect(requests).toBe(2);
   expect(errors).toEqual([]);
   await network.detach();
-  await db.$disconnect();
 });
 
 test('uses an icon-only send button and supports Enter, Shift+Enter, touch keyboards and IME composition', async ({
@@ -181,5 +180,4 @@ test('uses an icon-only send button and supports Enter, Shift+Enter, touch keybo
   await expect(page.locator('.message-body')).toHaveCount(2);
   await expect(send).toBeDisabled();
   await context.close();
-  await db.$disconnect();
 });

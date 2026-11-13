@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -16,7 +16,7 @@ for (const role of ['student', 'manager'] as const) {
     page,
   }) => {
     const { fixtures } = await import('../helpers/fixtures');
-    const { db } = await import('@niticket/database');
+
     const f = await fixtures();
     expect(
       (
@@ -118,6 +118,5 @@ for (const role of ['student', 'manager'] as const) {
     await page.keyboard.press('Enter');
     await expect(all).toHaveAttribute('aria-current', 'page');
     await expect(nav).toHaveAttribute('aria-busy', 'false');
-    await db.$disconnect();
   });
 }

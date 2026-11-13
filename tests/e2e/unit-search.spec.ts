@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -68,5 +68,4 @@ test('finds units outside the first page, clears an empty query and opens the ch
   await db.department.deleteMany({
     where: { id: { in: [...rows.slice(0, 50).map((row) => row.id), hidden.id] } },
   });
-  await db.$disconnect();
 });

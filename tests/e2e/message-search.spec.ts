@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -133,7 +133,6 @@ test('searches every chat, paginates results and opens an old matching message w
   await expect(results.first()).toContainText('SECOND_UNIT');
   expect(other.id).not.toBe(ticket.id);
   expect(errors).toEqual([]);
-  await db.$disconnect();
 });
 
 test('searches inside a chat, navigates matches across result pages and preserves drafts and bounded message rendering', async ({
@@ -221,7 +220,6 @@ test('searches inside a chat, navigates matches across result pages and preserve
   }
   expect(await page.locator('[data-message-id]').count()).toBeLessThan(40);
   expect(errors).toEqual([]);
-  await db.$disconnect();
 });
 
 test('filters file names and audio without downloading attachments and chooses only visible senders', async ({
@@ -301,7 +299,6 @@ test('filters file names and audio without downloading attachments and chooses o
   ).toBeVisible();
   await expect(page.getByLabel('نمایش پیام‌ها', { exact: true })).toHaveCount(0);
   expect(downloads).toBe(0);
-  await db.$disconnect();
 });
 
 test('filters administrative lists live and searches messages in place without a dialog', async ({
@@ -348,5 +345,4 @@ test('filters administrative lists live and searches messages in place without a
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'بستن جستجو', exact: true }).click();
   await expect(page.locator('[data-search-result]')).toHaveCount(0);
-  await db.$disconnect();
 });

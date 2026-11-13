@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { goToModalStep } from '../helpers/modal-steps';
 import { loadEnvFile } from 'node:process';
 import { randomBytes, randomUUID, randomInt } from 'node:crypto';
@@ -47,7 +47,6 @@ test('expired student and administrator sessions redirect while the page is idle
     await expect(page.getByLabel('رمز عبور فعلی برای تأیید')).toHaveCount(0);
     await context.close();
   }
-  await db.$disconnect();
 });
 
 test('an expired session redirects immediately when a protected form is submitted', async ({
@@ -75,7 +74,6 @@ test('an expired session redirects immediately when a protected form is submitte
   expect((await db.user.findUniqueOrThrow({ where: { id: f.student.id } })).name).toBe(
     f.student.name,
   );
-  await db.$disconnect();
 });
 
 test('sensitive operations confirm the password in the same form, keep mistakes local and resume once', async ({
@@ -171,7 +169,6 @@ test('sensitive operations confirm the password in the same form, keep mistakes 
     .click();
   await expect(page.getByText('اطلاعات سامانه ذخیره شد.', { exact: true })).toBeVisible();
   await expect(settingsConfirmation).toHaveCount(0);
-  await db.$disconnect();
 });
 
 test('password changes revoke other sessions even when the client requests otherwise', async ({
@@ -205,7 +202,6 @@ test('password changes revoke other sessions even when the client requests other
   ).toBe(1);
   await a.close();
   await b.close();
-  await db.$disconnect();
 });
 
 async function readOtp(phoneNumber: string) {
@@ -637,5 +633,4 @@ test('three roles complete a ticket with private history notes, file previews an
   await admin.close();
   await student.close();
   await staff.close();
-  await db.$disconnect();
 });

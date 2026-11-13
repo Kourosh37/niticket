@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -85,7 +85,6 @@ test('filters chats with an animated RTL selector, supports keyboard dismissal a
     await page.getByRole('listbox').evaluate((node) => getComputedStyle(node).animationName),
   ).toBe('none');
   await page.screenshot({ path: '.local/ui-preview/select-unit-light.png' });
-  await db.$disconnect();
 });
 
 test('uses the same selector for submitted reports, saved-reply units and live message search', async ({
@@ -136,5 +135,4 @@ test('uses the same selector for submitted reports, saved-reply units and live m
   await page.getByRole('combobox', { name: 'نمایش پیام‌ها', exact: true }).click();
   await page.getByRole('option', { name: 'فقط خصوصی واحد', exact: true }).click();
   await expect(page).toHaveURL(/visibility=internal/);
-  await db.$disconnect();
 });

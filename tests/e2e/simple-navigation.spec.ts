@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -132,5 +132,4 @@ test('keeps requester and officer navigation at the bottom and shares private un
   await expect(badge).toHaveText('۹۹+');
   await expect(dock.getByRole('status')).toHaveText('۱۰۲ اعلان خوانده‌نشده');
   await page.screenshot({ path: '.local/ui-preview/simple-officer-navigation-390.png' });
-  await db.$disconnect();
 });

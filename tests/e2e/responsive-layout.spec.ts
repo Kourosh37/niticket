@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -144,7 +144,6 @@ test('keeps chat controls, action sheets and the composer inside mobile and keyb
     page.getByText('فضای کافی برای مطالعه و نوشتن پیام در موبایل', { exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: '.local/ui-preview/mobile-chat-responsive-390.png' });
-  await db.$disconnect();
 });
 
 for (const role of ['student', 'manager', 'admin'] as const) {
@@ -247,7 +246,6 @@ for (const role of ['student', 'manager', 'admin'] as const) {
       await page.keyboard.press('Escape');
       await expect(drawer).toBeHidden();
     }
-    await db.$disconnect();
   });
 }
 

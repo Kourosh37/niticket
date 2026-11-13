@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
@@ -96,11 +96,6 @@ test.beforeAll(async () => {
     if (filename === 'persian.pdf') pdfId = upload.id;
   }
   account = { phone: f.student.phoneNumber!, password: f.password, ticketId: ticket.id, pdfId };
-});
-
-test.afterAll(async () => {
-  const { db } = await import('@niticket/database');
-  await db.$disconnect();
 });
 
 async function openChat(page: Page) {

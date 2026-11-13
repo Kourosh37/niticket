@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -144,6 +144,5 @@ for (const width of [390, 1440]) {
     await expect(
       page.getByText('Following resumes after a deliberate wheel return', { exact: true }),
     ).toBeInViewport();
-    await db.$disconnect();
   });
 }

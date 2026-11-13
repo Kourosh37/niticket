@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -197,7 +197,6 @@ for (const meter of ['silent-sink', 'unsupported'] as const) {
       expect(errors).toEqual([]);
     } finally {
       await browser.close();
-      await db.$disconnect();
     }
   });
 }

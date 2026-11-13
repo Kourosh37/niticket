@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID, randomInt } from 'node:crypto';
 
@@ -86,7 +86,6 @@ test('manages devices from an older valid login and logs out other devices immed
   await expect(page).toHaveURL(origin + '/login');
   await current.close();
   await other.close();
-  await db.$disconnect();
 });
 
 test('shows mobile numbers and navigates bounded user pages in both directions', async ({
@@ -129,7 +128,6 @@ test('shows mobile numbers and navigates bounded user pages in both directions',
   await expect(page.getByRole('button', { name: 'جستجو', exact: true })).toHaveCount(0);
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText(number.replace('+98', '0'));
-  await db.$disconnect();
 });
 
 function twoPagePdf() {
@@ -215,5 +213,4 @@ test('downloads and parses a PDF only once while changing its preview pages', as
   await expect(dialog.getByRole('status')).toHaveCount(0);
   expect(downloads).toBe(1);
   await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await db.$disconnect();
 });

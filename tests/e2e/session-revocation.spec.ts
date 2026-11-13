@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -97,7 +97,6 @@ for (const role of ['student', 'manager', 'admin'] as const) {
       await target.close();
       await untouched.close();
       await privacy.close();
-      await db.$disconnect();
     }
   });
 }

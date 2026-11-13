@@ -1,4 +1,4 @@
-import { test, expect, type BrowserContext } from '@playwright/test';
+import { test, expect, type BrowserContext } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -89,7 +89,6 @@ test('serves immutable versioned public assets while reauthorizing every private
   } finally {
     await owner.close();
     await outsider.close();
-    await db.$disconnect();
   }
 });
 
@@ -124,31 +123,28 @@ test('reopens and downloads a retained PDF without another binary transfer but c
       expiresAt: new Date(Date.now() + 60000),
     },
   });
-  try {
-    await login(page.context(), f.student.phoneNumber, f.password);
-    let binary = 0,
-      proofs = 0;
-    page.on('request', (request) => {
-      if (request.url().endsWith(`/attachments/${file.id}/access`)) binary++;
-      if (request.url().endsWith(`/attachments/${file.id}/metadata`)) proofs++;
-    });
-    await page.goto(`/tickets/${ticket.id}`);
-    const open = page.getByRole('button', { name: 'پیش‌نمایش cached.pdf', exact: true });
-    await open.click();
-    const dialog = page.getByRole('dialog', { name: 'پیش‌نمایش فایل', exact: true });
-    await expect(dialog.locator('canvas').first()).toBeVisible();
-    await dialog.getByRole('button', { name: 'بستن', exact: true }).click();
-    await open.click();
-    await expect(dialog.locator('canvas').first()).toBeVisible();
-    expect(binary).toBe(1);
-    expect(proofs).toBeGreaterThanOrEqual(2);
-    const downloaded = page.waitForEvent('download');
-    await dialog.locator('.preview-footer').getByRole('button').click();
-    expect((await downloaded).suggestedFilename()).toBe('cached.pdf');
-    expect(binary).toBe(1);
-  } finally {
-    await db.$disconnect();
-  }
+
+  await login(page.context(), f.student.phoneNumber, f.password);
+  let binary = 0,
+    proofs = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith(`/attachments/${file.id}/access`)) binary++;
+    if (request.url().endsWith(`/attachments/${file.id}/metadata`)) proofs++;
+  });
+  await page.goto(`/tickets/${ticket.id}`);
+  const open = page.getByRole('button', { name: 'پیش‌نمایش cached.pdf', exact: true });
+  await open.click();
+  const dialog = page.getByRole('dialog', { name: 'پیش‌نمایش فایل', exact: true });
+  await expect(dialog.locator('canvas').first()).toBeVisible();
+  await dialog.getByRole('button', { name: 'بستن', exact: true }).click();
+  await open.click();
+  await expect(dialog.locator('canvas').first()).toBeVisible();
+  expect(binary).toBe(1);
+  expect(proofs).toBeGreaterThanOrEqual(2);
+  const downloaded = page.waitForEvent('download');
+  await dialog.locator('.preview-footer').getByRole('button').click();
+  expect((await downloaded).suggestedFilename()).toBe('cached.pdf');
+  expect(binary).toBe(1);
 });
 
 test('restores an authorized old message window, reading anchor and text draft across navigation', async ({
@@ -215,33 +211,29 @@ test('restores an authorized old message window, reading anchor and text draft a
   } finally {
     releasePage?.();
     await page.unrouteAll({ behavior: 'wait' });
-    await db.$disconnect();
   }
 });
 
 test('invalidates warm unit choices when catalog metadata changes', async ({ page }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const { saveDepartment } = await import('@niticket/core/application/administration');
   const f = await fixtures();
-  try {
-    await login(page.context(), f.student.phoneNumber, f.password);
-    await page.goto('/tickets/new');
-    const search = page.getByLabel('جستجوی واحد', { exact: true });
-    await search.fill(f.department.name);
-    await expect(
-      page.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }),
-    ).toBeVisible();
-    const next = `واحد تازه ${randomUUID().slice(0, 8)}`;
-    await saveDepartment(await f.actor(f.admin.id), { name: next }, f.department.id);
-    await expect(
-      page.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }),
-    ).toHaveCount(0);
-    await search.fill(next);
-    await expect(page.getByRole('button', { name: `انتخاب ${next}`, exact: true })).toBeVisible();
-  } finally {
-    await db.$disconnect();
-  }
+
+  await login(page.context(), f.student.phoneNumber, f.password);
+  await page.goto('/tickets/new');
+  const search = page.getByLabel('جستجوی واحد', { exact: true });
+  await search.fill(f.department.name);
+  await expect(
+    page.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }),
+  ).toBeVisible();
+  const next = `واحد تازه ${randomUUID().slice(0, 8)}`;
+  await saveDepartment(await f.actor(f.admin.id), { name: next }, f.department.id);
+  await expect(
+    page.getByRole('button', { name: `انتخاب ${f.department.name}`, exact: true }),
+  ).toHaveCount(0);
+  await search.fill(next);
+  await expect(page.getByRole('button', { name: `انتخاب ${next}`, exact: true })).toBeVisible();
 });
 
 test('removes persisted drafts when signing out from a freshly loaded settings document', async ({
@@ -253,31 +245,27 @@ test('removes persisted drafts when signing out from a freshly loaded settings d
   const ticket = await db.ticket.create({
     data: { creatorId: f.student.id, departmentId: f.department.id, subject: 'draft logout' },
   });
-  try {
-    await login(page.context(), f.student.phoneNumber, f.password);
-    await page.goto(`/tickets/${ticket.id}`);
-    await page.getByLabel('پاسخ شما', { exact: true }).fill('پیش‌نویس محرمانه');
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            Object.keys(sessionStorage).filter((key) => key.startsWith('niticket:draft:')).length,
-        ),
-      )
-      .toBe(1);
-    // A hard navigation starts fresh modules without loading the conversation component.
-    await page.goto('/settings');
-    await page.getByRole('button', { name: 'خروج از حساب', exact: true }).click();
-    await expect(page).toHaveURL(origin + '/login');
-    expect(
-      await page.evaluate(
+
+  await login(page.context(), f.student.phoneNumber, f.password);
+  await page.goto(`/tickets/${ticket.id}`);
+  await page.getByLabel('پاسخ شما', { exact: true }).fill('پیش‌نویس محرمانه');
+  await expect
+    .poll(() =>
+      page.evaluate(
         () => Object.keys(sessionStorage).filter((key) => key.startsWith('niticket:draft:')).length,
       ),
-    ).toBe(0);
-    await login(page.context(), f.student.phoneNumber, f.password);
-    await page.goto(`/tickets/${ticket.id}`);
-    await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveValue('');
-  } finally {
-    await db.$disconnect();
-  }
+    )
+    .toBe(1);
+  // A hard navigation starts fresh modules without loading the conversation component.
+  await page.goto('/settings');
+  await page.getByRole('button', { name: 'خروج از حساب', exact: true }).click();
+  await expect(page).toHaveURL(origin + '/login');
+  expect(
+    await page.evaluate(
+      () => Object.keys(sessionStorage).filter((key) => key.startsWith('niticket:draft:')).length,
+    ),
+  ).toBe(0);
+  await login(page.context(), f.student.phoneNumber, f.password);
+  await page.goto(`/tickets/${ticket.id}`);
+  await expect(page.getByLabel('پاسخ شما', { exact: true })).toHaveValue('');
 });

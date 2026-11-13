@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -321,5 +321,4 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: '.local/ui-preview/theme-admin-dark.png' });
   expect(errors).toEqual([]);
-  await db.$disconnect();
 });

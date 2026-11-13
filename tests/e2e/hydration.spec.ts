@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Locator } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '../helpers/e2e-test';
 import { fixtures } from '../helpers/fixtures';
 import { db } from '@niticket/database';
 import { createSavedReply } from '@niticket/core/application/saved-replies';
@@ -81,6 +81,5 @@ test('retains the first input and edit action when application JavaScript loads 
   } finally {
     await student.close();
     await officer.close();
-    await db.$disconnect();
   }
 });

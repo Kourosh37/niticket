@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -108,5 +108,4 @@ test('categorizes requester chats and dismisses only replies actually seen in th
   await expect(page.locator('.inbox-thread')).toHaveCount(0);
   await page.getByRole('link', { name: 'پاسخ داده‌شده', exact: true }).click();
   await expect(page.locator('.inbox-thread')).toHaveCount(2);
-  await db.$disconnect();
 });

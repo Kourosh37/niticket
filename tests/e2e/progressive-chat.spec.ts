@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -27,7 +27,7 @@ test('accepts local, zero-less and spaced international numbers in the UI and re
   browser,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const f = await fixtures(),
     number = f.student.phoneNumber!;
   for (const value of [number.replace('+98', '0'), number.slice(3), `+98 ${number.slice(3)}`]) {
@@ -71,14 +71,13 @@ test('accepts local, zero-less and spaced international numbers in the UI and re
   await page.getByRole('button', { name: 'ورود', exact: true }).click();
   await expect(page).toHaveURL(origin + '/');
   await context.close();
-  await db.$disconnect();
 });
 
 test('uses a bottom desktop dock and fills the available workspace with responsive cards', async ({
   page,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const f = await fixtures();
   await page.setViewportSize({ width: 1920, height: 1080 });
   await login(page, f.student.phoneNumber!, f.password);
@@ -100,7 +99,6 @@ test('uses a bottom desktop dock and fills the available workspace with responsi
   expect((await forms.nth(1).boundingBox())!.y).toBeGreaterThan(
     (await forms.nth(0).boundingBox())!.y,
   );
-  await db.$disconnect();
 });
 
 test('keeps a 2000-message chat bounded, defers history and audio downloads, and preserves typing during paging', async ({
@@ -201,5 +199,4 @@ test('keeps a 2000-message chat bounded, defers history and audio downloads, and
   await draft.fill('تایپ در گفتگوی طولانی بدون بازسازی تاریخچه');
   await expect(draft).toHaveValue('تایپ در گفتگوی طولانی بدون بازسازی تاریخچه');
   expect(historyRequests).toHaveLength(0);
-  await db.$disconnect();
 });

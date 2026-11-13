@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { goToModalStep } from '../helpers/modal-steps';
@@ -116,7 +116,6 @@ test('keeps PDF saving busy until approval, preserves a rejected draft and sends
   await expect
     .poll(() => db.message.count({ where: { ticketId: ticket.id, savedReplyId: reply.id } }))
     .toBe(1);
-  await db.$disconnect();
 });
 
 test('manages a minimal media library, searches and sends a complete saved reply without losing the current draft', async ({
@@ -270,7 +269,6 @@ test('manages a minimal media library, searches and sends a complete saved reply
   await expect(recipient.getByText(reply.body, { exact: true })).toBeVisible();
   expect((await student.request.get(`/api/v1/attachments/${video.id}/access`)).ok()).toBe(true);
   await student.close();
-  await db.$disconnect();
 });
 
 test('hides the saved reply library from requesters and administrators and rejects forged send references', async ({
@@ -315,5 +313,4 @@ test('hides the saved reply library from requesters and administrators and rejec
     await page.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
   }
   expect(await db.message.count({ where: { ticketId: ticket.id } })).toBe(0);
-  await db.$disconnect();
 });

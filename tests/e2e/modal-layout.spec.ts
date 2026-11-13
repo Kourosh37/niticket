@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { goToModalStep } from '../helpers/modal-steps';
@@ -76,7 +76,7 @@ test('keeps administration forms fully visible and preserves values across secti
 }) => {
   test.setTimeout(120000);
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const f = await fixtures();
   expect(
     (
@@ -151,7 +151,6 @@ test('keeps administration forms fully visible and preserves values across secti
     await page.setViewportSize(viewport);
     await fits(user);
   }
-  await db.$disconnect();
 });
 
 test('fits all saved-reply sections, paginates the library and supports nested history notes without scrolling the modal', async ({
@@ -260,5 +259,4 @@ test('fits all saved-reply sections, paginates the library and supports nested h
   await note.getByRole('button', { name: 'بستن', exact: true }).click();
   await expect(info).toBeVisible();
   await expect(info.getByRole('button', { name: 'یادداشت یا وویس', exact: true })).toBeFocused();
-  await db.$disconnect();
 });

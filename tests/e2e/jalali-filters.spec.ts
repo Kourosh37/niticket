@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -58,7 +58,6 @@ test('filters messages at Tehran midnight using Persian leap dates and preserves
   await page.getByText('فیلترهای بیشتر', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'از تاریخ، ۱ فروردین ۱۴۰۴' })).toBeVisible();
   await expect(results).toHaveCount(2);
-  await db.$disconnect();
 });
 
 test('submits report dates, supports month/year shortcuts, Escape and compact viewports without overflow', async ({
@@ -152,5 +151,4 @@ test('submits report dates, supports month/year shortcuts, Escape and compact vi
   });
   await page.reload();
   await expect(total).toHaveText('۱');
-  await db.$disconnect();
 });

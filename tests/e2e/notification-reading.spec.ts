@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -71,7 +71,6 @@ test('opens the exact old reply from its notification and acknowledges it on vis
         ).readAt,
     )
     .toBe(true);
-  await db.$disconnect();
 });
 
 test('keeps officer notifications until reply and clears student notifications only when the reply is visible', async ({
@@ -181,5 +180,4 @@ test('keeps officer notifications until reply and clears student notifications o
     .toBe(true);
   await officer.close();
   await student.close();
-  await db.$disconnect();
 });

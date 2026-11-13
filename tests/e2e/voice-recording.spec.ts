@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -120,7 +120,6 @@ test('keeps the microphone stop control in place, displays a live timer and pres
     await page.getByRole('button', { name: 'حذف صدای ضبط‌شده', exact: true }).click();
     await expect(mic).toBeVisible();
   }
-  await db.$disconnect();
 });
 
 test('finalizes automatically at the configured duration limit and produces an accepted playable upload', async ({
@@ -181,7 +180,6 @@ test('finalizes automatically at the configured duration limit and produces an a
         await tx.systemSetting.deleteMany({ where: { key: 'policy' } });
         await enqueueRealtime(tx, { scope: 'everyone', topics: ['settings'] });
       });
-    await db.$disconnect();
   }
 });
 
@@ -290,5 +288,4 @@ test('settles the audio device before capture and preserves every short window o
     expect(decoded.events[capture - 1].type).toBe('meter-ready');
     await page.getByRole('button', { name: 'حذف صدای ضبط‌شده', exact: true }).click();
   }
-  await db.$disconnect();
 });

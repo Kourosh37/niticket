@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 
 try {
@@ -118,7 +118,6 @@ test('unit selection opens a persistent chat immediately, accepts an attachment 
   await o.screenshot({ path: '.local/ui-preview/officer-chat-390.png' });
   await student.close();
   await officer.close();
-  await db.$disconnect();
 });
 
 test('long chats use a single message scroller, preserve older-message position and keep drafts during live updates', async ({
@@ -299,5 +298,4 @@ test('long chats use a single message scroller, preserve older-message position 
   }
   await context.close();
   await staff.close();
-  await db.$disconnect();
 });

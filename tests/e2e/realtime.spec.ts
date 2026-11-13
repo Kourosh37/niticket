@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../helpers/e2e-test';
 import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 
@@ -42,7 +42,7 @@ test('receives live replies without remounting or stopping an active voice recor
   browser,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const { createTicket, addMessage } = await import('@niticket/core/application/tickets');
   const f = await fixtures();
   const ticket = await createTicket(
@@ -79,7 +79,6 @@ test('receives live replies without remounting or stopping an active voice recor
     await expect(page.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toBeVisible();
   } finally {
     await context.close();
-    await db.$disconnect();
   }
 });
 
@@ -159,7 +158,6 @@ test('streams public messages and receipts, keeps drafts, excludes private event
     expect((await streamState(page)).opened).toBe(1);
   } finally {
     await context.close();
-    await db.$disconnect();
   }
 });
 
@@ -167,7 +165,7 @@ test('recovers changes missed while offline and falls back to HTTP when streamin
   browser,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const { createTicket, addMessage } = await import('@niticket/core/application/tickets');
   const f = await fixtures(),
     student = await f.actor(f.student.id),
@@ -200,7 +198,6 @@ test('recovers changes missed while offline and falls back to HTTP when streamin
     });
   } finally {
     await context.close();
-    await db.$disconnect();
   }
 });
 
@@ -208,7 +205,7 @@ test('redirects a revoked open stream without waiting for the session polling in
   browser,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const f = await fixtures();
   const first = await browser.newContext(),
     target = await browser.newContext();
@@ -232,7 +229,6 @@ test('redirects a revoked open stream without waiting for the session polling in
   } finally {
     await first.close();
     await target.close();
-    await db.$disconnect();
   }
 });
 
@@ -311,7 +307,6 @@ test('updates saved replies, inbox entries and unread counts through their scope
   } finally {
     await officer.close();
     await requester.close();
-    await db.$disconnect();
   }
 });
 
@@ -319,7 +314,7 @@ test('removes an open conversation immediately when its unit is transferred away
   browser,
 }) => {
   const { fixtures } = await import('../helpers/fixtures');
-  const { db } = await import('@niticket/database');
+
   const { createTicket, transferTicket } = await import('@niticket/core/application/tickets');
   const f = await fixtures();
   const ticket = await createTicket(
@@ -351,6 +346,5 @@ test('removes an open conversation immediately when its unit is transferred away
     expect((await streamState(page)).changes.join('')).not.toContain(f.destination.id);
   } finally {
     await context.close();
-    await db.$disconnect();
   }
 });

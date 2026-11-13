@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/e2e-test';
 import { goToModalStep } from '../helpers/modal-steps';
 import { loadEnvFile } from 'node:process';
 
@@ -68,7 +68,6 @@ test('opens the full read-only chat for an administrator and pages through older
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  await db.$disconnect();
 });
 
 test('opens a unit history from administration and reads its conversations and private activity notes', async ({
@@ -211,5 +210,4 @@ test('opens a unit history from administration and reads its conversations and p
     await page.request.get(`/api/v1/tickets/${ticket.id}/history`)
   ).json();
   expect(JSON.stringify(studentHistory)).not.toContain('یادداشت خصوصی قابل مشاهده برای مدیر');
-  await db.$disconnect();
 });
