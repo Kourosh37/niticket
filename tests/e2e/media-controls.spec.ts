@@ -45,7 +45,11 @@ test('dims unavailable wizard actions and uses a forbidden cursor without advanc
   await expect(dialog).toBeVisible();
   expect(await db.savedReply.count({ where: { departmentId: f.department.id } })).toBe(0);
   await dialog.getByRole('tab', { name: 'متن پیام', exact: true }).click();
+  await expect(dialog.getByLabel('عنوان پیام آماده', { exact: true })).toHaveValue(
+    'Unavailable actions',
+  );
   await dialog.getByLabel('متن پیام آماده', { exact: true }).fill('Valid content');
+  await expect(dialog.getByLabel('متن پیام آماده', { exact: true })).toHaveValue('Valid content');
   await dialog.getByRole('tab', { name: 'پیام صوتی', exact: true }).click();
   await expect(save).toBeEnabled();
   await expect(save).toHaveCSS('cursor', 'pointer');
