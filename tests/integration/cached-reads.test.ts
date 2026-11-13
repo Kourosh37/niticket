@@ -107,3 +107,26 @@ it('invalidates display policy while keeping authoritative policy reads uncached
       });
   }
 });
+
+it('keeps an unrelated unit report warm while refreshing the affected unit and global aggregates', async () => {
+  const first = await fixtures(),
+    second = await fixtures();
+  const a = await first.actor(first.agent.id),
+    b = await second.actor(second.agent.id),
+    admin = await first.actor(first.admin.id);
+  const filterA = { departmentId: first.department.id },
+    filterB = { departmentId: second.department.id };
+  await reports(a, filterA);
+  await reports(b, filterB);
+  const global = await reports(admin);
+  await openConversation(await first.actor(first.student.id), filterA);
+  const queries = vi.spyOn(db.ticket, 'count');
+  try {
+    expect((await reports(b, filterB)).total).toBe(0);
+    expect(queries).not.toHaveBeenCalled();
+    expect((await reports(a, filterA)).total).toBe(1);
+    expect((await reports(admin)).total).toBe(global.total + 1);
+  } finally {
+    queries.mockRestore();
+  }
+});

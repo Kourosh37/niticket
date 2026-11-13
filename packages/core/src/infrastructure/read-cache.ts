@@ -120,13 +120,19 @@ function unpack(node: Node): unknown {
 export function tagsForChange(change: RealtimeChange) {
   const tags = new Set<string>();
   for (const topic of change.topics) {
-    if (['access', 'catalog'].includes(topic)) {
+    if (topic === 'catalog' || (topic === 'access' && change.scope === 'everyone')) {
       tags.add('catalog');
       tags.add('profiles');
       tags.add('reports');
     }
     if (topic === 'settings') tags.add('settings');
-    if (topic === 'conversation' || topic === 'inbox') tags.add('reports');
+    if (topic === 'conversation' || topic === 'inbox') {
+      tags.add('reports');
+      if (change.scope === 'ticket') {
+        tags.add(`report-user:${change.creatorId}`);
+        tags.add(`report-department:${change.departmentId}`);
+      }
+    }
     if (change.scope === 'ticket' && topic === 'inbox') tags.add(`user:${change.creatorId}`);
     if (change.scope === 'ticket') tags.add(`ticket:${change.ticketId}`);
     if (change.scope === 'department') tags.add(`department:${change.departmentId}`);

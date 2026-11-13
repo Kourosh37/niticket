@@ -542,26 +542,36 @@ export async function readNotification(actor: Actor, input: unknown) {
   return { ok: true };
 }
 
+const reportFilters = z.object({
+  departmentId: uuid.optional(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+});
+
 export async function reports(actor: Actor, input: unknown = {}) {
   if (!actor.active) fail();
+  const data = reportFilters.parse(input);
+  if (data.departmentId && !actor.isAdmin && !roleIn(actor, data.departmentId))
+    fail('FORBIDDEN', 403, 'دسترسی گزارش این واحد را ندارید.');
+  const scopes = actor.isAdmin
+    ? ['reports']
+    : userRole(actor) === 'STAFF'
+      ? actor.memberships
+          .filter(
+            (member) =>
+              member.active && (!data.departmentId || member.departmentId === data.departmentId),
+          )
+          .map((member) => `report-department:${member.departmentId}`)
+      : [`report-user:${actor.id}`];
   return cachedRead(
-    `reports:${actorCacheScope(actor)}:${JSON.stringify(input)}`,
-    ['reports', 'catalog', `user:${actor.id}`],
+    `reports:${actorCacheScope(actor)}:${JSON.stringify(data)}`,
+    [...scopes, 'catalog', `user:${actor.id}`],
     15000,
-    () => readReports(actor, input),
+    () => readReports(actor, data),
   );
 }
 
-async function readReports(actor: Actor, input: unknown = {}) {
-  const data = z
-    .object({
-      departmentId: uuid.optional(),
-      from: z.iso.datetime().optional(),
-      to: z.iso.datetime().optional(),
-    })
-    .parse(input);
-  if (data.departmentId && !actor.isAdmin && !roleIn(actor, data.departmentId))
-    fail('FORBIDDEN', 403, 'دسترسی گزارش این واحد را ندارید.');
+async function readReports(actor: Actor, data: z.infer<typeof reportFilters>) {
   const where: Prisma.TicketWhereInput = {
     AND: [
       ticketScope(actor),
