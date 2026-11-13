@@ -202,6 +202,7 @@ test('settles the audio device before capture and preserves every short window o
   ).toBe(true);
   await page.addInitScript(() => {
     const NativeContext = AudioContext;
+    let inputClock: AudioContext;
     const events: { type: string; at: number }[] = [];
     Object.assign(window, { initializationEvents: events });
     window.AudioContext = class extends NativeContext {
@@ -217,6 +218,7 @@ test('settles the audio device before capture and preserves every short window o
     };
     navigator.mediaDevices.getUserMedia = async () => {
       const context = new NativeContext();
+      inputClock = context;
       await context.resume();
       const tone = context.createOscillator();
       const destination = context.createMediaStreamDestination();
@@ -228,6 +230,8 @@ test('settles the audio device before capture and preserves every short window o
     window.MediaRecorder = class extends NativeRecorder {
       start(timeslice?: number) {
         events.push({ type: 'capture', at: performance.now() });
+        const captureStarted = inputClock.currentTime;
+        Object.assign(window, { captureClock: () => inputClock.currentTime - captureStarted });
         super.start(timeslice);
       }
     };
@@ -243,6 +247,11 @@ test('settles the audio device before capture and preserves every short window o
     await page.getByRole('button', { name: 'ضبط پیام صوتی', exact: true }).click();
     await expect(page.getByRole('button', { name: 'پایان ضبط', exact: true })).toBeVisible();
     await expect(page.getByLabel('مدت ضبط')).toHaveText('۰۰:۰۳');
+    // A virtual audio device can advance slower than the wall clock under CI load.
+    // Keep the decoded-duration and short-gap assertions tied to generated samples.
+    await page.waitForFunction(
+      () => (window as unknown as { captureClock: () => number }).captureClock() >= 3.1,
+    );
     await page.getByRole('button', { name: 'پایان ضبط', exact: true }).click();
     await expect(page.getByLabel('پیش‌شنوی پیام صوتی', { exact: true })).toBeVisible();
     const decoded = await page.evaluate(async () => {
