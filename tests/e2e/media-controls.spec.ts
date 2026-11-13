@@ -67,7 +67,14 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.addInitScript(() => {
       const play = HTMLMediaElement.prototype.play;
+      const observed = new WeakSet<HTMLMediaElement>();
       HTMLMediaElement.prototype.play = function () {
+        if (!observed.has(this)) {
+          observed.add(this);
+          this.addEventListener('pause', () => {
+            if (this.paused) Object.assign(window, { mediaPauseTime: this.currentTime });
+          });
+        }
         return play.call(this).catch((error: unknown) => {
           Object.assign(window, {
             mediaPlaybackFailure:
@@ -166,6 +173,22 @@ for (const scheme of ['light', 'dark'] as const) {
       throw new Error(`Media playback failed: ${JSON.stringify(failure)}`, { cause: error });
     }
     await player.getByRole('button', { name: 'مکث پیام صوتی', exact: true }).click();
+    // A pause click and its native media event are separate browser tasks. Assert
+    // the acknowledged media clock before checking that the paused UI stays frozen.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { mediaPauseTime?: number }).mediaPauseTime ?? -1,
+        ),
+      )
+      .toBeGreaterThan(0.3);
+    const expectedPosition = await seek.evaluate((input) => {
+      // Let this browser apply its range step normalization to the actual media time.
+      const probe = input.cloneNode(false) as HTMLInputElement;
+      probe.value = String((window as unknown as { mediaPauseTime: number }).mediaPauseTime);
+      return probe.value;
+    });
+    await expect(seek).toHaveValue(expectedPosition);
     const position = Number(await seek.inputValue());
     const fraction = () =>
       bars.evaluateAll(
