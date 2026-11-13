@@ -410,9 +410,9 @@ export const MessageTimeline = memo(function MessageTimeline({
                 align: 'start',
                 offset: -restorePosition.offset,
               }
-            : messages.length
-              ? { index: 'LAST', align: 'end' }
-              : 0
+            : // Native following owns the initial bottom position too. Virtuoso's LAST
+              // target queues delayed retries that can override an early upward gesture.
+              0
       }
       defaultItemHeight={126}
       increaseViewportBy={{ top: 350, bottom: 350 }}
