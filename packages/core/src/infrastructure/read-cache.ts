@@ -5,6 +5,7 @@ import { BoundedCache } from '../domain/bounded-cache';
 import type { Actor } from '../domain/authorization';
 import type { RealtimeChange } from '../domain/realtime';
 import { config } from './config';
+import { measure } from './metrics';
 
 const context = new AsyncLocalStorage<{ bypass: boolean }>();
 const local = new BoundedCache<string>({ entries: 256, bytes: 8 * 1024 * 1024 });
@@ -62,6 +63,7 @@ function connection() {
 }
 
 function sharedFailure() {
+  measure('cache.fallback');
   unavailableUntil = Date.now() + 5000;
   sharedEpoch++;
   generation++;
@@ -193,7 +195,10 @@ export async function cachedRead<T>(
   if (context.getStore()?.bypass) return load();
   const sharedConfigured = !!config().CACHE_REDIS_URL;
   const shared = connection();
-  if (sharedConfigured && !shared) return load();
+  if (sharedConfigured && !shared) {
+    measure('cache.fallback');
+    return load();
+  }
   if (shared && !(await validateSharedEpoch(shared))) return load();
   const started = generation;
   const tagKeys = ['__all', ...new Set(tags)].sort().map((tag) => `${cacheNamespace()}:tag:${tag}`);
@@ -222,10 +227,16 @@ export async function cachedRead<T>(
   const id = `${cacheNamespace()}:data:${hash}`;
   const decode = (value: string) => unpack(JSON.parse(value)) as T;
   const warm = local.get(id);
-  if (warm !== undefined) return decode(warm);
+  if (warm !== undefined) {
+    measure('cache.local_hit');
+    return decode(warm);
+  }
   const flightKey = `${id}:${started}`;
   const existing = flights.get(flightKey);
-  if (existing) return existing.then((value) => structuredClone(value as T));
+  if (existing) {
+    measure('cache.coalesced');
+    return existing.then((value) => structuredClone(value as T));
+  }
   if (flights.size >= 128) return load();
   const task = (async () => {
     if (shared) {
@@ -233,6 +244,7 @@ export async function cachedRead<T>(
         const value = await shared.get(id);
         if (value && Buffer.byteLength(value) <= MAX_ENTRY) {
           const result = decode(value);
+          measure('cache.shared_hit');
           // A local hit must not outlive the remote entry's remaining TTL.
           const remaining = await shared.pttl(id);
           if (remaining > 0 && started === generation)
@@ -244,7 +256,15 @@ export async function cachedRead<T>(
         sharedFailure();
       }
     }
-    const result = await load();
+    const startedAt = performance.now();
+    let result: T;
+    try {
+      result = await load();
+      measure('cache.load', performance.now() - startedAt);
+    } catch (error) {
+      measure('cache.load', performance.now() - startedAt, true);
+      throw error;
+    }
     const value = JSON.stringify(pack(result)),
       size = Buffer.byteLength(value);
     const lifetime = Math.max(1, Math.floor(ttl * (0.9 + Math.random() * 0.1)));

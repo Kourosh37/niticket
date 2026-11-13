@@ -6,7 +6,7 @@ import * as admin from '../application/administration';
 import * as attachments from '../application/attachments';
 import { readJson } from './api';
 import { settings, saveSettings } from '../application/settings';
-import { failedJobs, retryJob } from '../application/operations';
+import { failedJobs, retryJob, operationalMetrics } from '../application/operations';
 import { assertAdmin } from '../domain/authorization';
 import * as credentials from '../application/credentials';
 import * as sessions from '../application/sessions';
@@ -179,6 +179,7 @@ export async function dispatch(
   }
   if (resource === 'admin') {
     assertAdmin(actor);
+    if (id === 'metrics' && method === 'GET') return operationalMetrics(actor);
     const departmentId = segments[2],
       sub = segments[3];
     if (id === 'settings') {

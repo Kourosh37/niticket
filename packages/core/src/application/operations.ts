@@ -6,6 +6,43 @@ import { config } from '../infrastructure/config';
 import { requireFresh } from './context';
 import { uuid } from '../validation';
 import { fail } from '../domain/errors';
+import { processMetrics } from '../infrastructure/metrics';
+import { readCacheState } from '../infrastructure/read-cache';
+import { operationalAlerts } from '../domain/operational-alerts';
+
+export async function operationalMetrics(actor: Actor) {
+  assertAdmin(actor);
+  const now = Date.now();
+  const [queues, pendingOutbox, failedOutbox, oldest, overdueStorage] = await Promise.all([
+    withQueue(async (events, media) => ({
+      events: await events.getJobCounts('waiting', 'active', 'delayed', 'failed'),
+      media: await media.getJobCounts('waiting', 'active', 'delayed', 'failed'),
+    })),
+    db.outboxEvent.count({ where: { processedAt: null, failedAt: null } }),
+    db.outboxEvent.count({ where: { processedAt: null, failedAt: { not: null } } }),
+    db.outboxEvent.findFirst({
+      where: { processedAt: null, failedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    }),
+    db.storageCandidate.count({ where: { collectAfter: { lt: new Date(now - 5 * 60000) } } }),
+  ]);
+  const oldestPendingMs = oldest ? Math.max(0, now - oldest.createdAt.getTime()) : 0;
+  return {
+    sampledAt: new Date(now).toISOString(),
+    process: processMetrics(),
+    cache: readCacheState(),
+    queues,
+    outbox: { pending: pendingOutbox, failed: failedOutbox, oldestPendingMs },
+    storage: { overdue: overdueStorage },
+    alerts: operationalAlerts({
+      failedOutbox,
+      oldestPendingMs,
+      overdueStorage,
+      failedJobs: (queues.events.failed ?? 0) + (queues.media.failed ?? 0),
+    }),
+  };
+}
 
 async function withQueue<T>(fn: (queue: Queue, mediaQueue: Queue) => Promise<T>) {
   const connection = new Redis(config().REDIS_URL, { maxRetriesPerRequest: 1 });

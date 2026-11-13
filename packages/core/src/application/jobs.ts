@@ -13,6 +13,7 @@ import { attachmentChanged } from './realtime-events';
 import { objectBytes, putObject } from '../infrastructure/storage';
 import { detectFile, scanBytes } from '../infrastructure/scanner';
 import { log } from '../infrastructure/log';
+import { measure, processMetrics } from '../infrastructure/metrics';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -384,12 +385,23 @@ export function startJobs(role = config().WORKER_ROLE) {
     worker.on('error', (error) =>
       log.error({ operation: 'worker', category: error.name }, 'Worker connection failed'),
     );
-    worker.on('failed', (job, error) =>
+    worker.on('completed', (job) =>
+      measure(
+        job.queueName === mediaQueue.name ? 'job.media' : 'job.events',
+        Math.max(0, (job.finishedOn ?? Date.now()) - (job.processedOn ?? Date.now())),
+      ),
+    );
+    worker.on('failed', (job, error) => {
+      measure(
+        worker.name === mediaQueue.name ? 'job.media' : 'job.events',
+        Math.max(0, Date.now() - (job?.processedOn ?? Date.now())),
+        true,
+      );
       log.error(
         { operation: 'job', jobId: job?.id, category: error.message },
         'Background job failed',
-      ),
-    );
+      );
+    });
   }
   let dispatching = false,
     dispatchAgain = false,
@@ -410,6 +422,7 @@ export function startJobs(role = config().WORKER_ROLE) {
       if (role !== 'media' && Date.now() - lastAuthCleanup >= 60000) {
         await cleanupExpiredAuth();
         await collectOrphanedStorage();
+        log.info({ metrics: processMetrics(), role }, 'Worker metrics');
         lastAuthCleanup = Date.now();
       }
       if (role !== 'media') await expireUploads();
