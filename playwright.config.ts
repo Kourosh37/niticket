@@ -23,7 +23,7 @@ export default defineConfig({
     {
       name: 'webkit',
       testMatch:
-        /(?:theme|select-controls|jalali-filters|unit-search|session-revocation|caching|modal-layout|hydration)\.spec\.ts/,
+        /(?:theme|select-controls|navigation-stability|jalali-filters|unit-search|session-revocation|caching|modal-layout|hydration|media-controls)\.spec\.ts/,
       use: { browserName: 'webkit', launchOptions: {} },
     },
   ],
@@ -37,7 +37,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'bun --env-file=.env scripts/test-web.mjs',
+    command: 'bun scripts/test-web.mjs',
     url: 'http://localhost:3001/login',
     reuseExistingServer: false,
     timeout: 120000,

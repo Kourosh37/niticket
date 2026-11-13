@@ -362,6 +362,20 @@ bun audit --prod --audit-level=high
 
 در لینوکس ممکن است نصب مرورگر با `--with-deps` لازم باشد.
 
+برای بازتولید محیط لینوکس CI از هر سیستم‌عامل، سرویس اختیاری زیر هر دو مرورگر را با build تولیدی اجرا می‌کند. FFmpeg در همین محیط اجرا می‌شود و نیازی به اتصال Docker socket ندارد. نسخهٔ تصویر Playwright در `Dockerfile.e2e` باید با نسخهٔ قفل‌شدهٔ پکیج هماهنگ بماند.
+
+<div dir="ltr" align="left">
+
+```bash
+docker compose up -d --wait --wait-timeout 180 postgres redis cache minio clamav
+docker compose --profile tests build e2e
+docker compose --profile tests run --rm --no-deps e2e bun run test:e2e --project=chromium --project=webkit
+```
+
+</div>
+
+دو تست پخش واقعی WAV در WebKit ویندوز به دلیل نبود پشتیبانی عملی پخش صوت در مرورگر آزمایشی اجرا نمی‌شوند؛ همین تست‌ها در WebKit لینوکس و CI اجرا می‌شوند.
+
 گزارش‌ها در `playwright-report/` و `test-results/` تولید می‌شوند و وارد Git نمی‌شوند.
 
 [گردش CI](.github/workflows/ci.yml) بررسی کیفیت، تست‌ها، ممیزی وابستگی و ساخت Docker را اجرا می‌کند.

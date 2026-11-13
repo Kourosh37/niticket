@@ -151,6 +151,16 @@ services:
       SYNC_ROOT_ADMIN_ON_STARTUP: 'false'
       S3_PUBLIC_ENDPOINT: http://minio:9000
     command: [bun, --help]
+  e2e:
+    image: niticket-e2e
+    profiles: [tests]
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile.e2e }
+    env_file: .env
+    environment:
+      <<: *app-env
+      SYNC_ROOT_ADMIN_ON_STARTUP: 'false'
+      S3_PUBLIC_ENDPOINT: http://minio:9000
+      TEST_MEDIA_RUNTIME: native
 volumes:
   postgres_data:
   redis_data:
