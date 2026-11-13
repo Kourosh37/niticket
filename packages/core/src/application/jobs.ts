@@ -10,7 +10,7 @@ import {
   realtimeNamespace,
 } from '../infrastructure/realtime';
 import { attachmentChanged } from './realtime-events';
-import { objectBytes, putObject, deleteObject } from '../infrastructure/storage';
+import { objectBytes, putObject } from '../infrastructure/storage';
 import { detectFile, scanBytes } from '../infrastructure/scanner';
 import { log } from '../infrastructure/log';
 import { writeFile } from 'node:fs/promises';
@@ -24,6 +24,13 @@ import { settings } from './settings';
 import { transaction } from '../infrastructure/transaction';
 import { imageThumbnail } from '../infrastructure/thumbnail';
 import { expireUploads, deleteExpiredUpload } from './upload-lifecycle';
+import {
+  reservePromotion,
+  assertPromotion,
+  completePromotion,
+  collectOrphanedStorage,
+  deleteUnreferencedObject,
+} from './storage-reconciliation';
 
 export const eventPayload = z.object({
   ticketId: z.string(),
@@ -148,7 +155,6 @@ export async function processScan(eventId: string, payload: unknown) {
     }
     // Promote the exact scanned bytes to a new key: a replayed presigned PUT cannot replace approved content.
     const cleanKey = `clean/${randomUUID()}`;
-    await putObject(cleanKey, cleanBytes, detected.mime);
     let thumbnail: Buffer | undefined;
     if (detected.mime.startsWith('image/') && !attachment.avatarOwnerId) {
       try {
@@ -161,8 +167,12 @@ export async function processScan(eventId: string, payload: unknown) {
       }
     }
     const thumbnailKey = thumbnail ? `${cleanKey}.thumbnail.webp` : null;
+    const promotion = [cleanKey, ...(thumbnailKey ? [thumbnailKey] : [])];
+    await reservePromotion(promotion);
+    await putObject(cleanKey, cleanBytes, detected.mime);
     if (thumbnailKey && thumbnail) await putObject(thumbnailKey, thumbnail, 'image/webp');
     await transaction(async (tx) => {
+      await assertPromotion(tx, promotion);
       const changed = await tx.attachment.updateMany({
         where: { id: attachmentId, scanStatus: 'QUARANTINED' },
         data: {
@@ -216,9 +226,12 @@ export async function processScan(eventId: string, payload: unknown) {
         });
       }
       if (changed.count) await attachmentChanged(tx, attachment);
+      if (changed.count) await completePromotion(tx, promotion);
+      await tx.outboxEvent.create({
+        data: { type: 'DELETE_PENDING_OBJECT', payload: { key: attachment.objectKey } },
+      });
       await tx.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
     });
-    await deleteObject(attachment.objectKey);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (
@@ -245,9 +258,11 @@ export async function processScan(eventId: string, payload: unknown) {
             data: { updatedAt: new Date() },
           });
         await attachmentChanged(tx, attachment);
+        await tx.outboxEvent.create({
+          data: { type: 'DELETE_PENDING_OBJECT', payload: { key: attachment.objectKey } },
+        });
         await tx.outboxEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
       });
-      await deleteObject(attachment.objectKey);
       return;
     }
     throw error; // Scanner/decoder outages never approve content.
@@ -322,6 +337,8 @@ export function startJobs() {
       else if (event.type === 'SCAN_ATTACHMENT') await processScan(event.id, event.payload);
       else if (event.type === 'DELETE_PENDING_OBJECT')
         await deleteExpiredUpload(event.id, event.payload);
+      else if (event.type === 'DELETE_UNREFERENCED_OBJECT')
+        await deleteUnreferencedObject(event.id, event.payload);
       else if (event.type === 'REALTIME_INVALIDATION')
         await publishRealtimeEvent(event.id, event.payload);
       else throw new Error('Unknown event type');
@@ -350,6 +367,7 @@ export function startJobs() {
       await writeFile(path.join(tmpdir(), 'niticket-worker-heartbeat'), String(Date.now()));
       if (Date.now() - lastAuthCleanup >= 60000) {
         await cleanupExpiredAuth();
+        await collectOrphanedStorage();
         lastAuthCleanup = Date.now();
       }
       await expireUploads();

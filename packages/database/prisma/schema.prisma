@@ -345,6 +345,15 @@ model OutboxEvent {
   @@index([processedAt, failedAt, createdAt])
 }
 
+// Reserved before storage writes; unfinished promotions are reconciled after a grace period.
+model StorageCandidate {
+  key          String   @id
+  createdAt    DateTime @default(now())
+  collectAfter DateTime
+
+  @@index([collectAfter, key])
+}
+
 model Notification {
   id         String                 @id @default(uuid())
   eventId    String

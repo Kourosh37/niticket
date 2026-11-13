@@ -23,6 +23,7 @@ try {
     attachments: await client.attachment.count(),
     auditLogs: await client.auditLog.count(),
     outboxEvents: await client.outboxEvent.count(),
+    storageCandidates: await client.storageCandidate.count(),
   });
   const originalCounts = await countModels(source);
   const counts = await countModels(restored);
