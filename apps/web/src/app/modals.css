@@ -171,7 +171,7 @@
   gap: 5px;
 }
 .modal-form-steps > button:disabled {
-  cursor: default;
+  cursor: not-allowed;
   opacity: 0.55;
 }
 .modal-form-steps .modal-step-arrow {

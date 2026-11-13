@@ -298,6 +298,9 @@ function SavedReplyEditor({
         disabled={busy}
         lockNavigation={recording}
         submitLabel="ذخیره پیام آماده"
+        submitDisabled={
+          !title.trim() || (!body.trim() && !retained.length && !files.length && !voice)
+        }
         busyLabel={
           phase === 'checking'
             ? 'در حال بررسی پیوست‌ها…'

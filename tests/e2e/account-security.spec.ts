@@ -205,9 +205,20 @@ test('downloads and parses a PDF only once while changing its preview pages', as
   await page.goto(`/tickets/${ticket.id}`);
   await page.getByRole('button', { name: 'پیش‌نمایش pages.pdf', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'پیش‌نمایش فایل' });
+  const previousPage = dialog.getByRole('button', { name: 'صفحه قبلی', exact: true });
+  await expect(previousPage).toBeDisabled();
+  await previousPage.hover();
+  await expect(previousPage).toHaveCSS('cursor', 'not-allowed');
+  expect(
+    await previousPage.evaluate((node) => Number(getComputedStyle(node).opacity)),
+  ).toBeLessThan(0.7);
   await expect(dialog.getByRole('button', { name: 'صفحه بعدی', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: 'صفحه بعدی', exact: true }).click();
   await expect(dialog.getByText('صفحه ۲ از ۲', { exact: true })).toBeVisible();
+  const nextPage = dialog.getByRole('button', { name: 'صفحه بعدی', exact: true });
+  await expect(nextPage).toBeDisabled();
+  await nextPage.hover();
+  await expect(nextPage).toHaveCSS('cursor', 'not-allowed');
   await expect(dialog.getByRole('status')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'صفحه قبلی', exact: true }).click();
   await expect(dialog.getByRole('status')).toHaveCount(0);
