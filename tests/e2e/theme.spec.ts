@@ -84,6 +84,8 @@ async function login(page: Page, number: string, password: string) {
   await page.getByLabel('رمز عبور', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ورود', exact: true }).click();
   await expect(page).toHaveURL('http://localhost:3001/');
+  // URL replacement can precede the authenticated RSC render and its final refresh.
+  await expect(page.locator('.easy-app, .app-frame')).toBeVisible();
 }
 
 async function lightLayers(page: Page, layers: [string, string][]) {
