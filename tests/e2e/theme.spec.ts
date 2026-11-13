@@ -291,20 +291,23 @@ test('uses semantic palettes across requester, officer, admin, chat and modal sc
   await expect(page).toHaveURL('http://localhost:3001/settings');
   await expect(page.getByRole('heading', { name: 'تنظیمات', exact: true })).toBeVisible();
   await palette(page, true);
-  // Close the authenticated shell before switching accounts through the test
-  // API; its live session guard otherwise correctly races the next navigation.
-  await navigate('/login');
-  await page.request.post('/api/auth/sign-out', {
-    headers: { origin: 'http://localhost:3001' },
-    data: {},
-  });
+  const signOut = async () => {
+    // A login refresh can still be pending when its shell first becomes visible.
+    // Leave for an inert document before changing cookies through the test API.
+    await navigate('about:blank');
+    expect(
+      (
+        await page.request.post('/api/auth/sign-out', {
+          headers: { origin: 'http://localhost:3001' },
+          data: {},
+        })
+      ).ok(),
+    ).toBe(true);
+  };
+  await signOut();
   await login(page, f.agent.phoneNumber!, f.password);
   await palette(page, true);
-  await navigate('/login');
-  await page.request.post('/api/auth/sign-out', {
-    headers: { origin: 'http://localhost:3001' },
-    data: {},
-  });
+  await signOut();
   await login(page, f.admin.phoneNumber!, f.password);
   await palette(page, true);
   for (const path of ['/admin/users', '/admin/departments']) {
