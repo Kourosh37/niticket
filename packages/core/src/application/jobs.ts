@@ -25,6 +25,7 @@ import { settings } from './settings';
 import { transaction } from '../infrastructure/transaction';
 import { imageThumbnail } from '../infrastructure/thumbnail';
 import { expireUploads, deleteExpiredUpload } from './upload-lifecycle';
+import { purgeCompletedOutbox } from './retention';
 import {
   reservePromotion,
   assertPromotion,
@@ -422,6 +423,7 @@ export function startJobs(role = config().WORKER_ROLE) {
       if (role !== 'media' && Date.now() - lastAuthCleanup >= 60000) {
         await cleanupExpiredAuth();
         await collectOrphanedStorage();
+        await purgeCompletedOutbox();
         log.info({ metrics: processMetrics(), role }, 'Worker metrics');
         lastAuthCleanup = Date.now();
       }

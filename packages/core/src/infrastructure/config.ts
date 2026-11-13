@@ -11,6 +11,7 @@ const schema = z.object({
   CACHE_REDIS_URL: z.preprocess((value) => (value === '' ? undefined : value), z.url().optional()),
   WORKER_ROLE: z.enum(['all', 'events', 'media']).default('all'),
   MEDIA_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
+  OUTBOX_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(30),
   BETTER_AUTH_SECRET: z
     .string()
     .min(32)
