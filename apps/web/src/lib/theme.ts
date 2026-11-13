@@ -49,6 +49,17 @@ export function subscribeTheme(listener: () => void) {
   window.addEventListener(THEME_EVENT, listener);
   window.addEventListener('storage', storageChanged);
   media.addEventListener('change', systemChanged);
+  // Another tab or a system change can arrive between the head bootstrap and hydration.
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (isTheme(stored)) {
+      apply(stored, stored);
+      saveCookie(stored);
+    }
+  } catch {
+    // Keep the server/bootstrap preference when storage is unavailable.
+  }
+  systemChanged();
   return () => {
     window.removeEventListener(THEME_EVENT, listener);
     window.removeEventListener('storage', storageChanged);

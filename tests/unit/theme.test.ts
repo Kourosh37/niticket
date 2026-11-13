@@ -77,3 +77,20 @@ it('switches immediately even when storage writes fail', () => {
   expect(getTheme()).toBe('dark');
   expect(document.cookie).toContain(`${THEME_KEY}=dark`);
 });
+
+it('reconciles preferences changed before the tab attaches its storage listener', () => {
+  const media = Object.assign(new EventTarget(), { matches: false });
+  vi.stubGlobal('matchMedia', () => media);
+  document.documentElement.dataset.theme = 'dark';
+  document.documentElement.dataset.themePreference = 'dark';
+  localStorage.setItem(THEME_KEY, 'light');
+  const unsubscribe = subscribeTheme(vi.fn());
+  expect(getTheme()).toBe('light');
+  expect(document.cookie).toContain(`${THEME_KEY}=light`);
+  unsubscribe();
+  localStorage.clear();
+  document.documentElement.dataset.themePreference = 'system';
+  const stop = subscribeTheme(vi.fn());
+  expect(getTheme()).toBe('light');
+  stop();
+});

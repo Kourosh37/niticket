@@ -11,6 +11,7 @@ export function ThemeToggle() {
     <button
       type="button"
       role="switch"
+      disabled={theme === undefined}
       className="theme-toggle"
       aria-label="حالت تاریک"
       aria-checked={dark}
