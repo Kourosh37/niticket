@@ -4,9 +4,39 @@ import { Queue, Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { db } from '@niticket/database';
 import { config } from '@niticket/core/infrastructure/config';
-import { dispatchOutbox } from '@niticket/core/application/jobs';
+import { dispatchOutbox, startJobs } from '@niticket/core/application/jobs';
 
 afterAll(() => db.$disconnect());
+
+it('forwards pre-upgrade media jobs to the media lane without falsely completing their outbox event', async () => {
+  const connection = new Redis(config().REDIS_URL, { maxRetriesPerRequest: null });
+  const legacy = new Queue(config().QUEUE_NAME, { connection });
+  const media = new Queue(`${config().QUEUE_NAME}-media`, { connection });
+  const event = await db.outboxEvent.create({
+    data: {
+      type: 'DELETE_PENDING_OBJECT',
+      payload: { key: `pending/${randomUUID()}` },
+      dispatchedAt: new Date(),
+    },
+  });
+  await legacy.add(event.type, { eventId: event.id }, { jobId: event.id });
+  const jobs = startJobs('events');
+  try {
+    await expect.poll(async () => (await legacy.getJob(event.id))?.getState()).toBe('completed');
+    expect(await jobs.mediaQueue.getJob(event.id)).toBeDefined();
+    expect(
+      (await db.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).processedAt,
+    ).toBeNull();
+  } finally {
+    await jobs.close();
+    await (await media.getJob(event.id))?.remove();
+    await (await legacy.getJob(event.id))?.remove();
+    await legacy.close();
+    await media.close();
+    connection.disconnect();
+    await db.outboxEvent.delete({ where: { id: event.id } });
+  }
+});
 
 it('dispatches light events independently while the media worker is occupied', async () => {
   const connection = new Redis(config().REDIS_URL, { maxRetriesPerRequest: null });
