@@ -496,6 +496,15 @@ export async function updateProfile(actor: Actor, input: unknown) {
   return getProfile(actor);
 }
 
+/** A conversation contributes one badge, regardless of its number of unread messages. */
+export async function unreadNotificationCount(userId: string) {
+  const [result] = await db.$queryRaw<{ count: number }[]>(Prisma.sql`
+    SELECT (COUNT(DISTINCT "ticketId") + COUNT(*) FILTER (WHERE "ticketId" IS NULL))::int AS count
+    FROM "Notification" WHERE "userId" = ${userId} AND "readAt" IS NULL
+  `);
+  return result.count;
+}
+
 export async function notifications(actor: Actor, cursor?: string) {
   if (cursor) uuid.parse(cursor);
   if (
@@ -523,7 +532,7 @@ export async function notifications(actor: Actor, cursor?: string) {
   return {
     items: rows.slice(0, 30),
     nextCursor: rows.length > 30 ? rows[29].id : null,
-    unreadCount: await db.notification.count({ where: { userId: actor.id, readAt: null } }),
+    unreadCount: await unreadNotificationCount(actor.id),
   };
 }
 
@@ -591,7 +600,7 @@ async function readReports(actor: Actor, data: z.infer<typeof reportFilters>) {
       db.ticket.groupBy({ by: ['departmentId'], where, _count: true }),
       db.ticket.groupBy({ by: ['assigneeId'], where, _count: true }),
       db.ticket.count({ where }),
-      db.notification.count({ where: { userId: actor.id, readAt: null } }),
+      unreadNotificationCount(actor.id),
       actor.isAdmin ? db.user.count() : Promise.resolve(null),
       actor.isAdmin ? db.department.count({ where: { active: true } }) : Promise.resolve(null),
     ]);

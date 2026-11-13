@@ -1,4 +1,3 @@
-import { db } from '@niticket/database';
 import type { Actor } from '../domain/authorization';
 import { fail } from '../domain/errors';
 import * as tickets from '../application/tickets';
@@ -110,8 +109,11 @@ export async function dispatch(
   if (resource === 'notifications') {
     if (id === 'count' && method === 'GET')
       return {
-        unreadCount: await cachedRead(`unread:${actor.id}`, [`user:${actor.id}`], 1000, () =>
-          db.notification.count({ where: { userId: actor.id, readAt: null } }),
+        unreadCount: await cachedRead(
+          `unread-conversations:${actor.id}`,
+          [`user:${actor.id}`],
+          1000,
+          () => admin.unreadNotificationCount(actor.id),
         ),
       };
     if (method === 'GET') return admin.notifications(actor, query.cursor);

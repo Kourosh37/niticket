@@ -39,7 +39,7 @@ test('keeps requester and officer navigation at the bottom and shares private un
   });
   await db.notification.createMany({
     data: [
-      ...Array.from({ length: 3 }, () => ({
+      ...Array.from({ length: 7 }, () => ({
         userId: f.student.id,
         ticketId: ticket.id,
         title: 'اعلان تازه دانشجو',
@@ -63,9 +63,9 @@ test('keeps requester and officer navigation at the bottom and shares private un
   const badge = dock.locator('.dock-unread-count');
   await expect(page.locator('header')).toHaveCount(0);
   await expect(dock.getByRole('link')).toHaveCount(3);
-  await expect(badge).toHaveText('۳');
+  await expect(badge).toHaveText('۱');
   await expect(
-    page.getByRole('link', { name: '۳ اعلان جدید دارید مشاهده', exact: true }),
+    page.getByRole('link', { name: '۱ اعلان جدید دارید مشاهده', exact: true }),
   ).toBeVisible();
   await dock.getByRole('link', { name: 'تنظیمات', exact: true }).click();
   await expect(page).toHaveURL(origin + '/settings');
@@ -77,7 +77,7 @@ test('keeps requester and officer navigation at the bottom and shares private un
   );
   await expect(page.getByRole('heading', { name: 'نشست‌های فعال', exact: true })).toBeVisible();
   await expect(page.locator('header')).toHaveCount(0);
-  await expect(page.locator('.settings-preferences .dock-unread-count')).toHaveText('۳');
+  await expect(page.locator('.settings-preferences .dock-unread-count')).toHaveText('۱');
   await page
     .locator('.settings-preferences')
     .getByRole('link', { name: /اعلان‌ها/ })
@@ -114,7 +114,7 @@ test('keeps requester and officer navigation at the bottom and shares private un
   await page.request.post('/api/auth/sign-out', { headers: { origin }, data: {} });
   await login(page, f.agent.phoneNumber!, f.password);
   await expect(dock.getByRole('link')).toHaveCount(2);
-  await expect(badge).toHaveText('۲');
+  await expect(badge).toHaveText('۱');
   await expect(page.locator('header')).toHaveCount(0);
   const { transaction } = await import('@niticket/core/infrastructure/transaction');
   const { enqueueRealtime } = await import('@niticket/core/infrastructure/realtime');
@@ -130,6 +130,6 @@ test('keeps requester and officer navigation at the bottom and shares private un
   });
   await page.evaluate(() => window.dispatchEvent(new Event('notifications:changed')));
   await expect(badge).toHaveText('۹۹+');
-  await expect(dock.getByRole('status')).toHaveText('۱۰۲ اعلان خوانده‌نشده');
+  await expect(dock.getByRole('status')).toHaveText('۱۰۱ اعلان خوانده‌نشده');
   await page.screenshot({ path: '.local/ui-preview/simple-officer-navigation-390.png' });
 });
