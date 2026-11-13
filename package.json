@@ -19,6 +19,7 @@
     "test": "bun --bun vitest run --project unit",
     "test:integration": "bun scripts/isolated-tests.mjs integration",
     "test:e2e": "bun scripts/isolated-tests.mjs e2e",
+    "test:e2e:webkit": "bun scripts/isolated-tests.mjs e2e --project=webkit",
     "db:generate": "bun --bun prisma generate --schema packages/database/prisma/schema.prisma",
     "db:migrate": "bun --bun prisma migrate deploy --schema packages/database/prisma/schema.prisma",
     "admin:bootstrap": "bun --env-file=.env scripts/bootstrap.ts"

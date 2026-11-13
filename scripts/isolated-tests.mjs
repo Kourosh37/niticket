@@ -19,6 +19,9 @@ try {
   /* CI supplies environment. */
 }
 const suite = process.argv[2];
+const suiteArgs = process.argv.slice(3);
+if (suite === 'e2e' && !suiteArgs.some((arg) => arg.startsWith('--project')))
+  suiteArgs.push('--project=chromium');
 if (!['integration', 'e2e'].includes(suite)) throw new Error('Choose integration or e2e');
 const names = testResourceNames(randomUUID().replaceAll('-', '').slice(0, 16));
 const database = new URL(process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL);
@@ -152,14 +155,8 @@ try {
   if (await run(['scripts/init-storage.ts'])) throw new Error('Test storage initialization failed');
   process.exitCode = await run(
     suite === 'integration'
-      ? [
-          resolve('node_modules/vitest/vitest.mjs'),
-          'run',
-          '--project',
-          'integration',
-          ...process.argv.slice(3),
-        ]
-      : [resolve('node_modules/@playwright/test/cli.js'), 'test', ...process.argv.slice(3)],
+      ? [resolve('node_modules/vitest/vitest.mjs'), 'run', '--project', 'integration', ...suiteArgs]
+      : [resolve('node_modules/@playwright/test/cli.js'), 'test', ...suiteArgs],
   );
 } catch (error) {
   process.exitCode = 1;

@@ -345,8 +345,9 @@ bun run test
 bun run test:integration
 bun run build
 
-bun --bun playwright install chromium
+bun --bun playwright install chromium webkit
 bun run test:e2e
+bun run test:e2e:webkit
 
 bun audit --prod --audit-level=high
 ```

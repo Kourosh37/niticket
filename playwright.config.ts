@@ -18,13 +18,21 @@ export default defineConfig({
   timeout: 60000,
   expect: { timeout: 10000 },
   reporter: [['list'], ['html', { open: 'never' }]],
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium', ...(edge ? { channel: 'msedge' } : {}) } },
+    {
+      name: 'webkit',
+      testMatch:
+        /(?:theme|select-controls|jalali-filters|unit-search|session-revocation|caching|modal-layout)\.spec\.ts/,
+      use: { browserName: 'webkit', launchOptions: {} },
+    },
+  ],
   use: {
     baseURL: 'http://localhost:3001',
     headless: true,
     launchOptions: {
       args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
     },
-    ...(edge ? { channel: 'msedge' } : {}),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
