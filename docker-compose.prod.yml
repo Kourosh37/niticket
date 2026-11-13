@@ -88,6 +88,7 @@ services:
         retries: 5,
       }
   worker:
+    image: niticket-worker
     build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: worker }
     env_file: .env.production
     environment:
@@ -96,6 +97,8 @@ services:
         REDIS_URL: 'redis://redis:6379',
         CACHE_REDIS_URL: 'redis://cache:6379',
         CLAMAV_HOST: clamav,
+        WORKER_ROLE: events,
+        SERVICE_NAME: niticket-events-worker,
       }
     networks: [data, egress]
     depends_on:
@@ -120,6 +123,12 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     mem_limit: 1g
+  media-worker:
+    extends: { service: worker }
+    environment:
+      WORKER_ROLE: media
+      SERVICE_NAME: niticket-media-worker
+    stop_grace_period: 120s
   clamav:
     image: clamav/clamav:stable
     environment:

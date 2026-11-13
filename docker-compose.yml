@@ -109,11 +109,14 @@ services:
       interval: 15s
       retries: 5
   worker:
+    image: niticket-worker
     build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: worker }
     env_file: .env
     environment:
       <<: *app-env
       SYNC_ROOT_ADMIN_ON_STARTUP: 'false'
+      WORKER_ROLE: events
+      SERVICE_NAME: niticket-events-worker
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -132,6 +135,12 @@ services:
       interval: 30s
       start_period: 45s
       retries: 3
+  media-worker:
+    extends: { service: worker }
+    environment:
+      WORKER_ROLE: media
+      SERVICE_NAME: niticket-media-worker
+    stop_grace_period: 120s
   tools:
     image: niticket-tools
     build: *tools-build

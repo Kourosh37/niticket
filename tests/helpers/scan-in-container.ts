@@ -18,7 +18,7 @@ export async function scanInContainer(eventId: string) {
         'DATABASE_URL',
         '-e',
         'QUEUE_NAME=niticket-test',
-        'worker',
+        'media-worker',
         'bun',
         '-e',
         code,

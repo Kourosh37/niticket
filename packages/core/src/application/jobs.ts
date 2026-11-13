@@ -39,6 +39,8 @@ export const eventPayload = z.object({
   messageId: z.string().optional(),
 });
 
+const mediaEventTypes = ['SCAN_ATTACHMENT', 'DELETE_PENDING_OBJECT', 'DELETE_UNREFERENCED_OBJECT'];
+
 const titles: Record<string, string> = {
   TICKET_CREATED: 'درخواست جدید ثبت شد',
   PUBLIC_REPLY: 'پاسخ جدیدی برای درخواست ثبت شد',
@@ -289,10 +291,24 @@ export async function cleanupExpiredAuth() {
     });
 }
 
-export async function dispatchOutbox(queue: Queue, limit = 100) {
+export async function dispatchOutbox(queue: Queue, limit = 100, mediaQueue?: Queue) {
   z.number().int().min(1).max(100).parse(limit);
+  if (mediaQueue) {
+    await Promise.all([
+      dispatchLane(queue, limit, { notIn: mediaEventTypes }),
+      dispatchLane(mediaQueue, limit, { in: mediaEventTypes }),
+    ]);
+  } else await dispatchLane(queue, limit);
+}
+
+async function dispatchLane(
+  queue: Queue,
+  limit: number,
+  type?: { in: string[] } | { notIn: string[] },
+) {
   const events = await db.outboxEvent.findMany({
     where: {
+      ...(type ? { type } : {}),
       processedAt: null,
       failedAt: null,
       OR: [{ dispatchedAt: null }, { dispatchedAt: { lt: new Date(Date.now() - 60000) } }],
@@ -325,32 +341,56 @@ export async function dispatchOutbox(queue: Queue, limit = 100) {
   }
 }
 
-export function startJobs() {
+export function startJobs(role = config().WORKER_ROLE) {
   const connection = new Redis(config().REDIS_URL, { maxRetriesPerRequest: null });
   const queue = new Queue(config().QUEUE_NAME, { connection });
-  const worker = new Worker(
-    config().QUEUE_NAME,
-    async (job) => {
-      const event = await db.outboxEvent.findUniqueOrThrow({ where: { id: job.data.eventId } });
-      if (event.processedAt) return;
-      if (event.type === 'TICKET_NOTIFICATION') await processNotification(event.id, event.payload);
-      else if (event.type === 'SCAN_ATTACHMENT') await processScan(event.id, event.payload);
-      else if (event.type === 'DELETE_PENDING_OBJECT')
-        await deleteExpiredUpload(event.id, event.payload);
-      else if (event.type === 'DELETE_UNREFERENCED_OBJECT')
-        await deleteUnreferencedObject(event.id, event.payload);
-      else if (event.type === 'REALTIME_INVALIDATION')
-        await publishRealtimeEvent(event.id, event.payload);
-      else throw new Error('Unknown event type');
-    },
-    { connection, concurrency: 4 },
-  );
-  worker.on('failed', (job, error) =>
-    log.error(
-      { operation: 'job', jobId: job?.id, category: error.message },
-      'Background job failed',
-    ),
-  );
+  const mediaQueue = new Queue(`${config().QUEUE_NAME}-media`, { connection });
+  const workers: Worker[] = [];
+  const process = async (job: { data: { eventId: string }; queueName: string }) => {
+    const event = await db.outboxEvent.findUniqueOrThrow({ where: { id: job.data.eventId } });
+    if (event.processedAt) return;
+    if (job.queueName === queue.name && mediaEventTypes.includes(event.type)) {
+      // Drain pre-upgrade scan jobs from the original queue into the isolated media lane.
+      await mediaQueue.add(
+        event.type,
+        { eventId: event.id },
+        {
+          jobId: event.id,
+          attempts: 8,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: { age: 86400 },
+          removeOnFail: false,
+        },
+      );
+      return;
+    }
+    if (event.type === 'TICKET_NOTIFICATION') await processNotification(event.id, event.payload);
+    else if (event.type === 'SCAN_ATTACHMENT') await processScan(event.id, event.payload);
+    else if (event.type === 'DELETE_PENDING_OBJECT')
+      await deleteExpiredUpload(event.id, event.payload);
+    else if (event.type === 'DELETE_UNREFERENCED_OBJECT')
+      await deleteUnreferencedObject(event.id, event.payload);
+    else if (event.type === 'REALTIME_INVALIDATION')
+      await publishRealtimeEvent(event.id, event.payload);
+    else throw new Error('Unknown event type');
+  };
+  if (role !== 'media')
+    workers.push(new Worker(config().QUEUE_NAME, process, { connection, concurrency: 4 }));
+  if (role !== 'events')
+    workers.push(
+      new Worker(mediaQueue.name, process, { connection, concurrency: config().MEDIA_CONCURRENCY }),
+    );
+  for (const worker of workers) {
+    worker.on('error', (error) =>
+      log.error({ operation: 'worker', category: error.name }, 'Worker connection failed'),
+    );
+    worker.on('failed', (job, error) =>
+      log.error(
+        { operation: 'job', jobId: job?.id, category: error.message },
+        'Background job failed',
+      ),
+    );
+  }
   let dispatching = false,
     dispatchAgain = false,
     closing = false;
@@ -363,14 +403,16 @@ export function startJobs() {
     }
     dispatching = true;
     try {
-      await dispatchOutbox(queue);
+      if (role !== 'media') await dispatchOutbox(queue, 100, mediaQueue);
+      else await connection.ping();
+      if (!workers.every((worker) => worker.isRunning())) throw new Error('Worker is not running');
       await writeFile(path.join(tmpdir(), 'niticket-worker-heartbeat'), String(Date.now()));
-      if (Date.now() - lastAuthCleanup >= 60000) {
+      if (role !== 'media' && Date.now() - lastAuthCleanup >= 60000) {
         await cleanupExpiredAuth();
         await collectOrphanedStorage();
         lastAuthCleanup = Date.now();
       }
-      await expireUploads();
+      if (role !== 'media') await expireUploads();
     } catch (error) {
       log.error(
         { operation: 'outbox_dispatch', category: error instanceof Error ? error.name : 'unknown' },
@@ -394,13 +436,14 @@ export function startJobs() {
   void dispatch();
   return {
     queue,
+    mediaQueue,
     close: async () => {
       closing = true;
       clearInterval(timer);
       wake.disconnect();
       while (dispatching) await new Promise((r) => setTimeout(r, 100));
-      await worker.close();
-      await queue.close();
+      await Promise.all(workers.map((worker) => worker.close()));
+      await Promise.all([queue.close(), mediaQueue.close()]);
       await connection.quit();
     },
   };

@@ -203,7 +203,7 @@ bun --env-file=.env scripts/init-storage.ts
 bun run admin:bootstrap
 
 docker compose build worker
-docker compose up -d --no-deps --wait --wait-timeout 120 worker
+docker compose up -d --no-deps --wait --wait-timeout 120 worker media-worker
 
 bun run dev
 ```
@@ -301,7 +301,7 @@ docker build --target tools -t niticket-tools:deploy -f infrastructure/docker/Do
 
 docker run --rm --env-file .env.production niticket-tools:deploy bun scripts/init-storage.ts
 
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --wait web worker proxy
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --wait web worker media-worker proxy
 ```
 
 </div>
@@ -342,7 +342,7 @@ bun --env-file=.env scripts/test-database.mjs
 # تست‌های رسانه به Worker ساخته‌شده از همین نسخه و FFmpeg داخل آن نیاز دارند.
 docker compose up -d --wait cache
 docker compose build worker
-docker compose up -d --no-deps --wait --wait-timeout 120 worker
+docker compose up -d --no-deps --wait --wait-timeout 120 worker media-worker
 
 bun run format:check
 bun run typecheck

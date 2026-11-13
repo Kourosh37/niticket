@@ -9,6 +9,8 @@ const schema = z.object({
     .default('niticket'),
   REDIS_URL: z.url(),
   CACHE_REDIS_URL: z.preprocess((value) => (value === '' ? undefined : value), z.url().optional()),
+  WORKER_ROLE: z.enum(['all', 'events', 'media']).default('all'),
+  MEDIA_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
   BETTER_AUTH_SECRET: z
     .string()
     .min(32)
