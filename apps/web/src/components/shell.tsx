@@ -298,7 +298,7 @@ function ShellContent({
     <div className="app-frame">
       <SessionGuard />
       <DownloadScope key={user.id} />
-      <aside id="sidebar" className="sidebar admin-desktop-sidebar">
+      <aside id="sidebar" className="admin-desktop-sidebar">
         {sidebarContent}
       </aside>
       <Modal

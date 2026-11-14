@@ -750,7 +750,8 @@ svg {
 .app-frame {
   min-height: 100vh;
 }
-.sidebar {
+/* PDF.js also defines .sidebar globally; keep administration layout isolated. */
+.admin-desktop-sidebar {
   width: 250px;
   position: fixed;
   inset-block: 0;
@@ -2217,7 +2218,7 @@ svg {
   .stats-grid {
     gap: 24px;
   }
-  .sidebar {
+  .admin-desktop-sidebar {
     width: 275px;
   }
   .main-area {
@@ -2228,7 +2229,7 @@ svg {
   }
 }
 @media (max-width: 1200px) {
-  .sidebar {
+  .admin-desktop-sidebar {
     width: 220px;
     padding-inline: 14px;
   }
@@ -2283,7 +2284,7 @@ svg {
   }
 }
 @media (max-width: 1000px) {
-  .sidebar {
+  .admin-desktop-sidebar {
     width: 205px;
   }
   .main-area {
@@ -2368,7 +2369,7 @@ svg {
   }
 }
 @media (max-width: 767px) {
-  .sidebar {
+  .admin-desktop-sidebar {
     transform: translateX(105%);
     transition: transform 0.2s;
     width: 250px;
